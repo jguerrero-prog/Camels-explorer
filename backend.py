@@ -1104,6 +1104,100 @@ def get_halo_mass_function(suite, set_name, realization, snapnum, RMmin, RMmax, 
     )
 
 
+def get_cross_finder_hmf(suite, set_name, realization, snapnum, mass_min, mass_max, bins,
+                          fetch_public: bool = False) -> dict:
+    """Real halo-mass-function *shape* overlay across every halo finder this
+    app has (Subfind/AHF/Rockstar/CAESAR), for direct comparison - checking
+    whether a physical conclusion is robust to finder choice is a genuine,
+    recognized cosmology research pattern (this app already surfaced a real
+    example: 3133 AHF halos vs 5857 Rockstar vs 17261 CAESAR for the same
+    IllustrisTNG/LH_42 realization). Deliberately does NOT apply Subfind's
+    Ωm-normalization (see get_halo_mass_function) - Ωm isn't available on the
+    alternate finders' Catalog objects, and assuming a fixed Ωm would be
+    wrong for LH/1P/SB realizations where it's exactly what's varied. This is
+    a plain dn/dlogM per box volume, consistent across every curve in this
+    comparison - not numerically identical to the standalone HMF panel above,
+    which is a real, deliberate difference, not an oversight.
+    Returns {finder_name: Result}, skipping any finder without real data for
+    this suite/set/realization/snapshot (not an error - a real gap, same
+    honesty as everywhere else in this app)."""
+    if not fetch_public:
+        return {}
+
+    mass_bins = np.logspace(np.log10(mass_min), np.log10(mass_max), bins + 1)
+    mass_mean = np.sqrt(mass_bins[1:] * mass_bins[:-1])
+    dlogM = np.diff(np.log10(mass_bins))
+
+    def _bin(masses, box_size):
+        counts = np.histogram(masses, mass_bins)[0]
+        dn_dlogm = counts / (box_size ** 3 * dlogM)
+        return Result(
+            x=mass_mean, y=np.clip(dn_dlogm, 1e-12, None),
+            x_label="Halo Mass [Msun/h]", y_label="dn/dlogM [(Mpc/h)^-3]",
+            source="real",
+        )
+
+    results = {}
+
+    # Subfind: FOF-group-level mass, from the raw fetch dict (the Catalog
+    # Browser's Subfind table is subhalo-level and has no "Halo Mass" column
+    # at all - this is the same >50-CDM-particle cut get_halo_mass_function
+    # itself uses).
+    sf = _fetch_public_subfind(suite, set_name, realization, snapnum)
+    if sf is not None:
+        keep = sf["group_len_type"][:, 1] > 50
+        r = _bin(sf["group_mass"][keep], sf["box_size"])
+        r.note = f"Subfind (FOF), z = {sf['redshift']:.2f}, {int(keep.sum())} halos"
+        results["Subfind"] = r
+
+    # AHF and Rockstar's tables mix host (distinct) halos together with
+    # subhalos/substructure in one flat table - confirmed real (2026-08-02):
+    # AHF has a real `hostHalo` column (0 = distinct host, nonzero = a
+    # subhalo pointing at its host's ID); Rockstar has `pid` (-1 = distinct
+    # host, otherwise the parent's ID). Without filtering these out, their
+    # halo counts (and this comparison's low-mass end especially, since
+    # satellites skew low-mass) were inflated by counting substructure as if
+    # it were independent halos - an apples-to-oranges artifact against
+    # Subfind's FOF groups and CAESAR's halo_data, both of which are
+    # genuinely host-only already (FOF groups are top-level by construction;
+    # CAESAR architecturally separates halos from galaxies/substructure).
+    # This filter isolates the comparison to genuine mass-DEFINITION
+    # differences across finders (FOF vs. spherical-overdensity virial mass
+    # conventions really do disagree systematically in the literature) -
+    # that's a real, legitimate difference this comparison should still show,
+    # not something to filter away.
+    HOST_ONLY_FILTER = {
+        "AHF": ("hostHalo", lambda col: col == 0),
+        "Rockstar": ("pid", lambda col: col == -1),
+    }
+
+    for finder in ("AHF", "Rockstar", "CAESAR"):
+        cat = get_alt_halo_catalog(finder, suite, set_name, realization, snapnum, fetch_public=True)
+        if cat is None:
+            continue
+        mass_col = next((c for c in cat.frame.columns if c.startswith("Halo Mass")), None)
+        if mass_col is None:
+            continue
+        masses = cat.frame[mass_col].to_numpy()
+        n_total = len(masses)
+
+        substructure_note = ""
+        if finder in HOST_ONLY_FILTER and cat.raw_frame is not None:
+            filt_col, is_host = HOST_ONLY_FILTER[finder]
+            if filt_col in cat.raw_frame.columns:
+                host_mask = is_host(cat.raw_frame[filt_col].to_numpy())
+                masses = masses[host_mask]
+                n_dropped = n_total - len(masses)
+                if n_dropped > 0:
+                    substructure_note = f" ({n_dropped} subhalos excluded)"
+
+        r = _bin(masses, cat.box_size)
+        r.note = f"{finder}, z = {cat.redshift:.2f}, {len(masses)} host halos{substructure_note}"
+        results[finder] = r
+
+    return results
+
+
 # ---------------------------------------------------------------------------
 # Baryon fraction  (mirrors camels_library.baryon_fraction_FoF)
 # ---------------------------------------------------------------------------
@@ -2065,6 +2159,7 @@ def _fetch_caesar_halos(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1):
     )
 
 
+@lru_cache(maxsize=32)
 def _fetch_caesar_galaxies(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1):
     """Real CAESAR galaxy catalog - CAESAR's 6D-FOF galaxy finder result,
     fully precomputed (not the raw fof6d_tags file, which requires
