@@ -836,6 +836,284 @@ with tab_catalog:
             file_name=f"{suite}_{set_name}_{realization}_{finder.lower()}_catalog.csv", mime="text/csv",
         )
 
+        st.divider()
+        with st.expander("📊 Quick plot (any field, any finder)"):
+            st.caption(
+                "Pick any two real fields from this catalog and plot them against each "
+                "other - works with whatever's currently shown above (toggle 'show all "
+                "fields' for the full raw set first). No new data is fetched; this plots "
+                "what's already loaded."
+            )
+            numeric_cols = [c for c in display_frame.columns
+                            if pd.api.types.is_numeric_dtype(display_frame[c])]
+            if len(numeric_cols) < 1:
+                st.info("No numeric fields available to plot.")
+            else:
+                qp_type = st.radio(
+                    "Chart type", ["Scatter", "Histogram", "Box Plot", "Heatmap", "3D Scatter"],
+                    horizontal=True, key="qp_chart_type",
+                )
+                if qp_type == "Scatter":
+                    c1, c2, c3 = st.columns(3)
+                    qp_x = c1.selectbox("X field", numeric_cols, index=0, key="qp_x")
+                    qp_y = c2.selectbox("Y field", numeric_cols,
+                                         index=min(1, len(numeric_cols) - 1), key="qp_y")
+                    qp_color = c3.selectbox("Color by (optional)", ["None"] + numeric_cols,
+                                             key="qp_color")
+                    c4, c5 = st.columns(2)
+                    qp_logx = c4.checkbox("Log X", value=True, key="qp_logx")
+                    qp_logy = c5.checkbox("Log Y", value=True, key="qp_logy")
+
+                    # Extract each series independently (not via a multi-column
+                    # DataFrame selection) - qp_x/qp_y/qp_color can legitimately
+                    # be the same column name, and selecting a DataFrame with
+                    # duplicate column labels returns an ambiguous multi-column
+                    # result instead of a clean Series, breaking everything
+                    # downstream (a real bug caught via testing, not theoretical).
+                    x_vals = display_frame[qp_x]
+                    y_vals = display_frame[qp_y]
+                    color_vals = display_frame[qp_color] if qp_color != "None" else None
+
+                    mask = x_vals.notna() & y_vals.notna()
+                    if color_vals is not None:
+                        mask &= color_vals.notna()
+                    if qp_logx:
+                        mask &= x_vals > 0
+                    if qp_logy:
+                        mask &= y_vals > 0
+
+                    x_vals, y_vals = x_vals[mask], y_vals[mask]
+                    color_vals = color_vals[mask] if color_vals is not None else None
+
+                    marker = dict(size=6, opacity=0.7)
+                    if color_vals is not None:
+                        marker.update(color=color_vals, colorscale="Viridis",
+                                       showscale=True, colorbar=dict(title=qp_color))
+                    fig = go.Figure(go.Scatter(
+                        x=x_vals, y=y_vals, mode="markers", marker=marker,
+                        text=[f"{qp_x}={xv:.4g}<br>{qp_y}={yv:.4g}"
+                              for xv, yv in zip(x_vals, y_vals)],
+                        hoverinfo="text",
+                    ))
+                    fig.update_xaxes(type="log" if qp_logx else "linear", title=qp_x)
+                    fig.update_yaxes(type="log" if qp_logy else "linear", title=qp_y)
+                    fig.update_layout(height=450, margin=dict(l=10, r=10, t=10, b=10))
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.caption(f"{len(x_vals)} of {len(display_frame)} rows shown"
+                               + (" (log-scale axes hide non-positive values)."
+                                  if qp_logx or qp_logy else "."))
+                elif qp_type == "Histogram":
+                    c1, c2 = st.columns(2)
+                    qp_field = c1.selectbox("Field", numeric_cols, index=0, key="qp_hist_field")
+                    qp_hist_logx = c2.checkbox("Log X", value=True, key="qp_hist_logx")
+                    vals = display_frame[qp_field].dropna()
+                    vals_plot = vals[vals > 0] if qp_hist_logx else vals
+                    fig = go.Figure(go.Histogram(x=vals_plot, nbinsx=40))
+                    fig.update_xaxes(type="log" if qp_hist_logx else "linear", title=qp_field)
+                    fig.update_yaxes(title="Count")
+                    fig.update_layout(height=400, margin=dict(l=10, r=10, t=10, b=10))
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.caption(f"{len(vals_plot)} of {len(display_frame)} rows shown"
+                               + (" (log-scale hides non-positive values)." if qp_hist_logx else "."))
+
+                elif qp_type == "Box Plot":
+                    st.caption("Groups rows into bins along the X field, then shows the "
+                               "real spread (median/quartiles/outliers) of the Y field within "
+                               "each bin - the distribution behind a trend, not just its mean.")
+                    c1, c2, c3 = st.columns(3)
+                    qp_bx = c1.selectbox("X field (binned)", numeric_cols, index=0, key="qp_box_x")
+                    qp_by = c2.selectbox("Y field", numeric_cols,
+                                          index=min(1, len(numeric_cols) - 1), key="qp_box_y")
+                    qp_box_bins = c3.slider("Bins", 3, 15, 6, key="qp_box_bins")
+                    qp_box_logx = st.checkbox("Log-spaced X bins", value=True, key="qp_box_logx")
+
+                    x_vals = display_frame[qp_bx]
+                    y_vals = display_frame[qp_by]
+                    mask = x_vals.notna() & y_vals.notna()
+                    if qp_box_logx:
+                        mask &= x_vals > 0
+                    x_vals, y_vals = x_vals[mask], y_vals[mask]
+
+                    if len(x_vals) < qp_box_bins:
+                        st.info("Not enough rows to form the requested number of bins.")
+                    else:
+                        edges = (np.logspace(np.log10(x_vals.min()), np.log10(x_vals.max()),
+                                              qp_box_bins + 1) if qp_box_logx else
+                                 np.linspace(x_vals.min(), x_vals.max(), qp_box_bins + 1))
+                        bin_idx = np.clip(np.digitize(x_vals, edges) - 1, 0, qp_box_bins - 1)
+                        bin_labels = [f"{edges[i]:.3g}-{edges[i+1]:.3g}" for i in range(qp_box_bins)]
+                        x_bin_labels = np.array(bin_labels)[bin_idx]
+                        fig = go.Figure(go.Box(x=x_bin_labels, y=y_vals, boxpoints="outliers"))
+                        fig.update_xaxes(title=f"{qp_bx} (bin range)", categoryorder="array",
+                                          categoryarray=bin_labels)
+                        fig.update_yaxes(title=qp_by)
+                        fig.update_layout(height=450, margin=dict(l=10, r=10, t=10, b=10))
+                        st.plotly_chart(fig, use_container_width=True)
+                        st.caption(f"{len(x_vals)} of {len(display_frame)} rows shown across "
+                                   f"{qp_box_bins} bins.")
+
+                elif qp_type == "Heatmap":
+                    st.caption("2D histogram (point density) - more readable than a scatter "
+                               "plot when there are enough rows for overplotting to be an "
+                               "issue.")
+                    c1, c2, c3 = st.columns(3)
+                    qp_hx = c1.selectbox("X field", numeric_cols, index=0, key="qp_heat_x")
+                    qp_hy = c2.selectbox("Y field", numeric_cols,
+                                          index=min(1, len(numeric_cols) - 1), key="qp_heat_y")
+                    qp_heat_bins = c3.slider("Bins per axis", 10, 80, 30, key="qp_heat_bins")
+                    c4, c5 = st.columns(2)
+                    qp_heat_logx = c4.checkbox("Log X", value=True, key="qp_heat_logx")
+                    qp_heat_logy = c5.checkbox("Log Y", value=True, key="qp_heat_logy")
+
+                    x_vals = display_frame[qp_hx]
+                    y_vals = display_frame[qp_hy]
+                    mask = x_vals.notna() & y_vals.notna()
+                    if qp_heat_logx:
+                        mask &= x_vals > 0
+                    if qp_heat_logy:
+                        mask &= y_vals > 0
+                    x_vals, y_vals = x_vals[mask], y_vals[mask]
+                    x_plot = np.log10(x_vals) if qp_heat_logx else x_vals
+                    y_plot = np.log10(y_vals) if qp_heat_logy else y_vals
+
+                    fig = go.Figure(go.Histogram2d(
+                        x=x_plot, y=y_plot, nbinsx=qp_heat_bins, nbinsy=qp_heat_bins,
+                        colorscale="Viridis", colorbar=dict(title="count"),
+                    ))
+                    fig.update_xaxes(title=f"log10({qp_hx})" if qp_heat_logx else qp_hx)
+                    fig.update_yaxes(title=f"log10({qp_hy})" if qp_heat_logy else qp_hy)
+                    fig.update_layout(height=450, margin=dict(l=10, r=10, t=10, b=10))
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.caption(f"{len(x_vals)} of {len(display_frame)} rows shown"
+                               + (" (log-scale bins hide non-positive values)."
+                                  if qp_heat_logx or qp_heat_logy else "."))
+
+                else:  # 3D Scatter
+                    c1, c2, c3 = st.columns(3)
+                    qp_3x = c1.selectbox("X field", numeric_cols, index=0, key="qp_3d_x")
+                    qp_3y = c2.selectbox("Y field", numeric_cols,
+                                          index=min(1, len(numeric_cols) - 1), key="qp_3d_y")
+                    qp_3z = c3.selectbox("Z field", numeric_cols,
+                                          index=min(2, len(numeric_cols) - 1), key="qp_3d_z")
+                    qp_3color = st.selectbox("Color by (optional)", ["None"] + numeric_cols,
+                                              key="qp_3d_color")
+                    c4, c5, c6 = st.columns(3)
+                    qp_3logx = c4.checkbox("Log X", value=False, key="qp_3d_logx")
+                    qp_3logy = c5.checkbox("Log Y", value=False, key="qp_3d_logy")
+                    qp_3logz = c6.checkbox("Log Z", value=False, key="qp_3d_logz")
+
+                    x_vals = display_frame[qp_3x]
+                    y_vals = display_frame[qp_3y]
+                    z_vals = display_frame[qp_3z]
+                    color_vals = display_frame[qp_3color] if qp_3color != "None" else None
+                    mask = x_vals.notna() & y_vals.notna() & z_vals.notna()
+                    if color_vals is not None:
+                        mask &= color_vals.notna()
+                    if qp_3logx:
+                        mask &= x_vals > 0
+                    if qp_3logy:
+                        mask &= y_vals > 0
+                    if qp_3logz:
+                        mask &= z_vals > 0
+                    x_vals, y_vals, z_vals = x_vals[mask], y_vals[mask], z_vals[mask]
+                    color_vals = color_vals[mask] if color_vals is not None else None
+
+                    marker = dict(size=3, opacity=0.7)
+                    if color_vals is not None:
+                        marker.update(color=color_vals, colorscale="Viridis",
+                                       showscale=True, colorbar=dict(title=qp_3color))
+                    fig = go.Figure(go.Scatter3d(
+                        x=x_vals, y=y_vals, z=z_vals, mode="markers", marker=marker,
+                        text=[f"{qp_3x}={xv:.4g}<br>{qp_3y}={yv:.4g}<br>{qp_3z}={zv:.4g}"
+                              for xv, yv, zv in zip(x_vals, y_vals, z_vals)],
+                        hoverinfo="text",
+                    ))
+                    fig.update_layout(
+                        scene=dict(
+                            xaxis=dict(title=qp_3x, type="log" if qp_3logx else "linear"),
+                            yaxis=dict(title=qp_3y, type="log" if qp_3logy else "linear"),
+                            zaxis=dict(title=qp_3z, type="log" if qp_3logz else "linear"),
+                        ),
+                        height=550, margin=dict(l=0, r=0, t=10, b=0),
+                    )
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.caption(f"{len(x_vals)} of {len(display_frame)} rows shown. Drag to "
+                               "rotate, scroll to zoom, hover a point for its exact values.")
+
+        if finder == "CAESAR Galaxies":
+            st.divider()
+            with st.expander("📈 Galaxy scaling relations (CAESAR)"):
+                st.caption(
+                    "Same idea as the Subfind-based Scaling Relations statistic, from "
+                    "CAESAR's own galaxy catalog instead - individual galaxies shown "
+                    "directly (not binned/averaged), since this catalog is much smaller "
+                    "(hundreds, not thousands, of galaxies)."
+                )
+                gal = sorted_frame[sorted_frame["Stellar Mass [Msun]"] > 0]
+                fig, axes = plt.subplots(1, 3, figsize=(13, 4))
+                panels = [
+                    ("Stellar Half-Mass Radius [kpc/h]", "Stellar half-mass radius [kpc/h]"),
+                    ("BH Mass [Msun]", "BH mass [Msun]"),
+                    ("SFR [Msun/yr]", "SFR [Msun/yr]"),
+                ]
+                for ax, (col, ylabel) in zip(axes, panels):
+                    y = gal[col].to_numpy()
+                    mask = y > 0
+                    ax.scatter(gal["Stellar Mass [Msun]"][mask], y[mask], s=10, alpha=0.5)
+                    ax.set_xscale("log")
+                    ax.set_yscale("log")
+                    ax.set_xlabel("Stellar mass [Msun]")
+                    ax.set_ylabel(ylabel)
+                    ax.grid(alpha=0.3, which="both")
+                fig.tight_layout()
+                st.pyplot(fig)
+                st.caption(f"{len(gal)} galaxies with real stellar mass shown. In the SFR/BH "
+                           "mass panels, galaxies with a value of exactly 0 are omitted from "
+                           "that panel only (real - not every galaxy has star formation or a "
+                           "resolved BH), not dropped from the catalog.")
+
+        st.divider()
+        with st.expander("🔬 Compare Halo Mass Function across finders"):
+            st.caption(
+                "Overlays halo-mass-function shape from every finder that has real data "
+                "for this suite/set/realization/snapshot - comparing halo-finding methods "
+                "on the same simulation is a genuine, recognized cosmology research "
+                "pattern. AHF/Rockstar are filtered to distinct host halos only (their "
+                "real tables mix in subhalos/substructure, which would otherwise inflate "
+                "the low-mass end against Subfind's FOF groups and CAESAR's halo_data, "
+                "both host-only already) - what's left is a genuine, known difference in "
+                "how each method defines halo mass (e.g. FOF vs. spherical-overdensity "
+                "virial mass conventions), not a counting artifact. Not Ωm-normalized like "
+                "the standalone Halo Mass Function statistic - see the info icon there for "
+                "why."
+            )
+            c1, c2, c3 = st.columns(3)
+            cf_min = c1.number_input("Min mass [Msun/h]", value=1e10, format="%e", key="cf_hmf_min")
+            cf_max = c2.number_input("Max mass [Msun/h]", value=1e14, format="%e", key="cf_hmf_max")
+            cf_bins = c3.slider("Bins", 5, 40, 20, key="cf_hmf_bins")
+            hmf_results = B.get_cross_finder_hmf(suite, set_name, realization, snapnum,
+                                                  cf_min, cf_max, cf_bins, fetch_public=fetch_public)
+            if not hmf_results:
+                st.info("No finder has real halo data for this suite/set/realization/snapshot - "
+                        "switch to Public data release mode and pick IllustrisTNG or SIMBA.")
+            else:
+                fig, ax = plt.subplots(figsize=(8, 4.5))
+                for name, r in hmf_results.items():
+                    ax.plot(r.x, r.y, "o-", lw=1.5, ms=4, label=name)
+                ax.set_xscale("log")
+                ax.set_yscale("log")
+                ax.set_xlabel("Halo Mass [Msun/h]")
+                ax.set_ylabel("dn/dlogM [(Mpc/h)^-3]")
+                ax.grid(alpha=0.3, which="both")
+                ax.legend(fontsize=8)
+                fig.tight_layout()
+                st.pyplot(fig)
+                for name, r in hmf_results.items():
+                    st.caption(f"**{name}**: {r.note}")
+                missing = set(["Subfind", "AHF", "Rockstar", "CAESAR"]) - set(hmf_results.keys())
+                if missing:
+                    st.caption(f"No real data for: {', '.join(missing)}")
+
         if finder == "Subfind":
             st.divider()
             with st.expander("📈 Trace a subhalo's merger history (SubLink)"):
@@ -1100,6 +1378,34 @@ st.markdown(
     "CAMELS-SAM tabs~~ ✅ done (AHF/Rockstar/CAESAR/Subfind/CAMELS-SAM each parse far more real "
     "columns than the curated table shows - e.g. CAESAR has 118, Subfind 72 - a checkbox now "
     "surfaces all of them, no new fetching needed, it was already in memory)\n"
+    "- ~~**Catalog Browser plots**: every halo finder (AHF/Rockstar/CAESAR/CAESAR Galaxies) "
+    "was table-only, no visualization~~ ✅ done, three additions: (1) a generic \"Quick plot\" "
+    "expander - pick any real fields (curated or raw) from whichever finder is selected, "
+    "**5 chart types** (Scatter, Histogram, Box Plot, Heatmap, 3D Scatter), log-scale toggles, "
+    "optional color-by field - works identically for every finder including Subfind, no new "
+    "fetching (plots what's already loaded). Box Plot bins the X field and shows the real "
+    "spread of Y per bin, not just a mean trend; Heatmap is a 2D histogram for catalogs large "
+    "enough that a scatter plot overplots; 3D Scatter reuses this app's existing Scatter3d "
+    "pattern (native axes/hover) with independent log toggles per axis. Caught and fixed a "
+    "real bug during testing (applies to all 5 chart types): selecting the same field for two "
+    "different axes/color and selecting a DataFrame by a list of column names with a repeated "
+    "name returns an ambiguous multi-column result, not a clean Series - fixed by extracting "
+    "every field as its own independent Series rather than a multi-column selection. "
+    "(2) a CAESAR-Galaxies-specific 3-panel scaling-relations view (radius/BH-mass/SFR vs "
+    "stellar mass, individual galaxies since the catalog is small); (3) a \"Compare Halo Mass "
+    "Function across finders\" expander overlaying real dn/dlogM shape from Subfind/AHF/"
+    "Rockstar/CAESAR on one plot - the real cross-finder-comparison pattern already "
+    "anticipated by an earlier ticket in this project's own roadmap, not Ωm-normalized like "
+    "the standalone HMF statistic since Ωm isn't available for the alternate finders and "
+    "varies across LH/1P/SB sets anyway. Caught and fixed a real confound after the user "
+    "pushed back on how meaningful the comparison actually was: AHF/Rockstar's real tables "
+    "mix subhalos/substructure in with distinct host halos (confirmed via their real "
+    "`hostHalo`/`pid` fields - 101/3141 for AHF, 414/5903 for Rockstar in one realization), "
+    "while Subfind's FOF groups and CAESAR's halo_data are host-only already - counting "
+    "substructure as independent halos inflated AHF/Rockstar's low-mass end for a reason "
+    "unrelated to genuine finder disagreement. Now filtered to host-only for both, so what "
+    "remains isolates the real, legitimate difference (FOF vs. spherical-overdensity virial "
+    "mass conventions genuinely disagree in the literature), not a counting artifact.\n"
     "- ~~**Desktop packaging**: native window via `pywebview`~~ ✅ done — run `python desktop.py`\n"
     "- **ML scripts panel**: drive the GAN / autoencoder / params↔SFRH neural nets from `scripts/`\n"
     "- ~~**1P set real-data fetching (IllustrisTNG)**~~ ✅ done (2026-08-02): 1P's real public "
