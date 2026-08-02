@@ -61,12 +61,103 @@ SUITE_VIDEOS = {
     "N-body":       "w0VPWIyc7Wk",
 }
 
+# SB (Sobol sequence) - confirmed real (2026-08-02), simple {folder}_{realization}
+# naming like LH/CV/EX (not a compound scheme like 1P). Docs state Sobol
+# sequences are meant to eventually replace LH for parameter-space sampling.
+# Unlike every other set, SB's real folder NAME differs per suite (not just
+# its realization count) - confirmed via a real directory listing: IllustrisTNG
+# uses "SB28" (2048 realizations, 28 parameters), Astrid uses "SB7" (1024
+# realizations, 7 parameters). SIMBA/Swift-EAGLE don't have an SB set at all.
+SB_FOLDER_FOR_SUITE = {"IllustrisTNG": "SB28", "Astrid": "SB7"}
+SB_REALIZATIONS_FOR_SUITE = {"IllustrisTNG": 2048, "Astrid": 1024}
+
 SET_REALIZATIONS = {
     "LH": 1000,   # Latin Hypercube: varied cosmology + astrophysics
     "CV": 27,     # Cosmic Variance: fixed params, varied initial phases
-    "1P": 66,     # One-parameter-at-a-time
+    "1P": 66,     # One-parameter-at-a-time - this count is unverified and likely wrong
+                  # (kept as-is rather than guessed at, see note below) - real folders
+                  # aren't indexed by a flat integer at all, so this only matters for
+                  # the synthetic fallback's seed range and the slider's upper bound,
+                  # not for correctness of any real fetch.
     "EX": 4,      # Extreme
 }
+# 1P's real public folders are compound-named by parameter index and variation
+# (e.g. "1P_p11_2", not "1P_{realization}" like every other set) - confirmed via
+# a real directory listing (2026-08-02): 140 folders under Pk/IllustrisTNG/
+# L25n256/1P/, exactly 28 parameters x 5 variations (n2,n1,0,1,2). The upstream
+# docs (docs/source/suites_sets.rst) describe this set as "4 simulations per
+# parameter plus one shared fiducial" = 113 *physically distinct* sims for
+# IllustrisTNG's 28 parameters - the folder count is higher because the shared
+# fiducial (variation "0") gets its own folder under every parameter, even
+# though it's the same underlying simulation each time.
+#
+# IMPORTANT: there are actually TWO different 1P naming conventions in the
+# public release, confirmed via real directory listings (2026-08-02):
+#   - modern/expanded: "1P_p{1..28}_{n2,n1,0,1,2}" - used by Pk, FOF_Subfind,
+#     Sims (raw snapshots), Rockstar, Caesar, SubLink, Photometry
+#   - legacy/original: "1P_{1..6}_{n5,n4,n3,n2,n1,0,1,2,3,4,5}" (no "p", only
+#     6 params, 11 variations) - used by AHF, Profiles (Halo Gas Profiles),
+#     Lya (Lyman-alpha)
+# Only the modern scheme is wired up below (ONEP_TNG_PARAMS) - AHF/Halo Gas
+# Profiles/Lyman-alpha still show no 1P data, same as before this was built.
+#
+# Since every real-data fetcher in this app already builds its URL as
+# f"{set_name}_{realization}", passing realization as the STRING
+# "p{index}_{suffix}" (instead of an int) makes every existing Pk/FOF_Subfind/
+# Sims/Rockstar/Caesar/SubLink/Photometry fetcher construct the correct real
+# 1P path with zero changes to the fetchers themselves - confirmed by real
+# HEAD requests against all of them before relying on this (2026-08-02).
+ONEP_VARIATION_SUFFIX = {-2: "n2", -1: "n1", 0: "0", 1: "1", 2: "2"}
+
+def onep_realization_id(param_index: int, variation: int) -> str:
+    return f"p{param_index}_{ONEP_VARIATION_SUFFIX[variation]}"
+
+
+# The 28 real IllustrisTNG 1P parameters, discovered (not guessed) by fetching
+# the real FOF_Subfind header/Parameters attrs for the n2 and 2 variations of
+# each index and finding which value actually differs (2026-08-01/02). p2 and
+# p9 never appear in any output file's metadata (sigma_8 and n_s are only used
+# at initial-condition generation time, never written to a runtime attribute)
+# - identified only by elimination against the docs' "5 cosmological, 23
+# astrophysical = 28 total" count, with every other index in that count
+# independently confirmed. `attr_key` is the exact real HDF5 attribute name
+# (Header or Parameters group) so a UI can show the real fetched value, not a
+# guessed one; None for the two elimination-only entries.
+ONEP_TNG_PARAMS = [
+    {"index": 1,  "name": "Omega_m",                       "category": "cosmological",   "attr_key": "Omega0"},
+    {"index": 2,  "name": "sigma_8",                        "category": "cosmological",   "attr_key": None},
+    {"index": 3,  "name": "WindEnergyIn1e51erg",            "category": "astrophysical",  "attr_key": "WindEnergyIn1e51erg"},
+    {"index": 4,  "name": "RadioFeedbackFactor",            "category": "astrophysical",  "attr_key": "RadioFeedbackFactor"},
+    {"index": 5,  "name": "VariableWindVelFactor",          "category": "astrophysical",  "attr_key": "VariableWindVelFactor"},
+    {"index": 6,  "name": "RadioFeedbackReiorientationFactor", "category": "astrophysical", "attr_key": "RadioFeedbackReiorientationFactor"},
+    {"index": 7,  "name": "Omega_b",                        "category": "cosmological",   "attr_key": "OmegaBaryon"},
+    {"index": 8,  "name": "HubbleParam (h)",                "category": "cosmological",   "attr_key": "HubbleParam"},
+    {"index": 9,  "name": "n_s",                             "category": "cosmological",   "attr_key": None},
+    {"index": 10, "name": "MaxSfrTimescale",                "category": "astrophysical",  "attr_key": "MaxSfrTimescale"},
+    {"index": 11, "name": "FactorForSofterEQS",             "category": "astrophysical",  "attr_key": "FactorForSofterEQS"},
+    {"index": 12, "name": "IMFslope",                        "category": "astrophysical",  "attr_key": "IMFslope"},
+    {"index": 13, "name": "SNII_MinMass_Msun",              "category": "astrophysical",  "attr_key": "SNII_MinMass_Msun"},
+    {"index": 14, "name": "ThermalWindFraction",            "category": "astrophysical",  "attr_key": "ThermalWindFraction"},
+    {"index": 15, "name": "VariableWindSpecMomentum",       "category": "astrophysical",  "attr_key": "VariableWindSpecMomentum"},
+    {"index": 16, "name": "WindFreeTravelDensFac",          "category": "astrophysical",  "attr_key": "WindFreeTravelDensFac"},
+    {"index": 17, "name": "MinWindVel",                      "category": "astrophysical",  "attr_key": "MinWindVel"},
+    {"index": 18, "name": "WindEnergyReductionFactor",      "category": "astrophysical",  "attr_key": "WindEnergyReductionFactor"},
+    {"index": 19, "name": "WindEnergyReductionMetallicity", "category": "astrophysical",  "attr_key": "WindEnergyReductionMetallicity"},
+    {"index": 20, "name": "WindEnergyReductionExponent",    "category": "astrophysical",  "attr_key": "WindEnergyReductionExponent"},
+    {"index": 21, "name": "WindDumpFactor",                  "category": "astrophysical",  "attr_key": "WindDumpFactor"},
+    {"index": 22, "name": "SeedBlackHoleMass",              "category": "astrophysical",  "attr_key": "SeedBlackHoleMass"},
+    {"index": 23, "name": "BlackHoleAccretionFactor",       "category": "astrophysical",  "attr_key": "BlackHoleAccretionFactor"},
+    {"index": 24, "name": "BlackHoleEddingtonFactor",       "category": "astrophysical",  "attr_key": "BlackHoleEddingtonFactor"},
+    {"index": 25, "name": "BlackHoleFeedbackFactor",        "category": "astrophysical",  "attr_key": "BlackHoleFeedbackFactor"},
+    {"index": 26, "name": "BlackHoleRadiativeEfficiency",   "category": "astrophysical",  "attr_key": "BlackHoleRadiativeEfficiency"},
+    {"index": 27, "name": "QuasarThreshold",                 "category": "astrophysical",  "attr_key": "QuasarThreshold"},
+    {"index": 28, "name": "QuasarThresholdPower",           "category": "astrophysical",  "attr_key": "QuasarThresholdPower"},
+]
+# p15 has no n2/n1 folders published for IllustrisTNG (confirmed via a real
+# directory listing) - only variations 0, 1, 2 exist. Every other index has
+# all 5. Not hidden - the UI should let p15 be picked and simply show
+# "no data" for the two missing variations, same as any other real gap.
+ONEP_TNG_MISSING_VARIATIONS = {15: {-2, -1}}
 
 N_SNAPSHOTS = 34  # snapshots 000-033
 
@@ -88,22 +179,44 @@ PUBLIC_PK_SUITES = {"IllustrisTNG", "SIMBA", "Astrid", "Swift-EAGLE"}
 # Real public Pk files are one-per-species (Pk_c/Pk_m/Pk_g/Pk_s/Pk_bh), not
 # arbitrary particle-type combinations - map our UI's ptype selections onto
 # the closest real file. "Total" maps to the real matter file, which is
-# computed from the full particle set (including black holes).
+# computed from the full particle set (including black holes). Pk_bh (ptype
+# 5, Gadget's black-hole particle type) was previously unexposed - confirmed
+# real via a direct fetch (2026-08-02): Pk/IllustrisTNG/L25n256/LH/LH_1/
+# Pk_bh_z=0.00.txt exists and parses like every other species file.
 PK_SUFFIX_FOR_PTYPE = {
     (0,): "g",       # gas
     (1,): "c",       # CDM
     (4,): "s",       # stars
+    (5,): "bh",      # black holes
     (0, 1, 4): "m",  # total matter
 }
 
 # Suites with public FOF/Subfind catalogs in the first-generation box.
 PUBLIC_SUBFIND_SUITES = {"IllustrisTNG", "SIMBA", "Astrid", "Swift-EAGLE"}
 
-# FOF/Subfind catalogs are numbered on their own output schedule (~0-90),
-# not the 34-snapshot schedule Pk/SFRH use - 90 is the last one, z~0.
-# The snapshot slider doesn't yet select among catalog redshifts; see the
-# note this produces on Result.
-PUBLIC_SUBFIND_GROUPNUM = 90
+# FOF/Subfind catalogs are numbered on their own ~0-90 output schedule, NOT
+# the same integers as the 34-snapshot Pk/SFRH schedule - but verified
+# directly (2026-08-02) that only 34 of those ~90 numbers are actually
+# published, and sorted ascending they map exactly 1:1 onto
+# SNAPSHOT_REDSHIFTS (checked all 34 real redshifts, zero mismatches, across
+# IllustrisTNG/SIMBA/Astrid/Swift-EAGLE) - this SAME list of 34 numbers also
+# turned out to be exactly the raw Sims snapshot_XXX.hdf5 numbering and
+# CAESAR's caesar_newsnaps_XXX.hdf5 numbering (both confirmed real, not
+# assumed). So the existing Snapshot slider (0-33) can drive all of these,
+# not just Pk/SFRH/Bispectrum/Halo Gas Profiles/SubLink/Lyman-alpha.
+SUBFIND_GROUPNUM_FOR_SNAPSHOT = [14, 18, 24, 28, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54,
+                                  56, 58, 60, 62, 64, 66, 68, 70, 72, 74, 76, 78, 80, 82, 84, 86,
+                                  88, 90]
+PUBLIC_SUBFIND_GROUPNUM = SUBFIND_GROUPNUM_FOR_SNAPSHOT[-1]  # 90, kept for any remaining z=0-only callers
+
+# Rockstar's hlists are named by scale factor, not snapshot/groupnum, and
+# (like AHF) each suite computes its own scale factors rather than the exact
+# inverse of our rounded SNAPSHOT_REDSHIFTS table - confirmed these genuinely
+# differ *by suite* (SIMBA's real files are ~0.0001-0.0003 off from
+# IllustrisTNG's at the same schedule position, e.g. 0.14286 vs 0.14298), so
+# a single hardcoded table would silently fetch the wrong file for other
+# suites. Discovered via a real directory listing + closest-redshift match
+# instead, same spirit as AHF's discovery (see _fetch_rockstar_halos).
 
 # Raw snapshots use the same ~0-90 output schedule as FOF/Subfind (written at
 # the same steps). Verified directly: IllustrisTNG, SIMBA, and Astrid all use
@@ -114,7 +227,6 @@ PUBLIC_SUBFIND_GROUPNUM = 90
 # need dedicated reading code, not a Gadget-format bug fix. Excluded here
 # until that's built, rather than silently mishandled.
 PUBLIC_SIMS_SUITES = {"IllustrisTNG", "SIMBA", "Astrid"}
-PUBLIC_SIMS_SNAPNUM = 90
 
 # CMD's public 3D grids - confirmed suites (its data/ folder has no
 # Swift-EAGLE, unlike Pk/Subfind) and its 5 published redshifts. Unlike Pk's
@@ -303,7 +415,44 @@ PUBLIC_PHOTOMETRY_SUITES = {"IllustrisTNG", "SIMBA", "Astrid", "Swift-EAGLE"}
 # SIMBA's folder/file naming is all-caps - a genuine one-off inconsistency,
 # not a typo here.
 PHOTOMETRY_SUITE_FILENAME = {"SIMBA": "Simba"}
-PHOTOMETRY_SNAPNUM = PUBLIC_SUBFIND_GROUPNUM  # 90
+PHOTOMETRY_SNAPNUM = PUBLIC_SUBFIND_GROUPNUM  # 90, kept as the default snapnum
+# Real per-snapshot photometry uses the same 34-entry schedule as everything
+# else (confirmed real: snap_014...snap_090, same numbers as
+# SUBFIND_GROUPNUM_FOR_SNAPSHOT) - was hardcoded to z=0 only.
+PHOTOMETRY_SPS_MODELS = ["BC03", "BPASS"]
+PHOTOMETRY_SPECTRA_TYPES = ["attenuated", "intrinsic"]  # dust-attenuated vs. dust-free -
+                                                          # a real, meaningful comparison
+# Real filter families, confirmed via a direct h5py inspection of a real file
+# (2026-08-02), not the docs list - e.g. under .../luminosity/attenuated/, the
+# real top-level HDF5 keys are exactly:
+#   'GALEX FUV', 'GALEX NUV', 'Generic', 'HST', 'JWST', 'SLOAN', 'UKIRT',
+#   'UV1500', 'UV2800'
+# - five of those ("Generic", "HST", "JWST", "SLOAN", "UKIRT") are groups
+# containing the actual per-band datasets (e.g. Generic/Johnson.U); the other
+# four (GALEX FUV/NUV, UV1500, UV2800) are themselves single ungrouped
+# datasets, not families with sub-bands. Same structure confirmed for both
+# BC03/BPASS and attenuated/intrinsic. `hdf5_group` is None for those
+# ungrouped ones (the band name IS the top-level key); label keys below are
+# just for the UI and don't need to match the real HDF5 key ("Generic
+# (Johnson)" displays what "Generic" actually contains).
+PHOTOMETRY_FILTER_GROUPS = {
+    "SLOAN": {"hdf5_group": "SLOAN",
+               "bands": ["SDSS.u", "SDSS.g", "SDSS.r", "SDSS.i", "SDSS.z"]},
+    "Generic (Johnson)": {"hdf5_group": "Generic",
+                           "bands": ["Johnson.U", "Johnson.B", "Johnson.V", "Johnson.J"]},
+    "HST": {"hdf5_group": "HST",
+             "bands": ["ACS_HRC.F435W", "ACS_HRC.F606W", "ACS_HRC.F775W", "ACS_HRC.F814W",
+                       "ACS_HRC.F850LP", "WFC3_IR.F098M", "WFC3_IR.F105W", "WFC3_IR.F110W",
+                       "WFC3_IR.F125W", "WFC3_IR.F140W", "WFC3_IR.F160W"]},
+    "JWST": {"hdf5_group": "JWST",
+              "bands": ["NIRCam.F070W", "NIRCam.F090W", "NIRCam.F115W", "NIRCam.F150W",
+                        "NIRCam.F200W", "NIRCam.F277W", "NIRCam.F356W", "NIRCam.F444W"]},
+    "UKIRT": {"hdf5_group": "UKIRT",
+               "bands": ["UKIDSS.Y", "UKIDSS.J", "UKIDSS.H", "UKIDSS.K"]},
+    "UV / GALEX (rest-frame)": {"hdf5_group": None,
+                                  "bands": ["GALEX FUV", "GALEX NUV", "UV1500", "UV2800"]},
+}
+# kept for backward reference to the original default
 PHOTOMETRY_COLORS = {
     "g - r": ("SDSS.g", "SDSS.r"), "u - r": ("SDSS.u", "SDSS.r"),
     "u - g": ("SDSS.u", "SDSS.g"), "r - i": ("SDSS.r", "SDSS.i"), "i - z": ("SDSS.i", "SDSS.z"),
@@ -315,16 +464,21 @@ PHOTOMETRY_COLORS = {
 # Only the low-k FFT-based estimator (real-space, no RSD) is wired up - the
 # high-k HIPSTER-based files use a different schema (Legendre multipoles,
 # not mu bins) and RSD variants add a third axis of complexity, both
-# deliberately out of scope for now. Scoped to the **equilateral**
-# configuration (k1=k2=k3) for a genuine 1D line plot matching this app's
-# other statistics - confirmed the file's own mu convention directly (not
-# assumed): mu is the angle between the k1/k2 vectors, so a true equilateral
-# triangle (all 3 sides equal) needs mu=0.5, not mu=0 (mu=0 would be a
-# right-angle configuration instead) - verified with real k1==k2 rows before
-# picking the mu bin.
+# deliberately out of scope for now. Fixed to k1=k2 (still a genuine 1D line
+# plot vs. k, matching this app's other statistics) - confirmed the file's
+# own mu convention directly (not assumed): mu is the cosine of the angle
+# between the k1/k2 vectors, read straight from the file's own header row
+# (line 14: -0.9, -0.7, ..., 0.9 - 10 real mu bins, confirmed via a raw
+# fetch), not hardcoded from the docs. mu=0.5 (index 7) is the one value
+# that makes k1=k2=k3 truly equilateral; every other mu bin at fixed k1=k2
+# is a real, distinct triangle shape (squeezed toward mu=0.9, stretched
+# toward mu=-0.9) - exposing the choice lets a user see how the bispectrum's
+# shape-dependence (not just its k-dependence) looks, a real second axis of
+# this statistic that was previously hidden entirely.
 PUBLIC_BK_SUITES = {"IllustrisTNG", "SIMBA"}
 BK_TYPES = {"Total Matter": "m", "Gas": "g", "Dark Matter": "c"}
-BK_EQUILATERAL_MU_INDEX = 7  # mu_arr[7] == 0.5
+BK_MU_VALUES = [-0.9, -0.7, -0.5, -0.3, -0.1, 0.1, 0.3, 0.5, 0.7, 0.9]  # real header values
+BK_EQUILATERAL_MU_INDEX = 7  # mu_arr[7] == 0.5, kept as the default
 
 # PDF - real per-field histograms of CMD 3D grid pixel values, but for the
 # *entire* 1000-realization LH ensemble in one file (not per-realization
@@ -406,6 +560,12 @@ class Catalog:
     redshift: float
     source: str = "real"   # no synthetic version - see get_halo_catalog()
     note: str = ""
+    raw_frame: pd.DataFrame | None = None  # frame's columns + every other real
+                                            # column this file has - the escape
+                                            # hatch for "the curated columns
+                                            # don't have what I need." Same row
+                                            # order/index as frame. None where
+                                            # not wired up yet.
 
 
 @dataclass
@@ -422,6 +582,10 @@ class VoidCatalog:
     radius: np.ndarray            # Mpc/h
     density_contrast: np.ndarray
     box_size: float                # Mpc/h
+    extra: pd.DataFrame | None = None  # the file's other real columns this app didn't
+                                        # otherwise curate: vol, vol_norm, void_id, num_part,
+                                        # parent_id, tree_level, n_children, central_density -
+                                        # None for the synthetic fallback (no real analog to fake)
     source: str = "synthetic"
     note: str = ""
 
@@ -434,6 +598,11 @@ class ScalingRelations:
     sfr: np.ndarray            # Msun/yr, mean per bin
     vmax: np.ndarray           # km/s, mean per bin
     counts: np.ndarray         # galaxies per bin - bins with 0 count are unpopulated, not zero-valued
+    metallicity: np.ndarray | None = None  # mean stellar metallicity per bin - the
+                                            # mass-metallicity relation; None for the
+                                            # synthetic fallback (no illustrative
+                                            # model was built for it, unlike the
+                                            # other four panels)
     source: str = "synthetic"
     note: str = ""
 
@@ -449,9 +618,14 @@ class XrayProfiles:
 
 @dataclass
 class MergerHistory:
-    redshift: np.ndarray   # one entry per snapshot along the main branch, root (z=0) first
+    redshift: np.ndarray   # one entry per snapshot along the main branch, root first
     mass: np.ndarray       # Msun/h, SubLink's total Subhalo mass at each snapshot
-    subfind_id: int        # the z=0 SubfindID this history was traced from
+    subfind_id: int        # the root SubfindID (at root_snapnum) this history was traced from
+    num_particles: np.ndarray | None = None  # SubLink's NumParticles at each snapshot -
+                                              # a resolution/completeness proxy independent
+                                              # of Mass, useful for spotting when a "merger"
+                                              # mass jump is actually a low-particle-count
+                                              # subhalo being swallowed vs. a genuine major merger
     source: str = "real"   # real-data only, no synthetic fallback (see get_merger_history)
     note: str = ""
 
@@ -463,6 +637,16 @@ class HaloProfiles:
     log_mass: np.ndarray    # log10 M200c [Msun], shape (n_halos,)
     field: str
     units: str
+    n_part: np.ndarray | None = None  # shape (n_halos, 25) - particles per radial bin
+                                       # feeding each profile point; a direct Poisson-noise
+                                       # proxy (relative error ~ 1/sqrt(n)) for error bars,
+                                       # since illstack_CAMELS doesn't publish uncertainties
+                                       # directly
+    metadata: pd.DataFrame | None = None  # ~40 other real per-halo Group* fields this file
+                                           # has beyond M200c/R200c (SFR, BH mass, alternate
+                                           # mass/radius definitions, gas/star abundances,
+                                           # substructure count, etc.) - same row order as
+                                           # values/log_mass
     source: str = "real"    # real-data only, no synthetic fallback (see get_halo_profiles)
     note: str = ""
 
@@ -491,6 +675,11 @@ class LymanAlphaSpectrum:
     pixel: np.ndarray       # 0..nbins-1, raw index - no published velocity/wavelength calibration
     flux: np.ndarray        # transmitted flux fraction, exp(-tau), in [0, 1]
     sightline: int
+    colden: np.ndarray | None = None  # neutral hydrogen column density per pixel
+                                       # (colden/H/1 in the file, same shape as tau) - the
+                                       # physical quantity tau is derived from; shows where
+                                       # absorption comes from even in the fully-saturated
+                                       # (flux=0) regime where tau/flux alone are uninformative
     source: str = "real"    # real-data only, no synthetic fallback (see get_lya_spectrum)
     note: str = ""
 
@@ -532,20 +721,54 @@ def _fetch_public_pk(suite, set_name, realization, redshift, ptype):
     return k, Pk
 
 
-@lru_cache(maxsize=16)
-def _fetch_public_subfind(suite, set_name, realization):
+@lru_cache(maxsize=32)
+def get_linear_pk_ics(suite, set_name, realization):
+    """Real linear-theory matter Pk at z=0, generated by CAMB during initial-
+    condition generation for this exact realization's cosmology - confirmed
+    real (2026-08-02) at Sims/{suite}/L25n256/{set}/{set}_{realization}/ICs/
+    Pk_m_z=0.000.txt (docs/source/snapshots.rst), a plain 2-column (k, Pk)
+    text file, same trivial format as the regular Pk_*.txt products. Fixed
+    to z=0 - this is the linear spectrum used to seed the ICs, not a function
+    of the snapshot currently being viewed, so it's shown as-is (no growth-
+    factor rescaling to the viewer's chosen redshift, which would need an
+    additional cosmological calculation this app doesn't otherwise need and
+    isn't confirmed against real data). Confirmed absent for Swift-EAGLE
+    (different native output, same reason its raw snapshots are excluded
+    elsewhere). Returns (k, Pk) or None."""
+    if suite not in PUBLIC_SIMS_SUITES:
+        return None
+    url = (f"{PUBLIC_DATA_URL}/Sims/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
+           f"ICs/Pk_m_z=0.000.txt")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            raw = resp.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+    try:
+        k, Pk = np.loadtxt(raw.splitlines(), unpack=True)
+    except ValueError:
+        return None
+    return k, Pk
+
+
+@lru_cache(maxsize=64)
+def _fetch_public_subfind(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1):
     """Download one real FOF/Subfind catalog from the public CAMELS data
-    release. Only the highest-numbered (~z=0) catalog is fetched for now -
-    catalogs use their own ~0-90 numbering, unrelated to the 34-snapshot
-    schedule the snapshot slider drives elsewhere in this app. Returns a dict
-    of numpy arrays/floats, or None if unavailable. Cached - HMF, SMF, and
-    the catalog browser all pull from the same fetched file at no extra
-    download cost once a (suite, set, realization) has been seen."""
+    release. `snapnum` uses the same 0-33 schedule as Pk/SFRH - confirmed
+    real (not assumed) that only 34 of the ~90 possible groupnum values are
+    actually published, and sorted ascending they map exactly onto
+    SNAPSHOT_REDSHIFTS (see SUBFIND_GROUPNUM_FOR_SNAPSHOT). Returns a dict of
+    numpy arrays/floats, or None if unavailable. Cached - HMF, SMF, the
+    catalog browser, and scaling relations all pull from the same fetched
+    file at no extra download cost once a (suite, set, realization, snapnum)
+    has been seen."""
     if suite not in PUBLIC_SUBFIND_SUITES:
         return None
 
+    groupnum = SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]
     url = (f"{PUBLIC_DATA_URL}/FOF_Subfind/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
-           f"groups_{PUBLIC_SUBFIND_GROUPNUM:03d}.hdf5")
+           f"groups_{groupnum:03d}.hdf5")
     try:
         with urllib.request.urlopen(url, timeout=30) as response:
             raw = response.read()
@@ -558,6 +781,42 @@ def _fetch_public_subfind(suite, set_name, realization):
         with h5py.File(tmp.name, "r") as f:
             header = f["Header"].attrs
             subhalo_mass_type = f["Subhalo/SubhaloMassType"][:] * 1e10  # Msun/h, (N, 6)
+            n_subhalo = subhalo_mass_type.shape[0]
+
+            # Every other real per-subhalo 1D dataset the file has (SubhaloVel,
+            # SubhaloSpin, SubhaloGrNr, SubhaloIDMostbound, SubhaloWindMass,
+            # SubhaloGasMetallicity, etc.) - the escape hatch for the Catalog
+            # Browser's "show all fields" toggle. Collected dynamically since
+            # this app already downloads the whole file anyway; (N,3)/(N,6)
+            # datasets are split into indexed columns rather than skipped.
+            already = {"SubhaloMassType", "SubhaloHalfmassRad", "SubhaloHalfmassRadType",
+                       "SubhaloSFR", "SubhaloVmax", "SubhaloStarMetallicity"}
+            raw_extra = {}
+
+            def collect(name, obj):
+                if not isinstance(obj, h5py.Dataset) or not name.startswith("Subhalo/"):
+                    return
+                short = name.split("/", 1)[1]
+                if short in already or obj.shape[0] != n_subhalo:
+                    return
+                if obj.ndim == 1:
+                    raw_extra[short] = obj[:]
+                elif obj.ndim == 2 and obj.shape[1] <= 6:
+                    for i in range(obj.shape[1]):
+                        raw_extra[f"{short}_{i}"] = obj[:, i]
+            f.visititems(collect)
+
+            # Raw Header + Parameters (Arepo run-config) attrs, numeric/str only -
+            # the file is already fully downloaded above, so this costs nothing
+            # extra. Powers the 1P parameter picker's "real value" display
+            # (ONEP_TNG_PARAMS' attr_key looks up into this dict) - not used for
+            # any other set, but harmless to always include.
+            raw_params = {}
+            for attrs_group in (header, f["Parameters"].attrs if "Parameters" in f else {}):
+                for k, v in dict(attrs_group).items():
+                    if not isinstance(v, bytes):
+                        raw_params[k] = v.item() if hasattr(v, "item") else v
+
             return {
                 "box_size": header["BoxSize"] / 1e3,                # Mpc/h
                 "redshift": float(header["Redshift"]),
@@ -574,6 +833,8 @@ def _fetch_public_subfind(suite, set_name, realization):
                 "subhalo_sfr": f["Subhalo/SubhaloSFR"][:],           # Msun/yr
                 "subhalo_vmax": f["Subhalo/SubhaloVmax"][:],         # km/s
                 "subhalo_metallicity": f["Subhalo/SubhaloStarMetallicity"][:],
+                "subhalo_raw_extra": raw_extra,
+                "raw_params": raw_params,
             }
 
 
@@ -634,19 +895,25 @@ def _fetch_public_cmd_grid(suite, set_name, realization, grid_res, redshift, fie
 
 
 @lru_cache(maxsize=8)
-def _fetch_snapshot_positions(suite, set_name, realization, part_type=1, max_particles=2_000_000):
+def _fetch_snapshot_positions(suite, set_name, realization, part_type=1, max_particles=2_000_000,
+                               snapnum=N_SNAPSHOTS - 1):
     """Stream real particle positions lazily from a raw public snapshot over
     HTTP (fsspec issues Range requests under the hood, so the ~2-2.5GB file
     is never downloaded whole), subsampled via a stride to ~max_particles.
     Real particles, just coarser sampling, not synthetic. Shared by the
     density-field gridder and the particle-cloud viewer so switching between
-    them on the same (suite, set, realization) doesn't re-fetch. Returns
-    (positions [Mpc/h, N x 3], box_size [Mpc/h], redshift), or None."""
+    them on the same (suite, set, realization) doesn't re-fetch. `snapnum`
+    uses the same 0-33 schedule as FOF/Subfind (confirmed real: raw Sims
+    snapshot_XXX.hdf5 numbering matches SUBFIND_GROUPNUM_FOR_SNAPSHOT exactly)
+    - previously hardcoded to snapshot 90 (z=0) regardless of the caller's
+    snapshot choice, a real bug fixed 2026-08-02. Returns (positions [Mpc/h,
+    N x 3], box_size [Mpc/h], redshift), or None."""
     if suite not in PUBLIC_SIMS_SUITES:
         return None
 
+    groupnum = SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]
     url = (f"{PUBLIC_DATA_URL}/Sims/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
-           f"snapshot_{PUBLIC_SIMS_SNAPNUM:03d}.hdf5")
+           f"snapshot_{groupnum:03d}.hdf5")
     try:
         with fsspec.open(url, "rb") as fobj:
             with h5py.File(fobj, "r") as hf:
@@ -666,19 +933,24 @@ def _fetch_snapshot_positions(suite, set_name, realization, part_type=1, max_par
 
 
 @lru_cache(maxsize=8)
-def _fetch_snapshot_field_positions(suite, set_name, realization, field, max_particles=2_000_000):
+def _fetch_snapshot_field_positions(suite, set_name, realization, field, max_particles=2_000_000,
+                                     snapnum=N_SNAPSHOTS - 1):
     """Real particle positions + per-particle mass weights for one of the
     mass-type fields (Mgas/Mcdm/Mstar/Mtot), for weighted gridding. Separate
     from _fetch_snapshot_positions (which is DM-only/unweighted, used by the
     particle-cloud view) since this needs per-species mass weights. Only
     the 4 mass-type fields are supported - see RAW_SNAPSHOT_MASS_FIELDS for
-    why the derived-physics fields aren't implemented here. Returns
-    (positions [Mpc/h, N x 3], weights [Msun/h], box_size, redshift) or None."""
+    why the derived-physics fields aren't implemented here. `snapnum` uses
+    the same 0-33 schedule as FOF/Subfind - previously hardcoded to snapshot
+    90 (z=0), a real bug fixed 2026-08-02 (see _fetch_snapshot_positions).
+    Returns (positions [Mpc/h, N x 3], weights [Msun/h], box_size, redshift)
+    or None."""
     if suite not in PUBLIC_SIMS_SUITES or field not in RAW_SNAPSHOT_MASS_FIELDS:
         return None
 
+    groupnum = SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]
     url = (f"{PUBLIC_DATA_URL}/Sims/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
-           f"snapshot_{PUBLIC_SIMS_SNAPNUM:03d}.hdf5")
+           f"snapshot_{groupnum:03d}.hdf5")
     part_types = [0, 1, 4] if field == "Mtot" else [RAW_SNAPSHOT_MASS_FIELDS[field]]
     try:
         with fsspec.open(url, "rb") as fobj:
@@ -714,7 +986,7 @@ def _fetch_snapshot_field_positions(suite, set_name, realization, field, max_par
 
 
 def _fetch_and_grid_snapshot(suite, set_name, realization, grid_res, field=DEFAULT_CMD_FIELD,
-                             max_particles=2_000_000):
+                             max_particles=2_000_000, snapnum=N_SNAPSHOTS - 1):
     """Real per-particle gridding: real particle positions (mass-weighted
     for the selected field) painted onto a grid with the real
     `MAS_library.MA()`. Needs Pylians installed; returns
@@ -722,7 +994,7 @@ def _fetch_and_grid_snapshot(suite, set_name, realization, grid_res, field=DEFAU
     if not HAVE_CAMELS_LIBRARY:
         return None
     fetched = _fetch_snapshot_field_positions(suite, set_name, realization, field,
-                                              max_particles=max_particles)
+                                              max_particles=max_particles, snapnum=snapnum)
     if fetched is None:
         return None
     pos, weights, box_size, redshift = fetched
@@ -791,7 +1063,7 @@ def get_power_spectrum(suite, set_name, realization, snapnum, grid, MAS, threads
 def get_halo_mass_function(suite, set_name, realization, snapnum, RMmin, RMmax, bins,
                             subfind_path: str | None = None, fetch_public: bool = False) -> Result:
     if fetch_public:
-        catalog = _fetch_public_subfind(suite, set_name, realization)
+        catalog = _fetch_public_subfind(suite, set_name, realization, snapnum)
         if catalog is not None:
             # >50 CDM particles per halo, matching the cut in the upstream
             # halo_mass_function() so results are directly comparable to it.
@@ -811,7 +1083,7 @@ def get_halo_mass_function(suite, set_name, realization, snapnum, RMmin, RMmax, 
                 source="real",
                 note=(f"z = {catalog['redshift']:.2f} - public CAMELS data release "
                       f"(FOF_Subfind/{suite}/L25n256/{set_name}/{set_name}_{realization}, "
-                      f"catalog #{PUBLIC_SUBFIND_GROUPNUM} - snapshot slider not used for this source)"),
+                      f"catalog #{SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]})"),
             )
 
     if subfind_path and HAVE_CAMELS_LIBRARY:
@@ -839,7 +1111,7 @@ def get_halo_mass_function(suite, set_name, realization, snapnum, RMmin, RMmax, 
 def get_baryon_fraction(suite, set_name, realization, snapnum, RMmin, RMmax, bins,
                          subfind_path: str | None = None, fetch_public: bool = False) -> Result:
     if fetch_public:
-        catalog = _fetch_public_subfind(suite, set_name, realization)
+        catalog = _fetch_public_subfind(suite, set_name, realization, snapnum)
         if catalog is not None:
             # >50 CDM particles per halo, matching the upstream cut.
             keep = catalog["group_len_type"][:, 1] > 50
@@ -865,7 +1137,7 @@ def get_baryon_fraction(suite, set_name, realization, snapnum, RMmin, RMmax, bin
                 log_y=False, source="real",
                 note=(f"z = {catalog['redshift']:.2f} - public CAMELS data release "
                       f"(FOF_Subfind/{suite}/L25n256/{set_name}/{set_name}_{realization}, "
-                      f"catalog #{PUBLIC_SUBFIND_GROUPNUM} - snapshot slider not used for this source)"),
+                      f"catalog #{SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]})"),
             )
 
     # Synthetic fallback: baryon fraction rises with halo mass toward the
@@ -891,7 +1163,7 @@ def get_baryon_fraction(suite, set_name, realization, snapnum, RMmin, RMmax, bin
 def get_stellar_mass_function(suite, set_name, realization, snapnum, SMmin, SMmax, bins,
                                subfind_path: str | None = None, fetch_public: bool = False) -> Result:
     if fetch_public:
-        catalog = _fetch_public_subfind(suite, set_name, realization)
+        catalog = _fetch_public_subfind(suite, set_name, realization, snapnum)
         if catalog is not None:
             SM = catalog["subhalo_stellar_mass"]
             bins_SM = np.logspace(np.log10(SMmin), np.log10(SMmax), bins + 1)
@@ -907,7 +1179,7 @@ def get_stellar_mass_function(suite, set_name, realization, snapnum, SMmin, SMma
                 source="real",
                 note=(f"z = {catalog['redshift']:.2f} - public CAMELS data release "
                       f"(FOF_Subfind/{suite}/L25n256/{set_name}/{set_name}_{realization}, "
-                      f"catalog #{PUBLIC_SUBFIND_GROUPNUM} - snapshot slider not used for this source)"),
+                      f"catalog #{SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]})"),
             )
 
     if subfind_path and HAVE_CAMELS_LIBRARY:
@@ -928,19 +1200,40 @@ def get_stellar_mass_function(suite, set_name, realization, snapnum, SMmin, SMma
     )
 
 
+def get_onep_param_value(suite, param_index, variation, snapnum=N_SNAPSHOTS - 1):
+    """Real value of one 1P parameter for one variation, read directly from
+    the real FOF_Subfind file's own Header/Parameters attrs (via the same
+    cached fetch every other Subfind-based feature uses - no extra
+    download). Returns None if this parameter's real value can't be read
+    (the two elimination-only entries, sigma_8/n_s - see ONEP_TNG_PARAMS) or
+    the fetch fails (e.g. p15's missing n2/n1 variations)."""
+    entry = next((p for p in ONEP_TNG_PARAMS if p["index"] == param_index), None)
+    if entry is None or entry["attr_key"] is None:
+        return None
+    realization = onep_realization_id(param_index, variation)
+    catalog = _fetch_public_subfind(suite, "1P", realization, snapnum)
+    if catalog is None:
+        return None
+    return catalog["raw_params"].get(entry["attr_key"])
+
+
 # ---------------------------------------------------------------------------
 # Halo/subhalo catalog browser (no equivalent single camels_library function -
 # exposes the same real Subfind catalog HMF/SMF already fetch, as a table)
 # ---------------------------------------------------------------------------
 
-def get_halo_catalog(suite, set_name, realization, fetch_public: bool = False) -> Catalog | None:
+def get_halo_catalog(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1,
+                      fetch_public: bool = False) -> Catalog | None:
     """Real subhalo catalog as a browsable table. No synthetic version -
     a fabricated catalog isn't useful the way a fabricated curve is, so this
     returns None outright when real data isn't available (fetch_public off,
-    or an unsupported suite), rather than inventing fake rows."""
+    or an unsupported suite), rather than inventing fake rows. `snapnum` uses
+    the same 0-33 schedule as Pk/SFRH - the full range is real, not just z=0.
+    Note: SubfindID here only matches SubLink's tree at the *same* snapnum -
+    get_merger_history takes a matching root_snapnum for this reason."""
     if not fetch_public:
         return None
-    catalog = _fetch_public_subfind(suite, set_name, realization)
+    catalog = _fetch_public_subfind(suite, set_name, realization, snapnum)
     if catalog is None:
         return None
 
@@ -963,13 +1256,18 @@ def get_halo_catalog(suite, set_name, realization, fetch_public: bool = False) -
     # Starless subhalos (dark, DM-only) are real and correctly included in
     # stellar_mass_function()'s histogram upstream, but aren't useful rows in
     # a browsable table - this filter is a display choice, not a science one.
-    frame = frame[frame["Stellar Mass [Msun/h]"] > 0].reset_index(drop=True)
+    mask = frame["Stellar Mass [Msun/h]"] > 0
+    frame = frame[mask.to_numpy()].reset_index(drop=True)
+
+    raw_extra = catalog.get("subhalo_raw_extra", {})
+    raw_extra_frame = pd.DataFrame({k: v[mask.to_numpy()] for k, v in raw_extra.items()})
+    raw_frame = pd.concat([frame, raw_extra_frame], axis=1)
 
     return Catalog(
-        frame=frame, box_size=catalog["box_size"], redshift=catalog["redshift"],
+        frame=frame, box_size=catalog["box_size"], redshift=catalog["redshift"], raw_frame=raw_frame,
         note=(f"z = {catalog['redshift']:.2f} - public CAMELS data release "
               f"(FOF_Subfind/{suite}/L25n256/{set_name}/{set_name}_{realization}, "
-              f"catalog #{PUBLIC_SUBFIND_GROUPNUM}, {len(frame)} subhalos with stars)"),
+              f"catalog #{SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]}, {len(frame)} subhalos with stars)"),
     )
 
 
@@ -1028,12 +1326,20 @@ def get_sam_catalog(set_name, realization, fetch_public: bool = False) -> Catalo
         "SFR [Msun/yr]": df["sfr"],
         "x [Mpc]": df["x_position"], "y [Mpc]": df["y_position"], "z [Mpc]": df["z_position"],
     })
-    frame = frame[frame["Stellar Mass [Msun]"] > 0].reset_index(drop=True)
+    mask = frame["Stellar Mass [Msun]"] > 0
+    frame = frame[mask.to_numpy()].reset_index(drop=True)
     if len(frame) == 0:
         return None
 
+    # raw_frame: curated columns plus every other real GALPROP column (41
+    # total, e.g. mass_outflow_rate, tmerge, r_disk, sfrave1gyr) - the escape
+    # hatch, same row order as frame.
+    already = {"mstar", "mhalo", "mBH", "mcold", "sfr", "x_position", "y_position", "z_position"}
+    raw_extra = df[mask.to_numpy()][[c for c in GALPROP_COLUMNS if c not in already]].reset_index(drop=True)
+    raw_frame = pd.concat([frame, raw_extra], axis=1)
+
     return Catalog(
-        frame=frame, box_size=CAMELS_SAM_BOX_SIZE, redshift=float(df["redshift"].iloc[0]),
+        frame=frame, box_size=CAMELS_SAM_BOX_SIZE, redshift=float(df["redshift"].iloc[0]), raw_frame=raw_frame,
         note=(f"z ~ {df['redshift'].iloc[0]:.2f} - public CAMELS data release "
               f"(SCSAM/{set_name}/{set_name}_{realization}/sc-sam/{SAM_DEFAULT_OCTANT}, "
               f"{len(frame)} galaxies with stars - one of 8 spatial octants, tail sample of "
@@ -1055,10 +1361,10 @@ def _mean_per_bin(values, weights, bins_SM, counts):
     return total
 
 
-def get_scaling_relations(suite, set_name, realization, SMmin, SMmax, bins,
+def get_scaling_relations(suite, set_name, realization, SMmin, SMmax, bins, snapnum=N_SNAPSHOTS - 1,
                            fetch_public: bool = False) -> ScalingRelations:
     if fetch_public:
-        catalog = _fetch_public_subfind(suite, set_name, realization)
+        catalog = _fetch_public_subfind(suite, set_name, realization, snapnum)
         if catalog is not None:
             SM = catalog["subhalo_stellar_mass"]
             bins_SM = np.logspace(np.log10(SMmin), np.log10(SMmax), bins + 1)
@@ -1075,11 +1381,12 @@ def get_scaling_relations(suite, set_name, realization, SMmin, SMmax, bins,
                 sfr=_mean_per_bin(SM, catalog["subhalo_sfr"], bins_SM, counts),
                 vmax=_mean_per_bin(SM[finite_vmax], Vmax[finite_vmax], bins_SM,
                                     np.histogram(SM[finite_vmax], bins_SM)[0]),
+                metallicity=_mean_per_bin(SM, catalog["subhalo_metallicity"], bins_SM, counts),
                 counts=counts,
                 source="real",
                 note=(f"z = {catalog['redshift']:.2f} - public CAMELS data release "
                       f"(FOF_Subfind/{suite}/L25n256/{set_name}/{set_name}_{realization}, "
-                      f"catalog #{PUBLIC_SUBFIND_GROUPNUM} - snapshot slider not used for this source)"),
+                      f"catalog #{SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]})"),
             )
 
     rng = np.random.default_rng(_seed(suite, set_name, realization, "scaling"))
@@ -1102,8 +1409,78 @@ def get_scaling_relations(suite, set_name, realization, SMmin, SMmax, bins,
 # SFR history  (mirrors camels_library.star_formation_rate_history)
 # ---------------------------------------------------------------------------
 
+# Real per-timestep SFR log, confirmed real (2026-08-02) at
+# Sims/{suite}/L25n256/{set}/{set}_{realization}/extra_files/sfr.txt - the
+# native Arepo/Gadget-mufasa "sfr.txt" diagnostic file, NOT documented
+# anywhere in docs/source/*.rst (only referenced indirectly via the
+# undocumented star_formation_rate_history() function in camels_library.py,
+# which expects exactly this column layout). Real for IllustrisTNG/SIMBA/
+# Astrid; confirmed absent for Swift-EAGLE (different native output, same
+# reason its raw snapshots are excluded elsewhere in this app).
+PUBLIC_SFRH_SUITES = {"IllustrisTNG", "SIMBA", "Astrid"}
+
+
+@lru_cache(maxsize=32)
+def _fetch_public_sfrh(suite, set_name, realization):
+    """Real cosmic SFR history for one realization, read directly from the
+    simulation's own sfr.txt log (one row per internal timestep - 264k+ rows
+    over the IllustrisTNG LH_1 box, from the ICs' z=127 down to z=0). Column
+    layout (scale factor a, ..., total box SFR [Msun/yr], ...) matches
+    camels_library.star_formation_rate_history()'s own column selection
+    (data[:,2]/(BoxSize/h)**3) - reused here rather than guessed. Returns
+    (z_ascending, sfrd_ascending) or None. Note: the raw file's rows are in
+    ascending scale-factor order, i.e. DESCENDING redshift - reversed here
+    before returning, since np.interp requires ascending x - camels_library's
+    own version interpolates without reversing first, which would silently
+    misinterpolate; not replicated here (see the commented-out reversed line
+    still sitting unused in that source)."""
+    if suite not in PUBLIC_SFRH_SUITES:
+        return None
+
+    url = (f"{PUBLIC_DATA_URL}/Sims/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
+           f"extra_files/sfr.txt")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            raw = resp.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    try:
+        data = np.loadtxt(raw.splitlines())
+    except ValueError:
+        return None
+    if data.ndim != 2 or data.shape[1] < 3:
+        return None
+
+    h = 0.6711
+    box_size = 25.0  # Mpc/h, same L25n256 box used everywhere else in this app
+    a = data[:, 0]
+    z = 1.0 / a - 1.0
+    sfrd = data[:, 2] / (box_size / h) ** 3  # Msun/yr/(Mpc/h)^3
+
+    order = np.argsort(z)  # ascending z (raw file is ascending a, i.e. descending z)
+    return z[order], sfrd[order]
+
+
 def get_sfr_history(suite, set_name, realization, z_min, z_max, bins,
-                     sfrh_path: str | None = None) -> Result:
+                     sfrh_path: str | None = None, fetch_public: bool = False) -> Result:
+    if fetch_public:
+        fetched = _fetch_public_sfrh(suite, set_name, realization)
+        if fetched is not None:
+            z_raw, sfrd_raw = fetched
+            bins_z = np.linspace(z_min, z_max, bins)
+            sfrd = np.interp(bins_z, z_raw, sfrd_raw)
+            return Result(
+                x=bins_z, y=np.clip(sfrd, 1e-12, None),
+                x_label="Redshift", y_label="SFRD [Msun/yr/Mpc^3]",
+                log_x=False, source="real",
+                note=(f"public CAMELS data release (Sims/{suite}/L25n256/{set_name}/"
+                      f"{set_name}_{realization}/extra_files/sfr.txt, {len(z_raw)} real "
+                      f"timesteps from z={z_raw.max():.1f} to z={z_raw.min():.2f}, "
+                      f"interpolated onto the chosen bin grid)"),
+            )
+
     if sfrh_path and HAVE_CAMELS_LIBRARY:
         try:
             raise NotImplementedError("wire up real sfrh file read here")
@@ -1194,15 +1571,15 @@ def get_density_field_3d(suite, set_name, realization, snapnum, grid, field=DEFA
                       f"Range request, downsampled {128}->{min(grid, 128)})"),
             )
 
-        snap_fetch = _fetch_and_grid_snapshot(suite, set_name, realization, grid, field=field)
+        snap_fetch = _fetch_and_grid_snapshot(suite, set_name, realization, grid, field=field,
+                                               snapnum=snapnum)
         if snap_fetch is not None:
             density, box_size, actual_z, n_used = snap_fetch
             return Field3D(
                 density=density, box_size=box_size, source="real",
                 note=(f"z = {actual_z:.2f}, overdensity ρ/ρ̄ ({CMD_FIELDS[field]}) - real particles "
                       f"from a public snapshot (Sims/{suite}/L25n256/{set_name}/{set_name}_{realization}, "
-                      f"{n_used:,} particles gridded with Pylians' MAS_library, "
-                      f"snapshot slider not used for this source)"),
+                      f"{n_used:,} particles gridded with Pylians' MAS_library)"),
             )
 
     if snapshot_path and HAVE_CAMELS_LIBRARY:
@@ -1249,16 +1626,19 @@ def get_density_field_3d(suite, set_name, realization, snapnum, grid, field=DEFA
 # ---------------------------------------------------------------------------
 
 def get_particle_cloud(suite, set_name, realization, max_particles=50_000,
-                        fetch_public: bool = False) -> ParticleCloud:
+                        snapnum=N_SNAPSHOTS - 1, fetch_public: bool = False) -> ParticleCloud:
     """Real DM particle positions as a 3D point cloud, or a synthetic
     clustered stand-in. Reuses the same lazy-fetch helper the density-field
     gridder uses (cached, so viewing both for the same realization doesn't
-    re-fetch) - real particles, not synthetic, when available. Meant for
-    pydeck's GPU-instanced PointCloudLayer, which handles far more points
-    smoothly than Plotly's scatter3d."""
+    re-fetch) - real particles, not synthetic, when available. `snapnum`
+    previously wasn't accepted at all - this always fetched snapshot 90
+    (z=0) regardless of the sidebar's Snapshot slider, a real bug (confirmed
+    by the user, fixed 2026-08-02). Meant for pydeck's GPU-instanced
+    PointCloudLayer, which handles far more points smoothly than Plotly's
+    scatter3d."""
     if fetch_public:
         fetched = _fetch_snapshot_positions(suite, set_name, realization, part_type=1,
-                                             max_particles=max_particles)
+                                             max_particles=max_particles, snapnum=snapnum)
         if fetched is not None:
             pos, box_size, redshift = fetched
             return ParticleCloud(
@@ -1320,10 +1700,21 @@ def _fetch_public_vide_catalog(suite, set_name, realization):
     # columns: x,y,z (Mpc/h), vol_norm, radius (Mpc/h), redshift, vol (Mpc/h^3),
     # void_id, density_contrast, num_part, parent_id, tree_level, n_children, central_density
     data = np.atleast_2d(np.loadtxt(lines))
+    extra = pd.DataFrame({
+        "void_id": data[:, 7].astype(int),
+        "vol [Mpc/h^3]": data[:, 6],
+        "vol_norm": data[:, 3],
+        "num_part": data[:, 9].astype(int),
+        "central_density": data[:, 13],
+        "parent_id": data[:, 10].astype(int),
+        "tree_level": data[:, 11].astype(int),
+        "n_children": data[:, 12].astype(int),
+    })
     return {
         "positions": data[:, 0:3],
         "radius": data[:, 4],
         "density_contrast": data[:, 8],
+        "extra": extra,
     }
 
 
@@ -1333,7 +1724,7 @@ def get_void_catalog(suite, set_name, realization, fetch_public: bool = False) -
         if real is not None:
             return VoidCatalog(
                 positions=real["positions"], radius=real["radius"],
-                density_contrast=real["density_contrast"], box_size=25.0,
+                density_contrast=real["density_contrast"], box_size=25.0, extra=real["extra"],
                 source="real",
                 note=(f"z = 0.00 (only redshift VIDE_Voids publishes) - public CAMELS data release "
                       f"(VIDE_Voids/{suite}/{VIDE_SUITE_PREFIX[suite]}_LH_{realization}_ss1.0, "
@@ -1473,13 +1864,16 @@ def _parse_indexed_header(header_line):
     return [re.sub(r"\(\d+\)$", "", tok) for tok in tokens]
 
 
-@lru_cache(maxsize=16)
-def _fetch_ahf_halos(suite, set_name, realization):
+@lru_cache(maxsize=32)
+def _fetch_ahf_halos(suite, set_name, realization, snapnum=AHF_SNAPNUM):
     """Real AHF halo catalog. The exact filename encodes AHF's own computed
     redshift to 3 decimals (confirmed real - e.g. "z5.994" for snap000, not
     exactly our SNAPSHOT_REDSHIFTS table's 6.00), so it's discovered via a
     real directory listing + regex, never constructed. Small file (1-4MB),
-    fetched whole - no need for range requests at this size."""
+    fetched whole - no need for range requests at this size. AHF's own
+    filename numbering already matches SNAPSHOT_REDSHIFTS index-for-index
+    (confirmed via the redshift string, e.g. z5.994 for snap000 = z=6.00),
+    so `snapnum` is used directly, no remapping needed."""
     if suite not in PUBLIC_AHF_SUITES:
         return None
 
@@ -1488,7 +1882,7 @@ def _fetch_ahf_halos(suite, set_name, realization):
         req = urllib.request.Request(dir_url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=30) as resp:
             listing_html = resp.read().decode(errors="replace")
-        matches = re.findall(rf'snap{AHF_SNAPNUM:03d}[^"<>\s]*\.AHF_halos', listing_html)
+        matches = re.findall(rf'snap{snapnum:03d}[^"<>\s]*\.AHF_halos', listing_html)
         if not matches:
             return None
         req = urllib.request.Request(dir_url + matches[0], headers={"User-Agent": "Mozilla/5.0"})
@@ -1520,29 +1914,50 @@ def _fetch_ahf_halos(suite, set_name, realization):
         "x [Mpc/h]": df["Xc"] / 1e3, "y [Mpc/h]": df["Yc"] / 1e3, "z [Mpc/h]": df["Zc"] / 1e3,
         "N substructures": df["numSubStruct"],
     })
-    frame = frame[frame["Halo Mass [Msun/h]"] > 0].reset_index(drop=True)
+    mask = df["Mvir"] > 0
+    frame = frame[mask.to_numpy()].reset_index(drop=True)
     if len(frame) == 0:
         return None
+    # raw_frame: the curated columns plus every other real AHF column (86
+    # total) - the escape hatch, same row order as frame.
+    raw_extra = df[mask.to_numpy()].reset_index(drop=True)
+    raw_extra = raw_extra[[c for c in raw_extra.columns if c not in
+                           ("Mvir", "M_star", "M_gas", "Rvir", "Xc", "Yc", "Zc", "numSubStruct")]]
+    raw_frame = pd.concat([frame, raw_extra], axis=1)
     return Catalog(
-        frame=frame, box_size=25.0, redshift=float(z_str),
-        note=(f"z = {z_str} (AHF's own computed redshift for its highest snapshot) - public "
+        frame=frame, box_size=25.0, redshift=float(z_str), raw_frame=raw_frame,
+        note=(f"z = {z_str} (AHF's own computed redshift, snapshot {snapnum}) - public "
               f"CAMELS data release (AHF/{suite}/{set_name}_{realization}/AHF/{matches[0]}, "
               f"{len(frame)} halos)"),
     )
 
 
-@lru_cache(maxsize=16)
-def _fetch_rockstar_halos(suite, set_name, realization):
-    """Real Rockstar halo catalog at z=0. Scale factor a=1.0 is exact by
-    definition there, so the filename is constructed directly - unlike AHF,
-    no directory listing needed."""
+@lru_cache(maxsize=32)
+def _fetch_rockstar_halos(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1):
+    """Real Rockstar halo catalog. For z=0 (snapnum=33), scale factor a=1.0 is
+    exact by definition, so the filename could be constructed directly - but
+    for any other snapshot each suite computes its own scale factors
+    (confirmed real, not assumed: SIMBA's are ~0.0001-0.0003 off from
+    IllustrisTNG's at the same schedule position), so the real filename is
+    always discovered via a directory listing + closest-redshift match,
+    same spirit as AHF's discovery."""
     if suite not in PUBLIC_ROCKSTAR_SUITES:
         return None
 
-    url = (f"{PUBLIC_DATA_URL}/Rockstar/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
-           f"hlists/{ROCKSTAR_HLIST_Z0}")
+    target_z = SNAPSHOT_REDSHIFTS[snapnum]
+    dir_url = f"{PUBLIC_DATA_URL}/Rockstar/{suite}/L25n256/{set_name}/{set_name}_{realization}/hlists/"
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        req = urllib.request.Request(dir_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            listing_html = resp.read().decode(errors="replace")
+        scale_factors = sorted(set(float(m) for m in
+                                    re.findall(r'hlist_([\d.]+)\.list', listing_html)))
+        if not scale_factors:
+            return None
+        best_a = min(scale_factors, key=lambda a: abs((1.0 / a - 1.0) - target_z))
+        filename = f"hlist_{best_a:.5f}.list"
+
+        req = urllib.request.Request(dir_url + filename, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=60) as resp:
             text = resp.read().decode(errors="replace")
     except (urllib.error.URLError, TimeoutError, ValueError):
@@ -1568,28 +1983,39 @@ def _fetch_rockstar_halos(suite, set_name, realization):
         "x [Mpc/h]": df["x"], "y [Mpc/h]": df["y"], "z [Mpc/h]": df["z"],
         "Type": df["Type"],  # 0 = central, 1 = satellite (consistent-trees convention)
     })
-    frame = frame[frame["Halo Mass [Msun/h]"] > 0].reset_index(drop=True)
+    mask = df["Mvir"] > 0
+    frame = frame[mask.to_numpy()].reset_index(drop=True)
     if len(frame) == 0:
         return None
+    # raw_frame: curated columns plus every other real Rockstar column (85
+    # total) - the escape hatch, same row order as frame.
+    raw_extra = df[mask.to_numpy()].reset_index(drop=True)
+    raw_extra = raw_extra[[c for c in raw_extra.columns if c not in
+                           ("Mvir", "SM", "Gas", "BH_Mass", "vmax", "x", "y", "z", "Type")]]
+    raw_frame = pd.concat([frame, raw_extra], axis=1)
+    real_z = 1.0 / best_a - 1.0
     return Catalog(
-        frame=frame, box_size=25.0, redshift=0.0,
-        note=(f"z = 0.00 (scale factor a=1.0) - public CAMELS data release "
-              f"(Rockstar/{suite}/L25n256/{set_name}_{realization}/hlists/{ROCKSTAR_HLIST_Z0}, "
+        frame=frame, box_size=25.0, redshift=real_z, raw_frame=raw_frame,
+        note=(f"z = {real_z:.2f} (scale factor a={best_a:.5f}) - public CAMELS data release "
+              f"(Rockstar/{suite}/L25n256/{set_name}_{realization}/hlists/{filename}, "
               f"{len(frame)} halos)"),
     )
 
 
-@lru_cache(maxsize=16)
-def _fetch_caesar_halos(suite, set_name, realization):
+@lru_cache(maxsize=32)
+def _fetch_caesar_halos(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1):
     """Real CAESAR halo catalog. Masses/positions live in a flattened
     dict-of-dicts HDF5 layout (e.g. dataset name "masses.total", not a
     nested group) - confirmed via a real lazy read before assuming the
-    schema, not from docs."""
+    schema, not from docs. Uses SUBFIND_GROUPNUM_FOR_SNAPSHOT - confirmed
+    real that CAESAR's own caesar_newsnaps_XXX.hdf5 numbering matches
+    FOF_Subfind's exactly (same 34 real numbers, same redshifts)."""
     if not HAVE_CAMELS_LIBRARY or suite not in PUBLIC_CAESAR_SUITES:
         return None
 
+    groupnum = SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]
     url = (f"{PUBLIC_DATA_URL}/Caesar/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
-           f"caesar_newsnaps_{CAESAR_SNAPNUM:03d}.hdf5")
+           f"caesar_newsnaps_{groupnum:03d}.hdf5")
     try:
         with fsspec.open(url, "rb") as fobj:
             with h5py.File(fobj, "r") as hf:
@@ -1606,46 +2032,156 @@ def _fetch_caesar_halos(suite, set_name, realization):
                     "y [Mpc/h]": hd["pos"][:, 1] / 1e3,
                     "z [Mpc/h]": hd["pos"][:, 2] / 1e3,
                 })
+
+                # raw_frame: every other 1D halo-level quantity CAESAR has
+                # (radii.*, metallicities.*, ages.*, local densities, particle
+                # counts, etc.) - the escape hatch. Collected dynamically
+                # rather than hardcoded, since CAESAR's real "dicts" tree is
+                # large and this way nothing new gets missed if it grows.
+                n_halos = len(frame)
+                already = {"dicts/masses.total", "dicts/masses.stellar", "dicts/masses.gas",
+                           "dicts/masses.bh", "sfr", "pos"}
+                raw_cols = {}
+
+                def collect(name, obj):
+                    if (isinstance(obj, h5py.Dataset) and obj.ndim == 1
+                            and obj.shape[0] == n_halos and name not in already):
+                        raw_cols[name.replace("/", ".")] = obj[:]
+                hd.visititems(collect)
     except Exception:
         return None
 
-    frame = frame[frame["Halo Mass [Msun]"] > 0].reset_index(drop=True)
+    mask = frame["Halo Mass [Msun]"] > 0
+    frame = frame[mask.to_numpy()].reset_index(drop=True)
     if len(frame) == 0:
         return None
+    raw_extra = pd.DataFrame({k: v[mask.to_numpy()] for k, v in raw_cols.items()})
+    raw_frame = pd.concat([frame, raw_extra], axis=1)
     return Catalog(
-        frame=frame, box_size=box_size, redshift=redshift,
+        frame=frame, box_size=box_size, redshift=redshift, raw_frame=raw_frame,
         note=(f"z = {redshift:.2f} - public CAMELS data release (Caesar/{suite}/L25n256/"
-              f"{set_name}_{realization}/caesar_newsnaps_{CAESAR_SNAPNUM:03d}.hdf5, "
+              f"{set_name}_{realization}/caesar_newsnaps_{groupnum:03d}.hdf5, "
               f"{len(frame)} halos)"),
     )
 
 
-def get_alt_halo_catalog(finder, suite, set_name, realization, fetch_public: bool = False) -> Catalog | None:
-    """Real halo catalog from an alternate finder (AHF/Rockstar/CAESAR), as a
-    browsable table alongside the Subfind-based Catalog Browser. No synthetic
-    version - same reasoning as get_halo_catalog()."""
+def _fetch_caesar_galaxies(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1):
+    """Real CAESAR galaxy catalog - CAESAR's 6D-FOF galaxy finder result,
+    fully precomputed (not the raw fof6d_tags file, which requires
+    reconstructing CAESAR's internal particle-filtering/sort pipeline to
+    decode - a real dead end investigated 2026-08-02, see fof6d.py on
+    GitHub). This reads `galaxy_data` from the SAME caesar_newsnaps file
+    already used for halos - same dict-of-dicts schema as halo_data, so this
+    reuses that exact parsing pattern. Cross-validated (2026-08-02):
+    global_lists/galaxy_glist (per-gas-particle galaxy membership) has max
+    index 376, exactly matching galaxy_data's 377 rows for the same file.
+    `parent_halo_index` links each galaxy back to a row in the CAESAR halo
+    catalog (_fetch_caesar_halos) - same realization/snapshot, same ordering
+    convention CAESAR itself uses, not independently re-verified beyond that
+    the row counts and general schema are real."""
+    if not HAVE_CAMELS_LIBRARY or suite not in PUBLIC_CAESAR_SUITES:
+        return None
+
+    groupnum = SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]
+    url = (f"{PUBLIC_DATA_URL}/Caesar/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
+           f"caesar_newsnaps_{groupnum:03d}.hdf5")
+    try:
+        with fsspec.open(url, "rb") as fobj:
+            with h5py.File(fobj, "r") as hf:
+                gd = hf["galaxy_data"]
+                redshift = float(hf["simulation_attributes"].attrs["redshift"])
+                box_size = float(hf["simulation_attributes"].attrs["boxsize"]) / 1e3  # kpccm -> Mpc/h
+                frame = pd.DataFrame({
+                    "Stellar Mass [Msun]": gd["dicts/masses.stellar"][:],
+                    "Gas Mass [Msun]": gd["dicts/masses.gas"][:],
+                    "BH Mass [Msun]": gd["dicts/masses.bh"][:],
+                    "Total Mass [Msun]": gd["dicts/masses.total"][:],
+                    "SFR [Msun/yr]": gd["sfr"][:],
+                    "Stellar Half-Mass Radius [kpc/h]": gd["dicts/radii.stellar_half_mass"][:],
+                    "x [Mpc/h]": gd["pos"][:, 0] / 1e3,
+                    "y [Mpc/h]": gd["pos"][:, 1] / 1e3,
+                    "z [Mpc/h]": gd["pos"][:, 2] / 1e3,
+                    "Parent Halo Index": gd["parent_halo_index"][:],
+                })
+
+                # raw_frame escape hatch: this catalog is unusually rich -
+                # real multi-band photometry (~100 filters, attenuated and
+                # dust-free), radii/rotation/velocity-dispersion/metallicity
+                # dicts, etc. Collected dynamically, same pattern as
+                # _fetch_caesar_halos, since hardcoding this many fields
+                # would be unwieldy and would silently miss new ones.
+                n_gal = len(frame)
+                already = {"dicts/masses.stellar", "dicts/masses.gas", "dicts/masses.bh",
+                           "dicts/masses.total", "sfr", "dicts/radii.stellar_half_mass",
+                           "pos", "parent_halo_index"}
+                raw_cols = {}
+
+                def collect(name, obj):
+                    if (isinstance(obj, h5py.Dataset) and obj.ndim == 1
+                            and obj.shape[0] == n_gal and name not in already):
+                        raw_cols[name.replace("/", ".")] = obj[:]
+                gd.visititems(collect)
+    except Exception:
+        return None
+
+    mask = frame["Stellar Mass [Msun]"] > 0
+    frame = frame[mask.to_numpy()].reset_index(drop=True)
+    if len(frame) == 0:
+        return None
+    raw_extra = pd.DataFrame({k: v[mask.to_numpy()] for k, v in raw_cols.items()})
+    raw_frame = pd.concat([frame, raw_extra], axis=1)
+    return Catalog(
+        frame=frame, box_size=box_size, redshift=redshift, raw_frame=raw_frame,
+        note=(f"z = {redshift:.2f} - public CAMELS data release (Caesar/{suite}/L25n256/"
+              f"{set_name}_{realization}/caesar_newsnaps_{groupnum:03d}.hdf5, galaxy_data, "
+              f"{len(frame)} galaxies, CAESAR's 6D-FOF galaxy finder, {len(raw_cols)} extra "
+              f"real fields incl. ~100-filter photometry, radii, rotation/kinematics)"),
+    )
+
+
+def get_alt_halo_catalog(finder, suite, set_name, realization, snapnum=N_SNAPSHOTS - 1,
+                          fetch_public: bool = False) -> Catalog | None:
+    """Real halo/galaxy catalog from an alternate finder (AHF/Rockstar/CAESAR/
+    CAESAR Galaxies), as a browsable table alongside the Subfind-based
+    Catalog Browser. No synthetic version - same reasoning as
+    get_halo_catalog(). `snapnum` uses the same 0-33 schedule as Pk/SFRH/the
+    Snapshot slider - all finders now support the full range, not just z=0."""
     if not fetch_public:
         return None
     if finder == "AHF":
-        return _fetch_ahf_halos(suite, set_name, realization)
+        return _fetch_ahf_halos(suite, set_name, realization, snapnum)
     if finder == "Rockstar":
-        return _fetch_rockstar_halos(suite, set_name, realization)
+        return _fetch_rockstar_halos(suite, set_name, realization, snapnum)
     if finder == "CAESAR":
-        return _fetch_caesar_halos(suite, set_name, realization)
+        return _fetch_caesar_halos(suite, set_name, realization, snapnum)
+    if finder == "CAESAR Galaxies":
+        return _fetch_caesar_galaxies(suite, set_name, realization, snapnum)
     return None
 
 
+SUBLINK_VARIANTS = {
+    "SubLink": "SubLink",           # standard, DM-particle-linked tree
+    "SubLink_gal": "SubLink_gal",   # baryon-particle-linked tree - a distinct,
+                                     # galaxy-centric merger history, not just a
+                                     # naming variant. Confirmed real (2026-08-02)
+                                     # for IllustrisTNG/SIMBA/Astrid with the
+                                     # EXACT SAME Tree schema as standard SubLink,
+                                     # so it reuses this same fetch/walk code.
+}
+
+
 @lru_cache(maxsize=8)
-def _fetch_sublink_tree(suite, set_name, realization):
-    """Real SubLink merger tree for one whole realization (a single flat
-    compound-dtype array covering every subhalo at every snapshot - no
-    per-halo range request is possible, so this fetches ~50-70MB once per
-    realization; cached so repeated subhalo lookups within it are free).
-    Returns (tree_array, id_to_row_dict) or None."""
-    if suite not in PUBLIC_SUBLINK_SUITES:
+def _fetch_sublink_tree(suite, set_name, realization, variant="SubLink"):
+    """Real SubLink (or SubLink_gal) merger tree for one whole realization (a
+    single flat compound-dtype array covering every subhalo at every
+    snapshot - no per-halo range request is possible, so this fetches
+    ~5-70MB once per realization; cached so repeated subhalo lookups within
+    it are free). Returns (tree_array, id_to_row_dict) or None."""
+    if suite not in PUBLIC_SUBLINK_SUITES or variant not in SUBLINK_VARIANTS:
         return None
 
-    url = f"{PUBLIC_DATA_URL}/SubLink/{suite}/{set_name}/{set_name}_{realization}/tree.hdf5"
+    folder = SUBLINK_VARIANTS[variant]
+    url = f"{PUBLIC_DATA_URL}/{folder}/{suite}/{set_name}/{set_name}_{realization}/tree.hdf5"
     try:
         with fsspec.open(url, "rb") as fobj:
             with h5py.File(fobj, "r") as hf:
@@ -1657,39 +2193,48 @@ def _fetch_sublink_tree(suite, set_name, realization):
     return tree, id_to_row
 
 
-def get_merger_history(suite, set_name, realization, subfind_id, fetch_public: bool = False):
-    """Real main-branch mass accretion history for one z=0 subhalo, walking
-    FirstProgenitorID backward through the SubLink tree. No synthetic
-    version - same reasoning as get_halo_catalog()."""
+def get_merger_history(suite, set_name, realization, subfind_id, root_snapnum=SUBLINK_Z0_SNAPNUM,
+                        variant="SubLink", fetch_public: bool = False):
+    """Real main-branch mass accretion history for one subhalo, walking
+    FirstProgenitorID backward through the SubLink (or SubLink_gal) tree,
+    starting from `subfind_id` at `root_snapnum`. No synthetic version - same
+    reasoning as get_halo_catalog(). `root_snapnum` MUST match the snapshot
+    the caller's SubfindID actually came from (e.g. the Catalog Browser's
+    current snapshot) - SubfindID is only meaningful within a single
+    snapshot's Subfind catalog, so tracing from the wrong root_snapnum would
+    silently look up an unrelated subhalo."""
     if not fetch_public or not HAVE_CAMELS_LIBRARY:
         return None
-    fetched = _fetch_sublink_tree(suite, set_name, realization)
+    fetched = _fetch_sublink_tree(suite, set_name, realization, variant)
     if fetched is None:
         return None
     tree, id_to_row = fetched
 
-    root_mask = (tree["SnapNum"] == SUBLINK_Z0_SNAPNUM) & (tree["SubfindID"] == subfind_id)
+    root_mask = (tree["SnapNum"] == root_snapnum) & (tree["SubfindID"] == subfind_id)
     root_rows = np.nonzero(root_mask)[0]
     if len(root_rows) == 0:
         return None
 
     row = int(root_rows[0])
-    snaps, masses = [], []
+    snaps, masses, nparts = [], [], []
     seen = set()
     while row is not None and row not in seen:
         seen.add(row)
         snaps.append(int(tree["SnapNum"][row]))
         masses.append(float(tree["Mass"][row]) * 1e10)
+        nparts.append(int(tree["NumParticles"][row]))
         fp_id = int(tree["FirstProgenitorID"][row])
         row = id_to_row.get(fp_id) if fp_id != -1 else None
 
     redshifts = np.array([SNAPSHOT_REDSHIFTS[s] for s in snaps])
     return MergerHistory(
         redshift=redshifts, mass=np.array(masses), subfind_id=subfind_id,
-        note=(f"Main-branch mass history for z=0 SubfindID {subfind_id}, {len(snaps)} "
+        num_particles=np.array(nparts),
+        note=(f"Main-branch mass history for SubfindID {subfind_id} at snapshot "
+              f"{root_snapnum} (z={SNAPSHOT_REDSHIFTS[root_snapnum]:.2f}), {len(snaps)} "
               f"snapshots back to z={redshifts.max():.2f} - public CAMELS data release "
-              f"(SubLink/{suite}/{set_name}_{realization}/tree.hdf5, following "
-              f"FirstProgenitorID)"),
+              f"({SUBLINK_VARIANTS[variant]}/{suite}/{set_name}_{realization}/tree.hdf5, "
+              f"following FirstProgenitorID)"),
     )
 
 
@@ -1698,7 +2243,12 @@ def _fetch_halo_profiles_file(suite, set_name, realization, snapnum):
     """Real precomputed SO/CGM radial profiles for one snapshot (illstack_
     CAMELS). Small file (<1MB), fetched whole. Returns the raw arrays
     (still in the file's native code units - see get_halo_profiles for the
-    documented conversion) or None."""
+    documented conversion) or None. Also dynamically collects every other
+    real per-halo 1-D field this file has (confirmed via a direct h5py
+    inspection: ~44 `Group*`/`ID` fields beyond M200c/R200c - SFR, BH mass,
+    alternate mass/radius definitions, gas/star element abundances,
+    substructure count, position/velocity, etc.) rather than hardcoding a
+    column list, so it stays correct if the file ever adds fields."""
     if not HAVE_CAMELS_LIBRARY or suite not in PUBLIC_PROFILES_SUITES or set_name not in PUBLIC_PROFILES_SETS:
         return None
 
@@ -1709,10 +2259,17 @@ def _fetch_halo_profiles_file(suite, set_name, realization, snapnum):
             with h5py.File(fobj, "r") as hf:
                 r_raw = hf["r"][:]
                 profiles = hf["Profiles"][:]           # (4, n_halos, 25)
+                n_counts = hf["n"][:]                  # (4, n_halos, 25) - particles per bin
                 m200c_raw = hf["Group_M_Crit200"][:]   # 1e10 Msun/h
+                n_halos_total = m200c_raw.shape[0]
+                metadata_raw = {
+                    key: hf[key][:] for key in hf.keys()
+                    if isinstance(hf[key], h5py.Dataset) and hf[key].ndim == 1
+                    and hf[key].shape[0] == n_halos_total
+                }
     except Exception:
         return None
-    return r_raw, profiles, m200c_raw
+    return r_raw, profiles, n_counts, m200c_raw, metadata_raw
 
 
 def get_halo_profiles(suite, set_name, realization, snapnum, field, fetch_public: bool = False):
@@ -1729,7 +2286,7 @@ def get_halo_profiles(suite, set_name, realization, snapnum, field, fetch_public
     fetched = _fetch_halo_profiles_file(suite, set_name, realization, snapnum)
     if fetched is None:
         return None
-    r_raw, profiles, m200c_raw = fetched
+    r_raw, profiles, n_counts, m200c_raw, metadata_raw = fetched
 
     h = 0.6711
     z = SNAPSHOT_REDSHIFTS[snapnum]
@@ -1750,6 +2307,7 @@ def get_halo_profiles(suite, set_name, realization, snapnum, field, fetch_public
 
     idx = PROFILES_FIELD_INDEX[field]
     raw_vals = profiles[idx][valid]
+    n_vals = n_counts[idx][valid]
     if field == "Gas Density":
         values, units = raw_vals * density_conv, "g/cm^3"
     elif field == "Thermal Pressure":
@@ -1759,8 +2317,11 @@ def get_halo_profiles(suite, set_name, realization, snapnum, field, fetch_public
     else:
         values, units = raw_vals, "mass fraction"
 
+    metadata = pd.DataFrame({k: v[valid] for k, v in metadata_raw.items()})
+
     return HaloProfiles(
         r=r, values=values, log_mass=np.log10(m200c[valid]), field=field, units=units,
+        n_part=n_vals, metadata=metadata,
         note=(f"z = {z:.2f} - public CAMELS data release (Profiles/{suite}/{set_name}/"
               f"{set_name}_{realization}/{suite}_{set_name}_{realization}_{snapnum:03d}.hdf5, "
               f"{int(valid.sum())} halos, illstack_CAMELS SO/CGM profiles)"),
@@ -1768,53 +2329,80 @@ def get_halo_profiles(suite, set_name, realization, snapnum, field, fetch_public
 
 
 @lru_cache(maxsize=16)
-def _fetch_photometry_bands(suite, set_name, realization):
-    """Real per-subhalo SDSS-band luminosities (BC03 model, dust-attenuated)
-    at z=0, plus the SubhaloIndex needed to cross-match with the Subfind
+def _fetch_photometry_bands(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1,
+                             sps_model="BC03", spectra_type="attenuated"):
+    """Real per-subhalo band luminosities for one snapshot/SPS model/spectra
+    type, plus the SubhaloIndex needed to cross-match with the Subfind
     catalog. Fetched lazily - the file is 40-250MB, but only the small
-    per-band arrays we need are actually read, not the whole file."""
+    per-band arrays for the requested filter groups are actually read, not
+    the whole file. `emission` is fixed to "luminosity" (rest-frame): for a
+    *color* (a same-source band ratio), flux vs. luminosity cancels out the
+    same distance factor in both bands, so exposing it wouldn't change the
+    result - not worth the extra control for this feature."""
     if not HAVE_CAMELS_LIBRARY or suite not in PUBLIC_PHOTOMETRY_SUITES:
+        return None
+    if sps_model not in PHOTOMETRY_SPS_MODELS or spectra_type not in PHOTOMETRY_SPECTRA_TYPES:
         return None
 
     file_suite = PHOTOMETRY_SUITE_FILENAME.get(suite, suite)
+    groupnum = SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]
     url = (f"{PUBLIC_DATA_URL}/Photometry/{suite}/L25n256/{set_name}/"
            f"{file_suite}_{set_name}_{realization}_photometry.hdf5")
-    snap_key = f"snap_{PHOTOMETRY_SNAPNUM:03d}"
+    snap_key = f"snap_{groupnum:03d}"
     try:
         with fsspec.open(url, "rb") as fobj:
             with h5py.File(fobj, "r") as hf:
-                if snap_key not in hf:
+                if snap_key not in hf or sps_model not in hf[snap_key]:
                     return None
-                g = hf[snap_key]
-                sub_idx = g["SubhaloIndex"][:]
-                att = g["BC03/photometry/luminosity/attenuated/SLOAN"]
-                bands = {name: att[name][:] for name in att.keys()}
+                sub_idx = hf[snap_key]["SubhaloIndex"][:]
+                base = hf[f"{snap_key}/{sps_model}/photometry/luminosity/{spectra_type}"]
+                bands = {}
+                for spec in PHOTOMETRY_FILTER_GROUPS.values():
+                    group = spec["hdf5_group"]
+                    for name in spec["bands"]:
+                        if group is None:
+                            if name in base:  # ungrouped (GALEX/UV) - direct dataset
+                                bands[name] = base[name][:]
+                        elif group in base and name in base[group]:
+                            bands[name] = base[group][name][:]
     except Exception:
         return None
     return sub_idx, bands
 
 
-def get_color_mass_diagram(suite, set_name, realization, color: str, fetch_public: bool = False):
-    """Real galaxy color (e.g. g-r) vs. real stellar mass, cross-matching
-    the Photometry catalog with the Subfind catalog via SubhaloIndex. No
-    synthetic version - same reasoning as get_halo_catalog()."""
-    if not fetch_public or color not in PHOTOMETRY_COLORS:
+def get_color_mass_diagram(suite, set_name, realization, color=None, band1=None, band2=None,
+                            snapnum=N_SNAPSHOTS - 1, sps_model="BC03", spectra_type="attenuated",
+                            fetch_public: bool = False):
+    """Real galaxy color (band1 - band2) vs. real stellar mass, cross-
+    matching the Photometry catalog with the Subfind catalog via
+    SubhaloIndex. No synthetic version - same reasoning as
+    get_halo_catalog(). `color` (a key into PHOTOMETRY_COLORS) is kept for
+    backward compatibility; pass band1/band2 directly to use any of the real
+    filter families (SLOAN/Generic/HST/JWST/UKIRT/UV-GALEX)."""
+    if not fetch_public:
         return None
-    fetched = _fetch_photometry_bands(suite, set_name, realization)
+    if color is not None and color in PHOTOMETRY_COLORS:
+        band1, band2 = PHOTOMETRY_COLORS[color]
+    color_label = color or f"{band1} - {band2}"
+    if not band1 or not band2:
+        return None
+
+    fetched = _fetch_photometry_bands(suite, set_name, realization, snapnum, sps_model, spectra_type)
     if fetched is None:
         return None
     sub_idx, bands = fetched
 
-    subfind = _fetch_public_subfind(suite, set_name, realization)
+    # Cross-match at the SAME snapshot the photometry itself uses - both
+    # products must agree on redshift for the join to mean anything.
+    subfind = _fetch_public_subfind(suite, set_name, realization, snapnum)
     if subfind is None:
         return None
     mstar_all = subfind["subhalo_stellar_mass"]  # already Msun/h
 
-    b1, b2 = PHOTOMETRY_COLORS[color]
-    if b1 not in bands or b2 not in bands:
+    if band1 not in bands or band2 not in bands:
         return None
     in_range = sub_idx < len(mstar_all)
-    sub_idx, L1, L2 = sub_idx[in_range], bands[b1][in_range], bands[b2][in_range]
+    sub_idx, L1, L2 = sub_idx[in_range], bands[band1][in_range], bands[band2][in_range]
 
     with np.errstate(divide="ignore", invalid="ignore"):
         color_vals = -2.5 * np.log10(L1 / L2)
@@ -1823,19 +2411,21 @@ def get_color_mass_diagram(suite, set_name, realization, color: str, fetch_publi
     if mask.sum() == 0:
         return None
 
+    groupnum = SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]
     return ColorMassDiagram(
-        color=color_vals[mask], log_mass=np.log10(mstar[mask]), color_label=color,
-        note=(f"z = 0.00 - public CAMELS data release (Photometry/{suite}/L25n256/{set_name}/"
-              f"{suite}_{set_name}_{realization}_photometry.hdf5, BC03 model, dust-attenuated, "
+        color=color_vals[mask], log_mass=np.log10(mstar[mask]), color_label=color_label,
+        note=(f"z = {subfind['redshift']:.2f} - public CAMELS data release (Photometry/{suite}/"
+              f"L25n256/{set_name}/{suite}_{set_name}_{realization}_photometry.hdf5, "
+              f"{sps_model} model, {spectra_type}, snap_{groupnum:03d}, "
               f"{int(mask.sum())} galaxies cross-matched with the Subfind catalog via SubhaloIndex)"),
     )
 
 
 @lru_cache(maxsize=32)
-def _fetch_bispectrum(suite, set_name, realization, bk_type):
-    """Real low-k (FFT-based) equilateral bispectrum, real-space, z=0.00.
-    Small file (~37KB), fetched whole. Returns (k [h/Mpc], Bk [(Mpc/h)^6])
-    sorted by k, or None."""
+def _fetch_bispectrum(suite, set_name, realization, bk_type, mu_index=BK_EQUILATERAL_MU_INDEX):
+    """Real low-k (FFT-based) k1=k2 bispectrum at one mu bin, real-space,
+    z=0.00. Small file (~37KB), fetched whole. Returns (k [h/Mpc], Bk
+    [(Mpc/h)^6]) sorted by k, or None."""
     if suite not in PUBLIC_BK_SUITES or set_name != "LH":
         return None
 
@@ -1860,26 +2450,31 @@ def _fetch_bispectrum(suite, set_name, realization, bk_type):
     if equal.sum() == 0:
         return None
     k = k1[equal]
-    bk = data[equal, 2 + BK_EQUILATERAL_MU_INDEX]
+    bk = data[equal, 2 + mu_index]
     order = np.argsort(k)
     return k[order], bk[order]
 
 
-def get_bispectrum(suite, set_name, realization, field, fetch_public: bool = False) -> Result | None:
-    """Real equilateral-configuration matter/gas/dark-matter bispectrum. No
-    synthetic version - a fabricated bispectrum shape isn't a useful
-    illustrative stand-in the way a power-law Pk/HMF curve is, so this
-    returns None outright when real data isn't available."""
-    if not fetch_public or field not in BK_TYPES:
+def get_bispectrum(suite, set_name, realization, field, mu_index=BK_EQUILATERAL_MU_INDEX,
+                    fetch_public: bool = False) -> Result | None:
+    """Real k1=k2 matter/gas/dark-matter bispectrum at one mu (triangle-shape)
+    bin - mu_index=7 (mu=0.5) is the equilateral configuration; other values
+    are real, distinct triangle shapes at the same k1=k2. No synthetic
+    version - a fabricated bispectrum shape isn't a useful illustrative
+    stand-in the way a power-law Pk/HMF curve is, so this returns None
+    outright when real data isn't available."""
+    if not fetch_public or field not in BK_TYPES or not (0 <= mu_index < len(BK_MU_VALUES)):
         return None
-    fetched = _fetch_bispectrum(suite, set_name, realization, BK_TYPES[field])
+    fetched = _fetch_bispectrum(suite, set_name, realization, BK_TYPES[field], mu_index)
     if fetched is None:
         return None
     k, bk = fetched
+    mu = BK_MU_VALUES[mu_index]
+    shape = "equilateral (k1=k2=k3)" if mu_index == BK_EQUILATERAL_MU_INDEX else f"k1=k2, mu={mu:+.1f}"
     return Result(
-        x=k, y=bk, x_label="k [h/Mpc]", y_label="B(k,k,k) [(Mpc/h)^6]",
+        x=k, y=bk, x_label="k [h/Mpc]", y_label=f"B(k,k,mu={mu:+.1f}) [(Mpc/h)^6]",
         source="real",
-        note=(f"z = 0.00, real-space, equilateral configuration (k1=k2=k3) - public CAMELS "
+        note=(f"z = 0.00, real-space, {shape} - public CAMELS "
               f"data release (Bk/{suite}/{set_name}/{set_name}_{realization}/"
               f"Bk_{BK_TYPES[field]}_lowk_z=0.00.txt, low-k FFT-based estimator, {field})"),
     )
@@ -1945,13 +2540,14 @@ def get_lya_spectrum(suite, set_name, realization, snapnum, sightline,
                 if sightline >= tau_ds.shape[0]:
                     return None
                 tau = tau_ds[sightline, :]
+                colden = hf["colden/H/1"][sightline, :]
                 z = float(hf["Header"].attrs["redshift"])
     except Exception:
         return None
 
     flux = np.exp(-tau)
     return LymanAlphaSpectrum(
-        pixel=np.arange(len(flux)), flux=flux, sightline=sightline,
+        pixel=np.arange(len(flux)), flux=flux, sightline=sightline, colden=colden,
         note=(f"z = {z:.2f} - public CAMELS data release (Lya/{suite}/{set_name}/"
               f"{set_name}_{realization}/SPECTRA_{snapnum:03d}/Lya-spectra.hdf5, sightline "
               f"{sightline} of {LYA_N_SIGHTLINES}, hydrogen Ly-alpha 1215A optical depth). "

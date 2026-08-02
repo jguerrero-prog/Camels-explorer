@@ -10,6 +10,7 @@ this file.
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from matplotlib.colors import LogNorm
@@ -46,9 +47,9 @@ with st.sidebar:
         st.caption(
             "Public suite coverage varies by statistic: Pk works for IllustrisTNG/SIMBA/"
             "Astrid/Swift-EAGLE; HMF/SMF/Catalog Browser/Scaling Relations work for the same "
-            "4 but only fetch the z~0 catalog (snapshot slider ignored there); 3D Density "
-            "Field's fast path (CMD grids) covers IllustrisTNG/SIMBA/Astrid, with a slower "
-            "real-particle-gridding fallback (needs Pylians) for the same 3. SFR History "
+            "4 across the full Snapshot slider range (all 34 real redshifts, not just z=0); "
+            "3D Density Field's fast path (CMD grids) covers IllustrisTNG/SIMBA/Astrid, with a "
+            "slower real-particle-gridding fallback (needs Pylians) for the same 3. SFR History "
             "still falls back to synthetic (only the symbolic-regression overlay is real)."
         )
 
@@ -60,21 +61,85 @@ with st.sidebar:
                        "will still fall back to synthetic data until it is.")
 
     suite = st.selectbox("Suite", B.SUITES)
-    set_name = st.selectbox("Set", list(B.SET_REALIZATIONS.keys()))
-    n_real = B.SET_REALIZATIONS[set_name]
-    realization = st.slider("Realization", 0, n_real - 1, min(42, n_real - 1))
+    set_name = st.selectbox(
+        "Set", list(B.SET_REALIZATIONS.keys()) + ["SB"],
+        help="SB (Sobol sequence) is real for IllustrisTNG (SB28) and Astrid (SB7) only - "
+             "docs describe it as meant to eventually replace LH for parameter-space sampling.",
+    )
+
+    if set_name == "SB":
+        sb_folder = B.SB_FOLDER_FOR_SUITE.get(suite)
+        if sb_folder is None:
+            st.caption(f"⚠️ SB isn't published for {suite} - only IllustrisTNG (SB28) and "
+                       "Astrid (SB7) have an SB set.")
+        else:
+            st.caption(f"Real folder: **{sb_folder}** ({B.SB_REALIZATIONS_FOR_SUITE[suite]} "
+                       "realizations)")
+        set_name = sb_folder or "SB"  # fetches fail gracefully (honest "no data") if unsupported
+
+    onep_supported = fetch_public and set_name == "1P" and suite == "IllustrisTNG"
+    if fetch_public and set_name == "1P" and not onep_supported:
+        st.caption(
+            "⚠️ 1P's real public folders are named by parameter+variation (e.g. "
+            "`1P_p11_2`), not `1P_{realization}` like LH/CV/EX. Real support for this "
+            "is only built for **IllustrisTNG** so far (every other suite either uses "
+            "a different, unmapped parameter scheme, or doesn't expose enough real "
+            "metadata to identify its parameters at all - see backend.py for the full "
+            "finding). For this suite, statistics with a synthetic fallback (Pk, HMF, "
+            "SMF, Baryon Fraction, SFR History) will silently show 🟡 synthetic data "
+            "here even in Public data release mode; real-data-only features show "
+            "honest \"no data\" instead."
+        )
+
+    n_real = B.SET_REALIZATIONS.get(set_name) or B.SB_REALIZATIONS_FOR_SUITE.get(suite) or 1
+    if onep_supported:
+        param_options = {p["index"]: p for p in B.ONEP_TNG_PARAMS}
+        onep_param_idx = st.selectbox(
+            "1P Parameter", list(param_options.keys()),
+            format_func=lambda i: f"p{i}: {param_options[i]['name']} ({param_options[i]['category']})",
+            help="All 28 real parameters IllustrisTNG's 1P set varies, identified by "
+                 "diffing the real FOF_Subfind file's header/config between two "
+                 "variations of each index (2026-08-02) - not guessed from docs. "
+                 "sigma_8 and n_s (p2, p9) are cosmological parameters set only at "
+                 "initial-condition time - they never appear in any output file, so "
+                 "they're identified here by elimination against the documented "
+                 "5-cosmological/23-astrophysical count, not read directly.",
+        )
+        onep_variation = st.select_slider(
+            "Variation", options=[-2, -1, 0, 1, 2], value=0,
+            help="0 is the fiducial (shared baseline) simulation. Real per-parameter "
+                 "ranges vary in scale (some linear, some log-spaced) - the real value "
+                 "for whatever you pick is shown below once data is fetched, not "
+                 "precomputed or interpolated.",
+        )
+        missing = B.ONEP_TNG_MISSING_VARIATIONS.get(onep_param_idx, set())
+        if onep_variation in missing:
+            st.warning(f"p{onep_param_idx} has no published variation={onep_variation:+d} "
+                       "simulation (a real gap in the public release, not a bug) - pick "
+                       "another variation.")
+        realization = B.onep_realization_id(onep_param_idx, onep_variation)
+        real_value = B.get_onep_param_value(suite, onep_param_idx, onep_variation)
+        if real_value is not None:
+            st.caption(f"🟢 real value: **{param_options[onep_param_idx]['name']} = {real_value:.4g}**")
+        elif onep_variation not in missing:
+            st.caption("Real value not directly readable from any output file for this "
+                       "parameter (see help above) - only the variation step is shown.")
+        compare_mode = False
+        compare_realizations = [realization]
+    else:
+        realization = st.slider("Realization", 0, n_real - 1, min(42, n_real - 1))
+        compare_mode = st.checkbox(
+            "Compare mode", value=False,
+            help="Overlay several realizations of the same set/statistic on one plot.",
+        )
+        compare_realizations = (
+            st.multiselect("Realizations to compare", options=list(range(n_real)),
+                            default=sorted({realization, min(realization + 1, n_real - 1)}))
+            if compare_mode else [realization]
+        )
+
     snapnum = st.slider("Snapshot", 0, B.N_SNAPSHOTS - 1, B.N_SNAPSHOTS - 1)
     st.caption(f"z ≈ {B._snapshot_to_redshift(snapnum):.2f}")
-
-    compare_mode = st.checkbox(
-        "Compare mode", value=False,
-        help="Overlay several realizations of the same set/statistic on one plot.",
-    )
-    compare_realizations = (
-        st.multiselect("Realizations to compare", options=list(range(n_real)),
-                        default=sorted({realization, min(realization + 1, n_real - 1)}))
-        if compare_mode else [realization]
-    )
 
     st.divider()
     st.header("Statistic")
@@ -87,8 +152,23 @@ with st.sidebar:
         grid = st.select_slider("Grid size", options=[128, 256, 512, 1024], value=512)
         MAS = st.selectbox("Mass Assignment Scheme", ["NGP", "CIC", "TSC", "PCS"], index=1)
         threads = st.slider("Threads", 1, 16, 1)
-        ptype_label = st.selectbox("Particle type", ["Gas [0]", "DM [1]", "Stars [4]", "Total [0,1,4]"], index=1)
-        ptype = {"Gas [0]": [0], "DM [1]": [1], "Stars [4]": [4], "Total [0,1,4]": [0, 1, 4]}[ptype_label]
+        ptype_label = st.selectbox(
+            "Particle type", ["Gas [0]", "DM [1]", "Stars [4]", "Black holes [5]", "Total [0,1,4]"],
+            index=1,
+            help="Black holes [5] is real (Pk_bh) for the same suites as the others, just a "
+                 "much noisier curve - CAMELS boxes only have a few hundred BH particles, vs. "
+                 "millions of gas/DM/star particles.",
+        )
+        ptype = {"Gas [0]": [0], "DM [1]": [1], "Stars [4]": [4], "Black holes [5]": [5],
+                 "Total [0,1,4]": [0, 1, 4]}[ptype_label]
+
+        show_linear_pk = st.checkbox(
+            "Overlay linear-theory Pk (z=0, from ICs)", value=False,
+            help="Real CAMB-generated linear matter power spectrum used to seed this exact "
+                 "realization's initial conditions - IllustrisTNG/SIMBA/Astrid only. Shown at "
+                 "z=0 as-is, not rescaled to the Snapshot slider's redshift (that would need a "
+                 "growth-factor calculation this app doesn't otherwise compute).",
+        )
 
     elif statistic == "Halo Mass Function":
         RMmin = st.number_input("Min reduced mass [Msun/h]", value=1e10, format="%e")
@@ -108,8 +188,18 @@ with st.sidebar:
     elif statistic == "Bispectrum":
         bk_field = st.selectbox(
             "Field", list(B.BK_TYPES.keys()),
-            help="Equilateral-configuration bispectrum (k1=k2=k3), real-space, z=0.00. Real "
-                 "for IllustrisTNG/SIMBA, LH set only - no synthetic fallback.",
+            help="k1=k2 bispectrum, real-space, z=0.00. Real for IllustrisTNG/SIMBA, LH set "
+                 "only - no synthetic fallback.",
+        )
+        bk_mu_index = st.select_slider(
+            "Triangle shape (mu = cos angle between k1, k2)",
+            options=list(range(len(B.BK_MU_VALUES))), value=B.BK_EQUILATERAL_MU_INDEX,
+            format_func=lambda i: f"{B.BK_MU_VALUES[i]:+.1f}"
+            + (" (equilateral)" if i == B.BK_EQUILATERAL_MU_INDEX else ""),
+            help="mu=0.5 is the one value that makes k1=k2=k3 truly equilateral. Other values "
+                 "keep k1=k2 but change the third side, tracing squeezed (mu→0.9) to "
+                 "stretched (mu→-0.9) triangle configurations - a real second axis of this "
+                 "statistic beyond just k.",
         )
 
     elif statistic == "Field PDF":
@@ -217,11 +307,30 @@ with st.sidebar:
             st.caption("Compare mode doesn't apply to this view - showing a single realization.")
 
     elif statistic == "Color-Mass Diagram":
-        photometry_color = st.selectbox(
-            "Color", list(B.PHOTOMETRY_COLORS.keys()),
-            help="Mock SDSS-band colors (BC03 model, dust-attenuated), cross-matched with real "
-                 "Subfind stellar masses via SubhaloIndex. Real for IllustrisTNG/SIMBA/Astrid/"
-                 "Swift-EAGLE, always at z=0 (snapshot #90, same as the Subfind catalog).",
+        photometry_sps_model = st.selectbox(
+            "SPS model", B.PHOTOMETRY_SPS_MODELS,
+            help="Two independent stellar population synthesis models for the same galaxies - "
+                 "BC03 (Bruzual & Charlot 2003) and BPASS (includes binary-star evolution). "
+                 "Comparing them shows how much a galaxy's inferred color depends on the "
+                 "population-synthesis assumption, not just its physical properties.",
+        )
+        photometry_spectra_type = st.radio(
+            "Spectra", B.PHOTOMETRY_SPECTRA_TYPES, horizontal=True,
+            help="Dust-attenuated (what a telescope would actually see) vs. intrinsic "
+                 "(dust-free) - the difference isolates dust's reddening effect on color.",
+        )
+        photometry_family = st.selectbox(
+            "Filter family", list(B.PHOTOMETRY_FILTER_GROUPS.keys()), index=0,
+        )
+        family_bands = B.PHOTOMETRY_FILTER_GROUPS[photometry_family]["bands"]
+        c1, c2 = st.columns(2)
+        photometry_band1 = c1.selectbox("Band 1", family_bands, index=0)
+        photometry_band2 = c2.selectbox("Band 2", family_bands, index=min(2, len(family_bands) - 1))
+        st.caption(
+            f"Plotting {photometry_band1} − {photometry_band2}. Cross-matched with real Subfind "
+            "stellar masses via SubhaloIndex at the same snapshot. Real for IllustrisTNG/SIMBA/"
+            "Astrid/Swift-EAGLE, using the Snapshot slider above (same 34-snapshot schedule as "
+            "Pk/SFRH)."
         )
         if compare_mode:
             st.caption("Compare mode doesn't apply to this view - showing a single realization.")
@@ -245,9 +354,10 @@ def _compute_result(statistic: str, realization: int) -> B.Result:
         return B.get_stellar_mass_function(suite, set_name, realization, snapnum, SMmin, SMmax, bins,
                                             subfind_path=local_path or None, fetch_public=fetch_public)
     if statistic == "Bispectrum":
-        return B.get_bispectrum(suite, set_name, realization, bk_field, fetch_public=fetch_public)
+        return B.get_bispectrum(suite, set_name, realization, bk_field, mu_index=bk_mu_index,
+                                 fetch_public=fetch_public)
     return B.get_sfr_history(suite, set_name, realization, z_min, z_max, bins,
-                              sfrh_path=local_path or None)
+                              sfrh_path=local_path or None, fetch_public=fetch_public)
 
 
 tab_explore, tab_catalog, tab_sam, tab_video = st.tabs(
@@ -268,7 +378,7 @@ with tab_explore:
 
     if statistic == "Galaxy Scaling Relations":
         result = B.get_scaling_relations(suite, set_name, realization, SMmin, SMmax, bins,
-                                          fetch_public=fetch_public)
+                                          snapnum=snapnum, fetch_public=fetch_public)
         badge = "🟢 real data" if result.source == "real" else "🟡 synthetic demo data"
         st.caption(f"{badge}   ·   {result.note}")
 
@@ -291,6 +401,21 @@ with tab_explore:
         fig.tight_layout()
         st.pyplot(fig)
         st.caption("Only stellar-mass bins with at least one galaxy are plotted.")
+
+        if result.metallicity is not None:
+            fig2, ax2 = plt.subplots(figsize=(9, 3.5))
+            ax2.plot(result.stellar_mass[populated], result.metallicity[populated], "o-",
+                     lw=1.5, ms=4, color="tab:green")
+            ax2.set_xscale("log")
+            ax2.set_xlabel("Stellar mass [Msun/h]")
+            ax2.set_ylabel("Mean stellar metallicity (mass fraction)")
+            ax2.grid(alpha=0.3, which="both")
+            fig2.tight_layout()
+            st.pyplot(fig2)
+            st.caption("Mass-metallicity relation - real data only (no synthetic model was "
+                       "built for this one, unlike the four panels above).")
+        else:
+            st.caption("Mass-metallicity panel needs real data - switch to Public data release mode.")
 
     elif statistic == "3D Density Field":
         result = B.get_density_field_3d(suite, set_name, realization, snapnum, field_grid,
@@ -317,6 +442,17 @@ with tab_explore:
             voids = B.get_void_catalog(suite, set_name, realization, fetch_public=fetch_public)
             void_badge = "🟢 real" if voids.source == "real" else "🟡 synthetic"
             st.caption(f"Voids: {void_badge}   ·   {voids.note}")
+            if voids.extra is not None:
+                hover_text = [
+                    f"r={r:.1f} Mpc/h, δ={d:.2f}<br>void_id={row.void_id}, "
+                    f"num_part={row.num_part}<br>vol={row['vol [Mpc/h^3]']:.1f} Mpc/h^3, "
+                    f"tree_level={row.tree_level}, n_children={row.n_children}"
+                    for (r, d), (_, row) in zip(zip(voids.radius, voids.density_contrast),
+                                                 voids.extra.iterrows())
+                ]
+            else:
+                hover_text = [f"r={r:.1f} Mpc/h, δ={d:.2f}" for r, d in
+                              zip(voids.radius, voids.density_contrast)]
             traces.append(go.Scatter3d(
                 x=voids.positions[:, 0], y=voids.positions[:, 1], z=voids.positions[:, 2],
                 mode="markers",
@@ -324,8 +460,7 @@ with tab_explore:
                     size=np.clip(voids.radius * 3, 6, 40), color="cyan", opacity=0.35,
                     line=dict(width=1, color="lightcyan"),
                 ),
-                text=[f"r={r:.1f} Mpc/h, δ={d:.2f}" for r, d in
-                      zip(voids.radius, voids.density_contrast)],
+                text=hover_text,
                 hoverinfo="text", name="VIDE voids",
             ))
 
@@ -342,9 +477,20 @@ with tab_explore:
         st.caption("Drag to rotate, scroll to zoom. Higher-density knots/filaments show as brighter iso-surfaces."
                     + (" Cyan spheres are void centers, sized by radius." if show_voids else ""))
 
+        if show_voids and voids.extra is not None:
+            with st.expander("Void catalog fields (VIDE)"):
+                void_table = pd.DataFrame({
+                    "radius [Mpc/h]": voids.radius, "density_contrast": voids.density_contrast,
+                }).join(voids.extra)
+                st.dataframe(void_table, width="stretch")
+                st.download_button(
+                    "Download as CSV", void_table.to_csv(index=False),
+                    file_name=f"{suite}_{set_name}_{realization}_vide_voids.csv", mime="text/csv",
+                )
+
     elif statistic == "3D Particle Cloud":
         result = B.get_particle_cloud(suite, set_name, realization, max_particles,
-                                       fetch_public=fetch_public)
+                                       snapnum=snapnum, fetch_public=fetch_public)
         badge = "🟢 real data" if result.source == "real" else "🟡 synthetic demo data"
         st.caption(f"{badge}   ·   {result.note}")
 
@@ -434,17 +580,39 @@ with tab_explore:
         else:
             st.caption(f"🟢 real data   ·   {hprof.note}")
 
+            order = np.argsort(hprof.log_mass)[::-1]  # most massive first
+            highlight_rank = st.slider(
+                "Highlight halo (by mass rank, 1 = most massive)", 1, len(order), 1,
+                key="hprof_highlight_rank",
+                help="Shows this halo's profile with error bars derived from the real "
+                     "particle-count-per-bin array (`n` in the file) - relative Poisson "
+                     "error ~ 1/sqrt(n). illstack_CAMELS doesn't publish an uncertainty "
+                     "directly, so this is a real, physically-motivated proxy for it, not a "
+                     "fabricated one.",
+            )
+            hi = int(order[highlight_rank - 1])
+
             fig, ax = plt.subplots(figsize=(8, 5))
             norm = plt.Normalize(hprof.log_mass.min(), hprof.log_mass.max())
             cmap = plt.get_cmap("viridis")
-            for row, mass in zip(hprof.values, hprof.log_mass):
+            for i, (row, mass) in enumerate(zip(hprof.values, hprof.log_mass)):
+                if i == hi:
+                    continue
                 positive = row > 0
-                ax.plot(hprof.r[positive], row[positive], color=cmap(norm(mass)), alpha=0.5, lw=1.0)
+                ax.plot(hprof.r[positive], row[positive], color=cmap(norm(mass)), alpha=0.4, lw=1.0)
+
+            hi_row, hi_n = hprof.values[hi], hprof.n_part[hi]
+            hi_mask = (hi_row > 0) & (hi_n > 0)
+            hi_yerr = hi_row[hi_mask] / np.sqrt(hi_n[hi_mask])
+            ax.errorbar(hprof.r[hi_mask], hi_row[hi_mask], yerr=hi_yerr, fmt="o-", ms=4,
+                        color="crimson", lw=2, capsize=3, zorder=5,
+                        label=f"highlighted (log M200c={hprof.log_mass[hi]:.2f})")
             ax.set_xscale("log")
             ax.set_yscale("log")
             ax.set_xlabel("r [kpc]")
             ax.set_ylabel(f"{hprof.field} [{hprof.units}]")
             ax.grid(alpha=0.3, which="both")
+            ax.legend(fontsize=8, loc="upper right")
             sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
             sm.set_array([])
             fig.colorbar(sm, ax=ax, label="log10 M200c [Msun]")
@@ -455,9 +623,25 @@ with tab_explore:
                        "particles for that halo (e.g. beyond the box, or too far outside a "
                        "smaller halo's profile) - real, not a plotting artifact.")
 
+            with st.expander("Halo metadata (real Group* fields beyond M200c/R200c)"):
+                st.caption(
+                    f"{hprof.metadata.shape[1]} additional real per-halo fields from this same "
+                    "file - SFR, BH mass, alternate mass/radius definitions, gas/star element "
+                    "abundances, substructure count, position/velocity, etc."
+                )
+                st.dataframe(hprof.metadata, width="stretch", height=350)
+                st.download_button(
+                    "Download as CSV", hprof.metadata.to_csv(index=False),
+                    file_name=f"{suite}_{set_name}_{realization}_snap{snapnum:03d}_halo_metadata.csv",
+                    mime="text/csv",
+                )
+
     elif statistic == "Color-Mass Diagram":
-        cmd_result = B.get_color_mass_diagram(suite, set_name, realization, photometry_color,
-                                               fetch_public=fetch_public)
+        cmd_result = B.get_color_mass_diagram(
+            suite, set_name, realization, band1=photometry_band1, band2=photometry_band2,
+            snapnum=snapnum, sps_model=photometry_sps_model, spectra_type=photometry_spectra_type,
+            fetch_public=fetch_public,
+        )
         if cmd_result is None:
             st.info(
                 "This tab is real-data only - there's no synthetic version. Switch **Data "
@@ -518,17 +702,25 @@ with tab_explore:
         else:
             st.caption(f"🟢 real data   ·   {lya.note}")
 
-            fig, ax = plt.subplots(figsize=(9, 4))
+            fig, (ax, ax2) = plt.subplots(2, 1, figsize=(9, 6), sharex=True)
             ax.plot(lya.pixel, lya.flux, lw=1.2, color="#2b5f8a")
             ax.set_ylim(0, 1.05)
-            ax.set_xlabel("spectral pixel (uncalibrated)")
             ax.set_ylabel("transmitted flux (e^-tau)")
             ax.grid(alpha=0.3)
+            ax2.plot(lya.pixel, lya.colden, lw=1.2, color="#8a4a2b")
+            ax2.set_yscale("log")
+            ax2.set_xlabel("spectral pixel (uncalibrated)")
+            ax2.set_ylabel("HI column density")
+            ax2.grid(alpha=0.3, which="both")
             fig.tight_layout()
             st.pyplot(fig)
-            st.caption("A mock Lyman-alpha forest sightline - dips are real absorption features "
-                       "from intervening gas. At z=0 the forest is weak (mean flux close to 1); "
-                       "try a lower Snapshot for a higher-redshift, more absorbed spectrum.")
+            st.caption("A mock Lyman-alpha forest sightline - dips in flux (top) are real "
+                       "absorption features from intervening gas. At z=0 the forest is weak "
+                       "(mean flux close to 1); try a lower Snapshot for a higher-redshift, more "
+                       "absorbed spectrum. The column density panel (bottom) shows the underlying "
+                       "HI gas distribution directly - useful in the fully-saturated (flux≈0) "
+                       "regime near reionization, where the flux/tau panel alone can't "
+                       "distinguish a little HI from a lot.")
 
     else:
         results = {r: _compute_result(statistic, r) for r in realizations}
@@ -556,6 +748,14 @@ with tab_explore:
                 log_sfr = B.SFRHSymbolicModel.predict_log_sfr(z_curve, Om, s8, A1, A3)
                 ax.plot(z_curve, 10 ** log_sfr, "k--", lw=2, label="symbolic-regression fit (real)")
                 show_legend = True
+            if statistic == "Power Spectrum" and show_linear_pk:
+                lin = B.get_linear_pk_ics(suite, set_name, realization)
+                if lin is not None:
+                    k_lin, Pk_lin = lin
+                    ax.plot(k_lin, Pk_lin, "k--", lw=1.5, label="linear theory, z=0 (from ICs)")
+                    show_legend = True
+                else:
+                    st.caption("Linear-theory Pk isn't available for this suite/set/realization.")
 
             if first_result.log_x:
                 ax.set_xscale("log")
@@ -575,21 +775,26 @@ with tab_explore:
 
 with tab_catalog:
     finder = st.selectbox(
-        "Halo finder", ["Subfind", "AHF", "Rockstar", "CAESAR"],
+        "Halo finder", ["Subfind", "AHF", "Rockstar", "CAESAR", "CAESAR Galaxies"],
         help="Subfind is this app's primary finder (same one every other tab uses). AHF/"
              "Rockstar/CAESAR are alternate finders run on the same simulations - useful "
-             "for comparing halo definitions/masses across methods.",
+             "for comparing halo definitions/masses across methods. CAESAR Galaxies is a "
+             "different granularity - CAESAR's 6D-FOF galaxy catalog (sub-halo scale), not "
+             "another halo finder - each row links back to a CAESAR halo via Parent Halo Index.",
     )
     FINDER_SUITE_HINT = {
         "Subfind": "IllustrisTNG, SIMBA, Astrid, or Swift-EAGLE",
         "AHF": "IllustrisTNG or SIMBA",
         "Rockstar": "IllustrisTNG, SIMBA, or Astrid",
         "CAESAR": "IllustrisTNG or SIMBA",
+        "CAESAR Galaxies": "IllustrisTNG or SIMBA",
     }
     if finder == "Subfind":
-        catalog = B.get_halo_catalog(suite, set_name, realization, fetch_public=fetch_public)
+        catalog = B.get_halo_catalog(suite, set_name, realization, snapnum=snapnum,
+                                      fetch_public=fetch_public)
     else:
-        catalog = B.get_alt_halo_catalog(finder, suite, set_name, realization, fetch_public=fetch_public)
+        catalog = B.get_alt_halo_catalog(finder, suite, set_name, realization, snapnum=snapnum,
+                                          fetch_public=fetch_public)
 
     if catalog is None:
         st.info(
@@ -604,14 +809,26 @@ with tab_catalog:
                        "(not a parsing bug here) by checking the raw file directly across "
                        "several realizations. CAMELS's public Rockstar run doesn't populate it.")
 
+        show_all_fields = st.checkbox(
+            "Show all available fields (raw)", value=False, key="catalog_show_all_fields",
+            help="The curated columns above are a hand-picked subset. This file has real "
+                 "columns beyond them - toggle to see everything this catalog actually has, "
+                 "not just what we chose to name/convert units for.",
+            disabled=catalog.raw_frame is None,
+        )
+        display_frame = catalog.raw_frame if (show_all_fields and catalog.raw_frame is not None) else catalog.frame
+
         mass_col = next(c for c in catalog.frame.columns if c.startswith("Stellar Mass"))
         min_mass_exp = st.slider(
             f"Minimum stellar mass [log10 {mass_col.split('[')[1].rstrip(']')}]", 6.0, 12.0, 8.0, 0.1,
             help="Filters the table below - doesn't refetch data.", key="catalog_min_mass",
         )
-        filtered = catalog.frame[catalog.frame[mass_col] >= 10 ** min_mass_exp]
+        filtered = display_frame[display_frame[mass_col] >= 10 ** min_mass_exp]
         sorted_frame = filtered.sort_values(mass_col, ascending=False).reset_index(drop=True)
 
+        if show_all_fields and catalog.raw_frame is not None:
+            st.caption(f"Showing all {len(display_frame.columns)} available fields "
+                       f"(vs. {len(catalog.frame.columns)} curated ones above).")
         st.caption(f"Showing {len(sorted_frame)} of {len(catalog.frame)} halos/subhalos.")
         st.dataframe(sorted_frame, width="stretch", height=420)
         st.download_button(
@@ -624,34 +841,53 @@ with tab_catalog:
             with st.expander("📈 Trace a subhalo's merger history (SubLink)"):
                 st.caption(
                     "Follows the main branch backward via SubLink's FirstProgenitorID - real "
-                    "for IllustrisTNG/SIMBA/Astrid. Pick a SubfindID from the table above "
-                    "(defaults to the most massive one currently shown)."
+                    "for IllustrisTNG/SIMBA/Astrid. Pick a SubfindID from the table above - "
+                    "it's looked up at the current Snapshot slider value, since SubfindID only "
+                    "means something within its own snapshot's catalog (defaults to the most "
+                    "massive one currently shown)."
                 )
                 default_id = int(sorted_frame["SubfindID"].iloc[0]) if len(sorted_frame) else 0
                 subfind_id = st.number_input(
                     "SubfindID", min_value=0, value=default_id, step=1, key="sublink_subfind_id",
                 )
+                sublink_variant = st.radio(
+                    "Merger tree", ["SubLink", "SubLink_gal"], horizontal=True, key="sublink_variant",
+                    help="SubLink links subhalos via their dark-matter particles (the standard "
+                         "tree). SubLink_gal links via baryonic (gas/star) particles instead - a "
+                         "distinct, galaxy-centric merger history, not just a naming variant. "
+                         "Same real schema, so both are wired through the same code.",
+                )
                 history = B.get_merger_history(suite, set_name, realization, int(subfind_id),
+                                                root_snapnum=snapnum, variant=sublink_variant,
                                                 fetch_public=fetch_public)
                 if history is None:
                     st.warning(
                         "No merger history for this SubfindID - either this suite isn't "
                         "supported (IllustrisTNG/SIMBA/Astrid only) or the ID doesn't exist "
-                        "in this realization's tree."
+                        "in this realization's tree at the current snapshot."
                     )
                 else:
                     st.caption(f"🟢 real data   ·   {history.note}")
-                    fig, ax = plt.subplots(figsize=(7, 4))
+                    fig, (ax, ax2) = plt.subplots(1, 2, figsize=(11, 4))
                     ax.plot(history.redshift, history.mass, "o-", lw=1.5, ms=4)
                     ax.set_yscale("log")
                     ax.invert_xaxis()
                     ax.set_xlabel("Redshift")
                     ax.set_ylabel("Subhalo Mass [Msun/h]")
                     ax.grid(alpha=0.3, which="both")
+                    ax2.plot(history.redshift, history.num_particles, "o-", lw=1.5, ms=4, color="tab:orange")
+                    ax2.set_yscale("log")
+                    ax2.invert_xaxis()
+                    ax2.set_xlabel("Redshift")
+                    ax2.set_ylabel("NumParticles")
+                    ax2.grid(alpha=0.3, which="both")
                     fig.tight_layout()
                     st.pyplot(fig)
-                    st.caption("Redshift decreases left to right (time flows forward); "
-                               "z=0 (today) is on the right.")
+                    st.caption("Redshift decreases left to right (time flows forward); z=0 (or "
+                               "the root snapshot) is on the right. NumParticles alongside Mass "
+                               "helps distinguish a genuine major merger (both jump together) "
+                               "from a low-resolution subhalo being absorbed (particle count was "
+                               "already small).")
 
 # ---------------------------------------------------------------------------
 # CAMELS-SAM tab — a separate dataset, not tied to any hydro suite, so it
@@ -678,9 +914,23 @@ with tab_sam:
                 "Minimum stellar mass [log10 Msun]", 5.0, 11.0, 7.0, 0.1,
                 help="Filters the table below - doesn't refetch data.", key="sam_min_mass",
             )
+            sam_show_all_fields = st.checkbox(
+                "Show all available fields (raw)", value=False, key="sam_show_all_fields",
+                help="The curated columns above are a hand-picked subset of the real GALPROP "
+                     "file (41 columns total) - toggle to see the rest (e.g. mass_outflow_rate, "
+                     "sfrave1gyr, r_disk, tmerge).",
+                disabled=sam_catalog.raw_frame is None,
+            )
             sam_filtered = sam_catalog.frame[
                 sam_catalog.frame["Stellar Mass [Msun]"] >= 10 ** sam_min_mass_exp]
             sam_sorted = sam_filtered.sort_values("Stellar Mass [Msun]", ascending=False).reset_index(drop=True)
+
+            if sam_show_all_fields and sam_catalog.raw_frame is not None:
+                sam_table_frame = sam_catalog.raw_frame[
+                    sam_catalog.raw_frame["Stellar Mass [Msun]"] >= 10 ** sam_min_mass_exp
+                ].sort_values("Stellar Mass [Msun]", ascending=False).reset_index(drop=True)
+            else:
+                sam_table_frame = sam_sorted
 
             if len(sam_filtered) == 0:
                 st.warning("No galaxies pass this mass cut - lower the slider.")
@@ -732,10 +982,13 @@ with tab_sam:
                     st.caption("Drag to rotate, scroll to zoom, hover a point for its properties. "
                                "Real galaxy positions (one octant), colored by stellar mass.")
 
-            st.caption(f"Showing {len(sam_sorted)} of {len(sam_catalog.frame)} galaxies.")
-            st.dataframe(sam_sorted, width="stretch", height=420)
+            if sam_show_all_fields and sam_catalog.raw_frame is not None:
+                st.caption(f"Showing all {len(sam_table_frame.columns)} available fields "
+                           f"(vs. {len(sam_catalog.frame.columns)} curated ones above).")
+            st.caption(f"Showing {len(sam_table_frame)} of {len(sam_catalog.frame)} galaxies.")
+            st.dataframe(sam_table_frame, width="stretch", height=420)
             st.download_button(
-                "Download as CSV", sam_sorted.to_csv(index=False),
+                "Download as CSV", sam_table_frame.to_csv(index=False),
                 file_name=f"SAM_LH_{sam_realization}_catalog.csv", mime="text/csv",
             )
 
@@ -763,12 +1016,17 @@ st.markdown(
     "- ~~**Representative visualization tab**: per-suite video~~ ✅ done\n"
     "- ~~**Compare mode**: overlay multiple realizations~~ ✅ done (Pk/HMF/SMF/SFRH)\n"
     "- ~~**Real Pk**: live fetch from the public data release~~ ✅ done "
-    "(IllustrisTNG/SIMBA/Astrid/Swift-EAGLE only)\n"
-    "- ~~**Real HMF/SMF**: live fetch of a public Subfind catalog~~ ✅ done "
-    "(z~0 catalog only for now, same 4 suites)\n"
+    "(IllustrisTNG/SIMBA/Astrid/Swift-EAGLE; gas/DM/stars/total, plus black holes - `Pk_bh` was "
+    "real but unexposed, now a 5th Particle type option, noisier since CAMELS boxes only have a "
+    "few hundred BH particles)\n"
+    "- ~~**Real HMF/SMF/Baryon Fraction/Catalog Browser/Scaling Relations**: live fetch of a "
+    "public Subfind catalog~~ ✅ done - full 34-snapshot range via the Snapshot slider (all real "
+    "redshifts, not just the z~0 catalog), same 4 suites. SubfindID cross-references (SubLink "
+    "merger history) now use the same snapshot the catalog is browsing at, not a hardcoded z=0\n"
     "- ~~**Halo/subhalo catalog browser**: filterable table + CSV export~~ ✅ done\n"
     "- ~~**Galaxy scaling relations**: radius/BH-mass/SFR/Vmax vs stellar mass~~ ✅ done "
-    "(real via the fetched catalog, synthetic fallback otherwise)\n"
+    "(real via the fetched catalog, synthetic fallback otherwise, full snapshot range; a 5th "
+    "mass-metallicity panel is real-only, no synthetic model built for it)\n"
     "- ~~**Real 3D density field**: CMD grids (fast) + real-snapshot Pylians gridding (fallback)~~ "
     "✅ done (IllustrisTNG/SIMBA/Astrid; Swift-EAGLE excluded - SWIFT's native HDF5 format "
     "differs from the Gadget-style layout the rest of this app assumes)\n"
@@ -787,7 +1045,9 @@ st.markdown(
     "- ~~**Baryon fraction**: real, same Subfind catalog we already fetch~~ ✅ done\n"
     "- ~~**VIDE void catalogs**: real void positions overlaid on the 3D Density Field view~~ "
     "✅ done (IllustrisTNG/LH/z=0 only - the only populated combination in the public release; "
-    "synthetic illustrative spheres otherwise)\n"
+    "synthetic illustrative spheres otherwise; full field set - vol, vol_norm, void_id, "
+    "num_part, parent_id, tree_level, n_children, central_density - in an expander table below "
+    "the 3D view, not just position/radius/density_contrast)\n"
     "- ~~**CAMELS-SAM catalog browser**: real Santa Cruz semi-analytic-model galaxy catalogs, "
     "SM-halo mass scatter + 3D position view (axes, hover tooltips, colored by stellar mass)~~ "
     "✅ done (LH set only, 1000 realizations; CV excluded - irregular per-realization structure; "
@@ -798,23 +1058,68 @@ st.markdown(
     "- ~~**Alternate halo finders**: AHF/Rockstar/CAESAR catalogs alongside Subfind, same "
     "Catalog Browser tab~~ ✅ done (AHF/CAESAR: IllustrisTNG+SIMBA; Rockstar: also Astrid). "
     "~~**SubLink merger history**: real mass accretion history for any Subfind subhalo, "
-    "walking FirstProgenitorID~~ ✅ done (IllustrisTNG/SIMBA/Astrid)\n"
+    "walking FirstProgenitorID~~ ✅ done (IllustrisTNG/SIMBA/Astrid; alongside Mass, a real "
+    "NumParticles panel helps tell a genuine major merger from a low-resolution subhalo "
+    "being absorbed; traces from the Catalog Browser's current snapshot, not always z=0). "
+    "~~**SubLink_gal**: baryon-particle-linked merger tree, alongside standard SubLink~~ "
+    "✅ done (same real schema, reuses the same code, just a different real folder)\n"
+    "- ~~**CAESAR Galaxies**: CAESAR's 6D-FOF galaxy catalog (sub-halo scale), a distinct "
+    "granularity from the existing halo finders~~ ✅ done (IllustrisTNG/SIMBA; real, "
+    "precomputed `galaxy_data` from the same file already used for CAESAR halos - masses, "
+    "SFR, radii, position, ~100-filter real photometry, rotation/kinematics, and "
+    "`Parent Halo Index` linking each galaxy back to its CAESAR halo row. The raw "
+    "`fof6d_tags` file - what \"CAESAR fof6d\" originally meant - turned out to be a genuine "
+    "dead end: confirmed via CAESAR's own GitHub source that its particle indices only cover "
+    "a density/temperature-filtered, internally-resorted subset with no public documentation "
+    "of the exact ordering - not safely decodable without re-implementing CAESAR's internal "
+    "pipeline. `galaxy_data` achieves the same underlying goal safely instead.)\n"
     "- ~~**Halo gas profiles (SO_properties)**: real density/pressure/temperature/metallicity "
     "radial profiles per halo, colored by mass~~ ✅ done (IllustrisTNG/SIMBA, LH/CV sets - the "
-    "precomputed `Profiles/` product, not a live compute of the heaviest function in the library)\n"
-    "- ~~**Color-Mass Diagram**: real SDSS-band galaxy colors vs. real stellar mass, cross-matched "
-    "with the Subfind catalog~~ ✅ done (IllustrisTNG/SIMBA/Astrid/Swift-EAGLE, z=0 only)\n"
-    "- ~~**Bispectrum**: real equilateral-configuration B(k,k,k) for matter/gas/dark matter~~ "
-    "✅ done (IllustrisTNG/SIMBA, LH set only, z=0, real-space low-k estimator; compare mode "
-    "works here too)\n"
+    "precomputed `Profiles/` product, not a live compute of the heaviest function in the library; "
+    "a highlighted halo gets real error bars derived from the file's own per-bin particle-count "
+    "array (`n`, relative Poisson error ~ 1/sqrt(n)); an expander below exposes the other 44 "
+    "real per-halo Group* fields this file has beyond M200c/R200c - SFR, BH mass, alternate mass/"
+    "radius definitions, gas/star element abundances, etc.)\n"
+    "- ~~**Color-Mass Diagram**: real galaxy colors vs. real stellar mass, cross-matched with the "
+    "Subfind catalog~~ ✅ done (IllustrisTNG/SIMBA/Astrid/Swift-EAGLE; full 34-snapshot range, "
+    "not just z=0; both BC03 and BPASS SPS models; attenuated/intrinsic toggle; any 2-band color "
+    "across all 6 real filter families - SLOAN, Generic/Johnson, HST, JWST, UKIRT, UV/GALEX - "
+    "not just 5 fixed SDSS colors)\n"
+    "- ~~**Bispectrum**: real k1=k2 B(k) for matter/gas/dark matter~~ ✅ done (IllustrisTNG/SIMBA, "
+    "LH set only, z=0, real-space low-k estimator; compare mode works here too; a mu-bin slider "
+    "exposes all 10 real triangle-shape configurations, not just the equilateral mu=0.5 one)\n"
     "- ~~**Field PDF**: real ensemble mean +/- std histogram shape across all 1000 LH "
     "realizations, per CMD field~~ ✅ done (IllustrisTNG/SIMBA, grid 128/256, z=0/0.5/1/1.5/2 - "
     "x-axis is an uncalibrated bin index since the public release doesn't document bin edges)\n"
     "- ~~**Lyman-alpha Spectrum**: real mock forest sightline, transmitted flux vs pixel~~ "
     "✅ done (IllustrisTNG/SIMBA, all sets, uses the Snapshot slider - try low snapshots for a "
-    "saturated, high-z Gunn-Peterson-like spectrum vs. a near-transparent z=0 one)\n"
+    "saturated, high-z Gunn-Peterson-like spectrum vs. a near-transparent z=0 one; a second "
+    "panel shows the real HI column density alongside flux/tau - useful in the fully-saturated "
+    "regime where flux/tau alone can't distinguish a little HI from a lot)\n"
+    "- ~~**Show all available fields**: raw-column escape hatch in the Catalog Browser + "
+    "CAMELS-SAM tabs~~ ✅ done (AHF/Rockstar/CAESAR/Subfind/CAMELS-SAM each parse far more real "
+    "columns than the curated table shows - e.g. CAESAR has 118, Subfind 72 - a checkbox now "
+    "surfaces all of them, no new fetching needed, it was already in memory)\n"
     "- ~~**Desktop packaging**: native window via `pywebview`~~ ✅ done — run `python desktop.py`\n"
     "- **ML scripts panel**: drive the GAN / autoencoder / params↔SFRH neural nets from `scripts/`\n"
+    "- ~~**1P set real-data fetching (IllustrisTNG)**~~ ✅ done (2026-08-02): 1P's real public "
+    "folders are compound-named by parameter+variation (`1P_p11_2`), not `1P_{realization}` "
+    "like every other set. All 28 real parameters identified by diffing the real FOF_Subfind "
+    "file's header/config between two variations of each index (not guessed from docs) - "
+    "sigma_8/n_s (p2, p9) are the only two not directly readable, since they're set only at "
+    "initial-condition time and never written to any output file; identified by elimination "
+    "instead. A parameter+variation picker replaces the realization slider when IllustrisTNG+1P "
+    "is selected, and every real-data fetcher gets the right file for free (they already build "
+    "their URL as `{set_name}_{realization}` - passing the compound string as `realization` "
+    "just works, no fetcher changes needed). Covers Power Spectrum, HMF/SMF/Baryon Fraction, "
+    "Scaling Relations, Catalog Browser (Subfind/Rockstar/CAESAR), SubLink, and Photometry/"
+    "Color-Mass Diagram - verified end-to-end with real data. **Not covered**: SIMBA/Astrid/"
+    "Swift-EAGLE (SIMBA and Astrid's astrophysical parameters mostly aren't exposed in their "
+    "own output files' metadata either, so most of their 28/7 parameters can't be named or "
+    "valued this way - a real data limitation, not a missing feature); AHF, Halo Gas Profiles, "
+    "and Lyman-alpha (these three use a completely different, older 1P naming scheme - 6 "
+    "parameters, 11 variations each, `1P_{idx}_{variation}` with no \"p\" - confirmed via a "
+    "real directory listing, not yet wired up)\n"
     "- ⏸️ **HPC panel** (parked, not pursuing for now): `setup/` is simulation-*generation* "
     "infrastructure (SLURM submitters that run GIZMO/AREPO on Rusty for days per realization), "
     "not analysis of the existing public release - a different category of tool than everything "
