@@ -37,10 +37,23 @@
   --color-text-emphasis: var(--neutral-white);
 
   /* Accent - the brand palette doing double duty as the UI's one accent
-     event (Add Plot button, empty-state icon outline). Real, not proposed:
-     the Skeleton frame's own gradient is literally --brand-purple ->
-     --brand-bright-red. */
+     event (Add Plot button, empty-state icon border). Real, not proposed:
+     the Skeleton frame's Add Plot button is a flat 2-stop --brand-purple ->
+     --brand-bright-red gradient. */
   --color-accent-gradient-start: var(--brand-purple);
   --color-accent-gradient-end: var(--brand-bright-red);
-  --color-accent-border: var(--brand-purple);
+
+  /* Corrected 2026-08-04: the empty-state icon's border is its OWN, richer
+     4-stop top-to-bottom gradient (7B2D8E -> B0336A -> E8A030 -> E63946),
+     not a flat single color and not the same 2-stop gradient as the Add
+     Plot button above - given directly by the user reading the real value
+     off the design. 3 of 4 stops match existing brand primitives exactly
+     (purple / golden-amber / bright-red); the 50% midpoint (#B0336A) has no
+     match among the logo's cataloged 12 swatches, so it's kept as a literal
+     value here rather than added to color-ramps.css and misrepresented as
+     part of that original logo extraction. */
+  --color-empty-icon-gradient-1: var(--brand-purple);       /* 0% */
+  --color-empty-icon-gradient-2: #B0336A;                   /* 50% */
+  --color-empty-icon-gradient-3: var(--brand-golden-amber); /* 75% */
+  --color-empty-icon-gradient-4: var(--brand-bright-red);   /* 100% */
 }
