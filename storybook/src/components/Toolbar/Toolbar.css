@@ -1,0 +1,68 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.toolbar__tool {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.toolbar__tool img {
+  width: 18px;
+  height: 18px;
+}
+
+.toolbar__tool--active {
+  background: var(--color-border-subtle);
+}
+
+.toolbar__divider {
+  width: 1px;
+  height: 20px;
+  background: var(--color-border-subtle);
+}
+
+.toolbar__spacer {
+  width: 8px;
+}
+
+.toolbar__viewmode {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--color-surface-toggle);
+  border-radius: 8px;
+}
+
+.toolbar__viewmode-option {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.toolbar__viewmode-option img {
+  width: 16px;
+  height: 16px;
+}
+
+.toolbar__viewmode-option--active {
+  background: var(--color-surface-toggle-active);
+}

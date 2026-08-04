@@ -1,0 +1,59 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as ParamsSidebarStories from './ParamsSidebar.stories';
+
+<Meta of={ParamsSidebarStories} />
+
+# ParamsSidebar
+
+The per-tile params panel from Figma node `1068:18` (and identically in `1046:10`) — shown when a tile is focused, occupying the same 280px slot as `IconRail`'s Project/Files panels (mutually exclusive, per `STUDIO_PLAN.md`'s "Left icon rail" section).
+
+## Token
+
+- `--color-surface-chrome` — background (same as TopNav/IconRail)
+- `--color-border` — right border, and the divider under the title
+- `--font-label` (Lato) — eyebrow label
+- `--font-ui` (Inter) — statistic title
+
+Individual fields carry their own tokens — see `SelectField.mdx`, `Slider.mdx`, `NumberStepper.mdx`, `Checkbox.mdx`.
+
+## Spec
+
+<Canvas of={ParamsSidebarStories.Playground} />
+<Controls />
+
+- 280px wide, full height, 24px/20px padding, 18px gap between rows.
+- `panelLabel` ("PANEL 1 · FOCUSED") in small uppercase, then `title` (the statistic's name) at 18px semibold, then a divider, then whatever field controls the statistic actually needs.
+
+**Corrected 2026-08-04: this component no longer owns field rendering.** It originally took a `fields: {label, value}[]` prop and rendered every field as the same dropdown-styled box. Real evidence since then (Figma nodes `1055:28`, `1055:33`, `1055:41`, `1055:75`, `1055:56`) shows the real params panel mixes **heterogeneous field types** — a plain select-styled dropdown (`SelectField`), an actual range slider (`Slider`), a numeric increment field (`NumberStepper`), and checkboxes (`Checkbox`) — not one uniform shape. `ParamsSidebar` now only owns the panel shell (eyebrow/title/divider) and takes `children`; composing the right real field atoms for a given statistic is the caller's job.
+
+**Real, upgraded from `STUDIO_PLAN.md`'s plan-level decision:** SFR History's own real fields (Suite, Set, Realization, plus Compare mode and z max — see below) confirm the "only render controls the statistic's real backend call actually uses" rule directly against design, not just against the plan.
+
+**The Canvas above renders generic field labels ("Select label 1," "Slider label," etc.), not the real Figma copy (Suite, Set, Realization, Compare mode).** `panelLabel`/`title` are left as real structural context — which panel, which statistic — since those describe the panel itself rather than a control's label. The real field names are documented below and in each field component's own doc.
+
+**Still open:**
+- **"Redshift range" (the combined field in `1068:18`) and "z max" (the separate `NumberStepper` in `1055:56`) are both explicit placeholders, confirmed 2026-08-04** — not a discrepancy to reconcile. Which real input control actually fits z_min/z_max (one combined range field, two separate steppers, a dual-handle range slider, or something else) is intentionally undecided until real data is wired up — the right control depends on how that wiring actually behaves. The `Playground` story includes "z max" as a `NumberStepper` because that's the more recent placeholder, not because it's been confirmed as final.
+- Every field in `SelectField` is closed-state only — there is no real design yet for an open dropdown menu.
+
+## Usecase
+
+- Mutually exclusive with `IconRail`'s Project/Files panels — only one 280px left panel is ever open at a time.
+- One `ParamsSidebar` per focused tile; `panelLabel` should reflect whichever tile is actually focused (`"Panel 1 · Focused"`, `"Panel 2 · Focused"`, ...), not hardcoded.
+- Compose only the fields the focused statistic's real backend call consumes (see `backend.py`'s actual function signatures) — don't default to a fixed field set across every statistic.
+
+## Code
+
+```tsx
+import { ParamsSidebar } from '@/components/ParamsSidebar/ParamsSidebar';
+import { SelectField } from '@/components/SelectField/SelectField';
+import { Slider } from '@/components/Slider/Slider';
+import { NumberStepper } from '@/components/NumberStepper/NumberStepper';
+import { Checkbox } from '@/components/Checkbox/Checkbox';
+
+<ParamsSidebar panelLabel="PANEL 1 · FOCUSED" title="SFR History">
+  <SelectField label="Suite" value="IllustrisTNG" />
+  <SelectField label="Set" value="LH — Latin Hypercube" />
+  <Slider label="Realization" min={0} max={999} value={278} onChange={setRealization} />
+  <NumberStepper label="z max" value={10.0} step={0.1} onChange={setZMax} formatValue={(v) => v.toFixed(1)} />
+  <Checkbox label="Compare mode" checked={false} onChange={setCompareMode} />
+</ParamsSidebar>
+```

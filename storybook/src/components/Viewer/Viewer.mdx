@@ -1,0 +1,73 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as ViewerStories from './Viewer.stories';
+
+<Meta of={ViewerStories} />
+
+# Viewer
+
+The tile arrangements toggled by `Toolbar`'s view-mode control: **grid** (auto-tiling, real Figma source for the 4-tile case: node `1078:78`, "2x2 panel") and **stacked** (real source: node `1046:88`, "stacked panel"). Layout only — this arranges whatever tiles it's given, it doesn't render tile content itself.
+
+## Token
+
+No new tokens — this is pure layout (padding/gap), no color/typography of its own.
+
+## Spec
+
+Grid mode auto-tiles by how many tiles are present, per `STUDIO_PLAN.md`'s "Interface model" ("one item is a full view, a second snaps to a side-by-side split... a fourth to a 2x2 grid") — it is not four separate modes a user picks between, it's one mode that reflows:
+
+<Canvas of={ViewerStories.OneByOne} />
+
+**1x1** — a single tile spans the full width. Not shown in either source frame directly (both real frames had 2 or 4 tiles) — implemented from `STUDIO_PLAN.md`'s own description of this exact behavior, via `grid-column: span 2` on an only child.
+
+<Canvas of={ViewerStories.TwoByOne} />
+
+**2x1** — two tiles side by side, each half width. Falls out of the same 2-column grid with no special-case rule needed.
+
+<Canvas of={ViewerStories.Thirds} />
+
+**Thirds** — three tiles: 2 in the first row, the 3rd spans full width below it. Confirmed directly 2026-08-04 (not sourced from a Figma frame — described directly). Implemented via `grid-column: span 2` on the 3rd child, scoped with `:last-child` so it only fires at exactly 3 tiles — a 3rd tile among 5+ stays in its normal 2-column slot rather than spanning.
+
+<Canvas of={ViewerStories.TwoByTwo} />
+
+**2x2** — four tiles, two rows of two. The real, directly-sourced case (Figma node `1078:78`).
+
+<Canvas of={ViewerStories.Stacked} />
+
+**Stacked** — full-width, one tile per row, any tile count. Real source: Figma node `1046:88`.
+
+<Controls />
+
+All states share the same real measurements: 16px outer padding, 16px gap between tiles (measured from both real frames' child positions — e.g. stacked's Panel 2 sits at y=866 with Panel 1 ending at y=850, a 16px gap; grid's two 661px columns plus a 16px gap sum to the real 1338px row width).
+
+**Still open:** 5+ tile arrangements beyond these five named states aren't specified anywhere yet — the grid will keep wrapping 2-per-row, which is a reasonable default but hasn't been confirmed as the intended behavior past 4 tiles.
+
+## Usecase
+
+- One `Viewer` per canvas, switched by `Toolbar`'s `viewMode` — `Viewer` doesn't own that state itself, it's a controlled component.
+- Grid is the default/primary mode; stacked is the alternate for reading multiple tiles top-to-bottom.
+- Within grid mode, arrangement is automatic (driven by tile count) — there's no separate prop to force 1x1 vs 2x1 vs 2x2. Adding/removing a tile is what changes it.
+- This pass only arranges empty `Tile`s. The real frames this was sourced from show fully populated panels (title + status dot + plot + params readout + occasionally a "view underlying halos" footer) — that populated-tile anatomy is a separate, not-yet-built variant, deliberately deferred, not forgotten.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { Viewer } from '@/components/Viewer/Viewer';
+import { Toolbar } from '@/components/Toolbar/Toolbar';
+import { Tile } from '@/components/Tile/Tile';
+import type { ViewMode } from '@/components/Toolbar/Toolbar';
+
+function Canvas({ tileCount }: { tileCount: number }) {
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  return (
+    <>
+      <Toolbar viewMode={viewMode} onViewModeChange={setViewMode} />
+      <Viewer mode={viewMode}>
+        {Array.from({ length: tileCount }, (_, i) => (
+          <Tile key={i} title={`Panel ${i + 1}`} onAddPlot={() => {}} />
+        ))}
+      </Viewer>
+    </>
+  );
+}
+```

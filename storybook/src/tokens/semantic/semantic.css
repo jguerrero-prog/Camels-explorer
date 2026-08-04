@@ -1,0 +1,46 @@
+/*
+ * Semantic tokens - the ONLY layer components may reference (see
+ * STORYBOOK_STRUCTURE.md's primitive/semantic split). Values below are the
+ * real "Skeleton" frame's dark design (Figma node 1113:1583).
+ *
+ * There is only one real theme so far. Per STORYBOOK_STRUCTURE.md, a second
+ * theme should redefine these under its own [data-theme="..."] file without
+ * ever touching component CSS - but writing that file now, with no real
+ * light-mode design to source values from, would mean inventing colors
+ * nobody designed. So: these values live directly on :root for now (today's
+ * only reality), not yet split into themes/dark.css. Split it out the day a
+ * second theme actually needs to override them - see STORYBOOK_STRUCTURE.md's
+ * theming section for why that split matters once it's real.
+ */
+
+:root {
+  /* Surfaces */
+  --color-surface-chrome: var(--neutral-950);   /* top nav, icon rail */
+  --color-surface-content: var(--neutral-925);  /* tiles */
+  --color-surface-sunken: var(--neutral-black); /* stat chips */
+
+  /* Borders */
+  --color-border: var(--neutral-900);
+  --color-border-subtle: var(--neutral-850);  /* input fields, toolbar divider - one step up from --color-border */
+
+  /* Controls */
+  --color-surface-control: var(--neutral-900);   /* input/select fields (ParamsSidebar) - same primitive as --color-border, different role */
+  --color-surface-toggle: var(--neutral-910);    /* viewmode-toggle container */
+  --color-surface-toggle-active: var(--neutral-850); /* selected option within a toggle */
+  --color-surface-chip: var(--neutral-920);          /* MultiSelect chips */
+  --color-surface-track: var(--neutral-850);         /* Slider track (same primitive as --color-border-subtle, different role) */
+
+  /* Text */
+  --color-text-primary: var(--neutral-100);
+  --color-text-muted: var(--neutral-400);
+  --color-text-faint: var(--neutral-500);
+  --color-text-emphasis: var(--neutral-white);
+
+  /* Accent - the brand palette doing double duty as the UI's one accent
+     event (Add Plot button, empty-state icon outline). Real, not proposed:
+     the Skeleton frame's own gradient is literally --brand-purple ->
+     --brand-bright-red. */
+  --color-accent-gradient-start: var(--brand-purple);
+  --color-accent-gradient-end: var(--brand-bright-red);
+  --color-accent-border: var(--brand-purple);
+}

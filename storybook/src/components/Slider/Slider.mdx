@@ -1,0 +1,48 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as SliderStories from './Slider.stories';
+
+<Meta of={SliderStories} />
+
+# Slider
+
+A range slider with a gradient fill, real source: Figma node `1055:33` ("slider-Realization"). Corrects an earlier assumption in `ParamsSidebar` that "Realization" was a dropdown-styled box — it's actually this.
+
+## Token
+
+- `--color-surface-track` (`--neutral-850`, same primitive as `--color-border-subtle`) — the unfilled track
+- `--color-accent-gradient-start` → `--color-accent-gradient-end` — the filled portion, same gradient as `Button`'s primary variant and `Tile`'s empty-icon border
+- `--font-label` (Lato) — the label
+- `--font-ui` (Inter) — the current value, semibold
+
+## Spec
+
+<Canvas of={SliderStories.Playground} />
+<Controls />
+
+- Label row: label (muted, left) and current value (semibold, right), `justify-content: space-between`.
+- Track: 4px tall, full width, 2px radius, `--color-surface-track`.
+- Fill: same height/radius, gradient, width = `(value - min) / (max - min)`.
+- Thumb: 14px, positioned at the fill's edge minus half its own width, so it sits centered on the fill boundary — matches the real frame's `left: 60px` for a 67px-wide fill (67 - 14/2 = 60).
+
+**The Canvas above renders "Slider label," not "Realization."** This story demonstrates the control's mechanics, not confirmed copy — the real field name is documented in Usecase below instead.
+
+**Still open:**
+- A native `<input type="range">` is layered underneath, invisible, purely for keyboard/pointer accessibility — the visuals are entirely custom-drawn. This wasn't a real design decision, it's a standard accessible-custom-slider pattern; flagged so it's understood as an implementation choice, not something sourced from Figma.
+- No drag-to-scrub visual feedback (e.g. thumb scale-up while dragging) is specified in the real frame.
+
+## Usecase
+
+- Real, confirmed usage: SFR History's "Realization" field inside `ParamsSidebar`.
+- Reasonable for any single bounded numeric parameter a user scrubs rather than types — don't reach for it for values with no natural min/max (use `NumberStepper` for step-driven values like z max instead).
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { Slider } from '@/components/Slider/Slider';
+
+function RealizationField() {
+  const [value, setValue] = useState(278);
+  return <Slider label="Realization" min={0} max={999} value={value} onChange={setValue} />;
+}
+```

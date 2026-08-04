@@ -1,0 +1,24 @@
+/*
+ * Neutral primitives - sourced from the "Skeleton" frame (Figma "Denario"
+ * file, node 1113:1583): top nav, left icon rail, and the empty tile state.
+ * This is the first real app-chrome screen (not the logo) to hand off real
+ * hex values, so these are new - not previously in color-ramps.css.
+ *
+ * These are dark-theme values. There is currently no light-theme design for
+ * any of this - see tokens/semantic/semantic.css for how that gap is handled
+ * rather than guessed at.
+ */
+
+:root {
+  --neutral-black: #000000;
+  --neutral-950: #121111;  /* chrome surface: sidebar, top nav */
+  --neutral-925: #14141a;  /* content surface: tile background - one step lighter than chrome */
+  --neutral-920: #222228;  /* multiselect chip fill - new from MultiSelect (1019:37). Naming here is an ad hoc index, not a strict lightness ramp - #14141a (925) is visually darker than this despite the higher number. */
+  --neutral-910: #1f1f21;  /* viewmode-toggle container fill - new from Toolbar (1078:30) */
+  --neutral-900: #1a1a1a;  /* borders; also the empty-state icon-wrap fill */
+  --neutral-850: #2a2a2e;  /* subtler border/divider - new from Toolbar/ParamsSidebar (input borders, toolbar-divider, active viewmode-grid fill) */
+  --neutral-500: #5a5a65;  /* faint text: breadcrumb separator */
+  --neutral-400: #9ca3af;  /* muted text: inactive breadcrumb, captions, chip labels */
+  --neutral-100: #e5e7eb;  /* primary light text: tile titles, chip numbers */
+  --neutral-white: #ffffff; /* emphasized text: active breadcrumb */
+}

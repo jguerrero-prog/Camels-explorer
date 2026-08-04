@@ -1,0 +1,52 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as ButtonStories from './Button.stories';
+
+<Meta of={ButtonStories} />
+
+# Button
+
+Two real variants, from two different frames: **primary** (Figma node `1113:1591`'s "btn-add-plot", "Add Plot") and **secondary** (Figma node `1019:70`, "btn-remove-plot", "Remove plot"). This is the generic version of a button that was previously only built inline inside `TopNav` — `TopNav`'s own "Add Plot" button has not been refactored to consume this component yet (see Usecase).
+
+## Token
+
+- **Primary**: `--color-accent-gradient-start` → `--color-accent-gradient-end`, `--color-text-emphasis`
+- **Secondary**: `--color-border-subtle` (border only, transparent fill), `--color-text-muted`
+- `--font-label` (Lato Bold) — both variants
+
+## Spec
+
+<Canvas of={ButtonStories.Primary} />
+<Canvas of={ButtonStories.Secondary} />
+<Controls />
+
+- **Primary**: 40px tall, 16px horizontal padding, 12px radius, gradient fill, `0px 8px 9px rgba(0,0,0,0.4)` shadow, 14px text, optional icon (18×18).
+- **Secondary**: auto height (10px/14px padding), 8px radius, transparent fill, 1px outline border, 13px text, no icon in its only real usage so far.
+
+**Real, not unified — flagged rather than papered over:** the two variants are genuinely different sizes/radii/font-sizes in their real source frames, not two color treatments of one shared shape. This component keeps them distinct rather than forcing a single shared size that neither real design actually uses.
+
+**The Canvas above renders "Button label," not "Add Plot"/"Remove plot."** This story demonstrates the control's mechanics, not confirmed copy — the real label text each variant has actually been used with is documented in Usecase below instead.
+
+**Still open:**
+- No hover/active/disabled state is shown for either variant in its real frame.
+- `secondary` has never been shown with an icon — the `icon` prop works for it mechanically, but there's no real precedent confirming it should ever be used that way.
+
+## Usecase
+
+- **Primary** — the one high-emphasis committed action per context (Add Plot). Matches `STUDIO_PLAN.md`'s "Adding tiles" decision that this stays a single, low-ceremony action.
+- **Secondary** — a lower-emphasis, often destructive-adjacent action (Remove plot) inside a params panel, not a toolbar or header.
+- **Follow-up, not done here:** `TopNav`'s "Add Plot" button (see `TopNav.mdx`) predates this component and still has its own inline markup/CSS rather than rendering `<Button variant="primary">`. Consolidating them is a real, worthwhile cleanup — flagged so it's a deliberate decision to make later, not silently forgotten.
+
+## Code
+
+```tsx
+import { Button } from '@/components/Button/Button';
+import plusIcon from './assets/plus.svg';
+
+<Button variant="primary" icon={<img src={plusIcon} alt="" />} onClick={handleAddPlot}>
+  Add Plot
+</Button>
+
+<Button variant="secondary" onClick={handleRemovePlot}>
+  Remove plot
+</Button>
+```

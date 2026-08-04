@@ -1,0 +1,55 @@
+.number-stepper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.number-stepper__label {
+  margin: 0;
+  font-family: var(--font-label);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.number-stepper__input-row {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 12px;
+  background: var(--color-surface-control);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.number-stepper__value {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+
+.number-stepper__buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.number-stepper__btn {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--color-surface-chrome);
+  border: 1px solid var(--color-border-subtle);
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.number-stepper__btn img {
+  width: 10px;
+  height: 10px;
+}

@@ -1,0 +1,28 @@
+/*
+ * Brand color primitives — sourced directly from the CAMELS logo/wordmark
+ * (Figma "Denario" file, node 1106:1364, frame "Camels Logo Color Palette").
+ *
+ * These are the literal 12 swatches used in the logo mark's gradient fill,
+ * in the same left-to-right order they appear on the logo. Names match the
+ * Figma layer names exactly (e.g. "Deep Crimson" -> --brand-deep-crimson).
+ *
+ * These are brand primitives, not semantic tokens: no component should
+ * reference these directly (see semantic/semantic.css). They exist here so
+ * every semantic alias and every data-visualization color scale traces back
+ * to one real source instead of each place re-typing/re-guessing the hex.
+ */
+
+:root {
+  --brand-deep-crimson: #8B1A1A;
+  --brand-crimson-red: #CC2233;
+  --brand-bright-red: #E63946;
+  --brand-burnt-orange: #D4652A;
+  --brand-golden-amber: #E8A030;
+  --brand-yellow: #D4C040;
+  --brand-emerald-green: #2D8C4E;
+  --brand-teal: #1A6B5A;
+  --brand-royal-blue: #1B4DCC;
+  --brand-deep-indigo: #2B2D8E;
+  --brand-purple: #7B2D8E;
+  --brand-magenta: #C72C8E;
+}

@@ -1,0 +1,55 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as MultiSelectStories from './MultiSelect.stories';
+
+<Meta of={MultiSelectStories} />
+
+# MultiSelect
+
+A chip-based multi-value field. Real source: Figma node `1019:37` ("field-Realizations to compare") — chips for existing values, each removable, plus a text input for adding more.
+
+## Token
+
+- `--color-surface-control` / `--color-border-subtle` — the outer box, same as `SelectField`'s
+- `--color-surface-chip` (`--neutral-920`, new) — each chip's fill, distinct from any other surface token in the system so far
+- `--font-ui` (Inter) — chip values and the add-input's typed text
+- `--color-text-muted` — the × remove glyph and the input's placeholder
+
+## Spec
+
+<Canvas of={MultiSelectStories.Playground} />
+<Controls />
+
+- Label above (12px muted), then a wrapping box (8px padding, 8px border radius) holding chips and an inline text input.
+- Each chip: 6px radius, `--color-surface-chip` fill, value + a muted "×", the whole chip clickable to remove.
+- The add-input has no visible border of its own — it sits flush inside the shared box, `flex: 1 0 80px` so it always has room to grow/type even with several chips present.
+
+**The Canvas above renders "Multi-select label" and generic chip values, not "Realizations to compare"/"278"/"3"/"Add realization…".** This story demonstrates the control's mechanics, not confirmed copy — the real labels/values are documented in Usecase below and in the Code snippet's illustrative real usage instead.
+
+**Still open:**
+- The real frame shows two literal chips ("278", "3") and placeholder text ("Add realization…") — there's no visible autocomplete/suggestion list, so this component's `onAdd` just accepts free text typed then Enter. Whether real usage should constrain input to actual valid realizations (e.g. an autocomplete against the real dataset) is unconfirmed.
+- No visible "already added" / duplicate-prevention state in the real frame — not implemented here.
+
+## Usecase
+
+- Real, confirmed usage: SFR History's "Realizations to compare" field — directly powers Compare mode (see `Checkbox.mdx`) once more than one realization is selected.
+- Use for any field where a user picks an open-ended set of discrete values, as opposed to `SelectField` (exactly one value from a fixed list).
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { MultiSelect } from '@/components/MultiSelect/MultiSelect';
+
+function RealizationsToCompare() {
+  const [values, setValues] = useState(['278', '3']);
+  return (
+    <MultiSelect
+      label="Realizations to compare"
+      values={values}
+      onRemove={(v) => setValues((prev) => prev.filter((x) => x !== v))}
+      onAdd={(v) => setValues((prev) => [...prev, v])}
+      placeholder="Add realization…"
+    />
+  );
+}
+```

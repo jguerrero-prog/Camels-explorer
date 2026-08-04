@@ -1,0 +1,51 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as CanvasStatsRowStories from './CanvasStatsRow.stories';
+
+<Meta of={CanvasStatsRowStories} />
+
+# CanvasStatsRow
+
+The four pill-shaped stat chips ("1,000 LH Realizations", "4 suites", "15 Statistics", "5 Halo finders") from the "Skeleton" frame (Figma node `1113:1583`). Originally built as part of `Tile`; **extracted out on 2026-08-04** once the real behavior was confirmed — see Usecase.
+
+## Token
+
+- `--color-surface-sunken` (pure black) — chip background, distinct from the tile's own surface
+- `--color-border` — chip border
+- `--font-label` (Lato) — both the bold value and the muted label
+- `--color-text-primary` / `--color-text-muted` — value vs. label weight
+
+## Spec
+
+<Canvas of={CanvasStatsRowStories.Playground} />
+<Controls />
+
+- A row of pill chips (`border-radius: 999px`), evenly split (`flex: 1 0 0` each), each holding a bold value + muted label.
+- The four values are real product facts, not filler: `1,000` LH realizations, `4` suites, `15` statistics (`backend.py`'s own `STATISTICS` list — confirmed the same length via direct introspection), `5` halo finders.
+
+**Still open:**
+- **No live data source wired yet.** These are still passed as static `stats` props. Wiring them to something real (the FastAPI layer's own route/metadata) is a real follow-up, not done here.
+
+## Usecase
+
+**Confirmed 2026-08-04, correcting the original assumption this was per-tile:** this row shows **only when the whole canvas has zero plots** — the very first moment, before anything has been added anywhere. It is not repeated per empty tile, and it disappears entirely once *any* plot exists on the canvas, regardless of which tile it was added to. This is why it was pulled out of `Tile` — `Tile` has no way to know whether it's the canvas's only content, and baking a canvas-level decision into a per-tile component was the wrong ownership.
+
+The values are confirmed to be **live, not static** once wired — they update in response to real app/data state even while the canvas is still in this empty moment (e.g. if a future control changes scope before any plot is added). The current `stats` prop already supports that; only the actual data source is still missing.
+
+Render this once, above/near whatever single starter empty state the canvas shows before the first plot — not inside `Tile` itself.
+
+## Code
+
+```tsx
+import { CanvasStatsRow } from '@/components/CanvasStatsRow/CanvasStatsRow';
+
+{isCanvasEmpty && (
+  <CanvasStatsRow
+    stats={[
+      { value: '1,000', label: 'LH Realizations' },
+      { value: '4', label: 'suites' },
+      { value: '15', label: 'Statistics' },
+      { value: '5', label: 'Halo finders' },
+    ]}
+  />
+)}
+```
