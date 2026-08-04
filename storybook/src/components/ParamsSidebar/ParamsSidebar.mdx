@@ -50,8 +50,8 @@ import { NumberStepper } from '@/components/NumberStepper/NumberStepper';
 import { Checkbox } from '@/components/Checkbox/Checkbox';
 
 <ParamsSidebar panelLabel="PANEL 1 · FOCUSED" title="SFR History">
-  <SelectField label="Suite" value="IllustrisTNG" />
-  <SelectField label="Set" value="LH — Latin Hypercube" />
+  <SelectField label="Suite" value={suite} options={['IllustrisTNG', 'SIMBA', 'Astrid', 'Swift-EAGLE']} onChange={setSuite} />
+  <SelectField label="Set" value={set} options={['LH — Latin Hypercube', 'CV — Cosmic Variance']} onChange={setSet} />
   <Slider label="Realization" min={0} max={999} value={278} onChange={setRealization} />
   <NumberStepper label="z max" value={10.0} step={0.1} onChange={setZMax} formatValue={(v) => v.toFixed(1)} />
   <Checkbox label="Compare mode" checked={false} onChange={setCompareMode} />

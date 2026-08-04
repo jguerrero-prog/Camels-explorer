@@ -10,15 +10,20 @@ Run from the repo root (not from api/) so `import backend` resolves:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import catalogs, fields, halos, statistics
+from api.routers import catalogs, fields, halos, metadata, statistics
 
 app = FastAPI(title="CAMELS Explorer API", version="0.1.0")
 
-# Dev-only allowlist - the eventual React app's Vite dev server. Revisit
+# Dev-only allowlist - the real app's Vite dev server (5173) and Storybook
+# (6006, so components like AddPlotModal's Curated tab can demo real,
+# live-fetched data instead of only the API-down error state). Revisit
 # before any real deployment; this is not a production CORS policy.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:6006", "http://127.0.0.1:6006",
+    ],
     allow_methods=["GET"],
     allow_headers=["*"],
 )
@@ -27,6 +32,7 @@ app.include_router(statistics.router, prefix="/api")
 app.include_router(catalogs.router, prefix="/api")
 app.include_router(fields.router, prefix="/api")
 app.include_router(halos.router, prefix="/api")
+app.include_router(metadata.router, prefix="/api")
 
 
 @app.get("/api/health")
