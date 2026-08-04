@@ -23,8 +23,9 @@ The single-tile empty state from the "Skeleton" frame (Figma node `1113:1583`, "
 - Container: rounded 12px, 1px border, `0px 10px 24px -10px rgba(0,0,0,0.4)` shadow, 20px/16px padding, flex column with 12px gaps.
 - Title (`Panel 1` in the real frame) — plain text prop, no rename affordance observed.
 - Empty state: centered 56px icon (rounded 16px, accent-outlined) + plus glyph + a caption ("Add a plot or simulation"). Implemented as a single button — the whole empty-state area is the click target for `onAddPlot`.
+- Optional `footer` slot, rendered as the card's last child, after the empty state.
 
-**Corrected 2026-08-04:** the four stat chips shown in the same Figma frame ("1,000 LH Realizations" etc.) are **not** part of this component — they were originally built in here, but are a canvas-level "zero plots exist anywhere" concern, not a per-tile one. See `CanvasStatsRow.mdx` for where they actually live now and why.
+**Corrected 2026-08-04:** the four stat chips shown in the same Figma frame ("1,000 LH Realizations" etc.) are **not** part of this component's own implementation — they were originally hardcoded in here, but are a canvas-level "zero plots exist anywhere" concern, not a per-tile one (see `CanvasStatsRow.mdx`). **Re-confirmed against real Figma evidence (node `1113:1609`, "stats-row") that they DO visually nest as the last child inside this same card** — not as a separate row floating above it, which is what an earlier app build incorrectly did. The `footer` prop exists for exactly this: `Tile` still has no opinion on *whether* to show stats (that decision stays canvas-level, in whatever composes `Tile`), it just renders whatever the caller passes.
 
 **Still open:**
 - **No "populated" (non-empty) variant exists yet.** This is deliberately just the empty state — what a tile looks like once a real plot is rendered inside it is a separate, not-yet-designed variant.
@@ -34,12 +35,34 @@ The single-tile empty state from the "Skeleton" frame (Figma node `1113:1583`, "
 
 - One `Tile` per cell in the Viewer's auto-tiling grid, in its empty state — this is the "before adding a plot" moment the whole app starts from.
 - Do not reuse `Tile` for the populated (has-a-plot) state by just conditionally hiding the empty-state block — that's a different enough anatomy (a real chart, its own toolbar per `STUDIO_PLAN.md`'s "Toolbar candidates") that it likely deserves its own documented variant when it's built, not a silently-overloaded prop on this one.
-- Pair with `CanvasStatsRow` at the canvas level (not inside this component) when the whole canvas is empty — see that component's Usecase for the exact rule.
+- Pass `footer={<CanvasStatsRow .../>}` only for the canvas's lone starter tile, and only while the whole canvas has zero plots — see `CanvasStatsRow.mdx`'s Usecase for the exact rule. Every other tile gets no `footer`.
+
+<Canvas of={TileStories.AsCanvasStarter} />
+
+**Real bug fixed 2026-08-04:** `onAddPlot` must NOT be wired to "add a new tile to the canvas" — that's `TopNav`'s action (see `TopNav.mdx`). An earlier app build wired every tile's own `onAddPlot` to that same handler, so clicking any existing empty tile spawned an unrelated sibling tile. Since the per-tile statistic-picker flow isn't built yet, `onAddPlot` should be a real no-op for now (or eventually `openAddPlotFlow()`, per the Code sample below) — never a stand-in for adding more tiles.
 
 ## Code
 
 ```tsx
 import { Tile } from '@/components/Tile/Tile';
+import { CanvasStatsRow } from '@/components/CanvasStatsRow/CanvasStatsRow';
 
-<Tile title="Panel 1" onAddPlot={() => openAddPlotFlow()} />
+// The canvas's lone starter tile, before any plot exists anywhere:
+<Tile
+  title="Panel 1"
+  onAddPlot={() => openAddPlotFlow()}
+  footer={
+    <CanvasStatsRow
+      stats={[
+        { value: '1,000', label: 'LH Realizations' },
+        { value: '4', label: 'suites' },
+        { value: '15', label: 'Statistics' },
+        { value: '5', label: 'Halo finders' },
+      ]}
+    />
+  }
+/>
+
+// Any other tile — no footer:
+<Tile title="Panel 2" onAddPlot={() => openAddPlotFlow()} />
 ```

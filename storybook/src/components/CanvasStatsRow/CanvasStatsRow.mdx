@@ -27,25 +27,32 @@ The four pill-shaped stat chips ("1,000 LH Realizations", "4 suites", "15 Statis
 
 ## Usecase
 
-**Confirmed 2026-08-04, correcting the original assumption this was per-tile:** this row shows **only when the whole canvas has zero plots** — the very first moment, before anything has been added anywhere. It is not repeated per empty tile, and it disappears entirely once *any* plot exists on the canvas, regardless of which tile it was added to. This is why it was pulled out of `Tile` — `Tile` has no way to know whether it's the canvas's only content, and baking a canvas-level decision into a per-tile component was the wrong ownership.
+**Confirmed 2026-08-04, correcting the original assumption this was per-tile:** this row shows **only when the whole canvas has zero plots** — the very first moment, before anything has been added anywhere. It is not repeated per empty tile, and it disappears entirely once *any* plot exists on the canvas, regardless of which tile it was added to.
 
 The values are confirmed to be **live, not static** once wired — they update in response to real app/data state even while the canvas is still in this empty moment (e.g. if a future control changes scope before any plot is added). The current `stats` prop already supports that; only the actual data source is still missing.
 
-Render this once, above/near whatever single starter empty state the canvas shows before the first plot — not inside `Tile` itself.
+**Placement, re-corrected 2026-08-04 against real Figma evidence (node `1113:1609`):** this renders as the *last child inside the same card* as the canvas's lone starter `Tile` — passed via `Tile`'s `footer` prop — not as a separate row floating above the tile grid. An earlier app build placed it above `Viewer` as an independent sibling; a direct `get_design_context` pull showed the real "stats-row" node nested inside "Panel 1" itself, after its empty-state block. The *ownership* rule from the original correction still holds — `Tile` doesn't decide whether to show this, the canvas-level caller does — only the rendering position changed. See `Tile.mdx`'s Usecase and Code.
 
 ## Code
 
 ```tsx
+import { Tile } from '@/components/Tile/Tile';
 import { CanvasStatsRow } from '@/components/CanvasStatsRow/CanvasStatsRow';
 
 {isCanvasEmpty && (
-  <CanvasStatsRow
-    stats={[
-      { value: '1,000', label: 'LH Realizations' },
-      { value: '4', label: 'suites' },
-      { value: '15', label: 'Statistics' },
-      { value: '5', label: 'Halo finders' },
-    ]}
+  <Tile
+    title="Panel 1"
+    onAddPlot={() => openAddPlotFlow()}
+    footer={
+      <CanvasStatsRow
+        stats={[
+          { value: '1,000', label: 'LH Realizations' },
+          { value: '4', label: 'suites' },
+          { value: '15', label: 'Statistics' },
+          { value: '5', label: 'Halo finders' },
+        ]}
+      />
+    }
   />
 )}
 ```

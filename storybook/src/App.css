@@ -44,26 +44,12 @@ body,
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Viewer supplies its own real 16px outer padding (see Viewer.mdx) and
+   fills 100% of its parent — matches the real frame's header-to-canvas gap
+   (~2px, i.e. flush) now that CanvasStatsRow no longer sits here as a
+   separate sibling row (see Tile.mdx footer slot). */
 .app-shell__canvas {
   flex: 1;
   min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding-top: 16px;
   overflow: hidden;
-}
-
-/* Viewer already carries its own real 16px outer padding (see Viewer.mdx),
-   so CanvasStatsRow — a sibling outside Viewer — gets a matching inset here
-   rather than double-padding Viewer's own content. */
-.app-shell__canvas .canvas-stats-row {
-  flex-shrink: 0;
-  padding: 0 16px;
-  box-sizing: border-box;
-}
-
-.app-shell__canvas .viewer {
-  flex: 1;
-  min-height: 0;
 }

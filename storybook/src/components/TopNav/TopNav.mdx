@@ -25,6 +25,8 @@ The 64px header row from the "Skeleton" frame (Figma node `1113:1583`): the fold
 - Path display: `folderName` (muted, weight 500) `/` (faint separator) `projectName` (emphasis white, weight 600) — matching the real frame's "Untitled / Project 1".
 - Add Plot button: 40px tall, 12px radius, the real diagonal purple→red gradient plus a `0px 8px 9px rgba(0,0,0,0.4)` drop shadow, 18×18 plus icon + label.
 
+**Deliberate deviation from Figma (2026-08-04):** the raw frame specifies the label at `font-weight: 700` (Lato Bold); implemented at `600` per direct user request after seeing it rendered — one weight lighter than the literal spec. Noted here rather than silently matching Figma's stated value, since this is a real, intentional adjustment, not an oversight.
+
 **Confirmed 2026-08-04, correcting an earlier misreading:** this is **not** a breadcrumb navigation trail — it's the folder name and the project name, two independent pieces of identity, not a clickable hierarchy to navigate up through. Renamed props/classes accordingly (`folderName`/`projectName`, `.top-nav__path*`) so the code doesn't imply breadcrumb semantics that aren't real.
 
 **Still open:**
@@ -34,7 +36,11 @@ The 64px header row from the "Skeleton" frame (Figma node `1113:1583`): the fold
 ## Usecase
 
 - One `TopNav` per app shell, always visible — this is chrome, not a per-tile control.
-- `onAddPlot` is the entry point into whatever the "add a plot or simulation" flow turns out to be (see `Tile.mdx` — the same action is also reachable per-tile from the empty state). `STUDIO_PLAN.md`'s "Adding tiles" section already settled that this stays a single, low-ceremony action, not a wizard.
+- `onAddPlot` here is specifically **"add a new empty tile to the canvas."** `STUDIO_PLAN.md`'s "Adding tiles" section already settled that this stays a single, low-ceremony action, not a wizard.
+
+**Corrected 2026-08-04:** this is a distinct action from `Tile`'s own per-tile `onAddPlot` (opening a statistic picker for *that* tile, not built yet) — they were wrongly wired to the same handler in the first real app build, which meant clicking any existing empty tile added a whole new sibling tile instead of doing nothing. See `Tile.mdx` Usecase.
+
+**Real gap (also confirmed 2026-08-04):** no design exists yet for what happens once the canvas already has one or more tiles and this button is clicked again — does it add a blank tile immediately, or open a picker first? Only the very-first-tile case is designed (the "Skeleton" frame). Currently implemented as "always add a blank tile," the simplest reading, not a confirmed final answer.
 
 ## Code
 
