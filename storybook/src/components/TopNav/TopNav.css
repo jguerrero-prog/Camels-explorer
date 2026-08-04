@@ -44,7 +44,7 @@
   background: linear-gradient(to right, var(--color-accent-gradient-start), var(--color-accent-gradient-end));
   box-shadow: 0px 8px 9px rgba(0, 0, 0, 0.4);
   font-family: var(--font-label);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 14px;
   color: var(--color-text-emphasis);
 }

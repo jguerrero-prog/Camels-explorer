@@ -24,17 +24,21 @@ export function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [tiles, setTiles] = useState<CanvasTile[]>([]);
 
-  // Both "Add Plot" entry points do the same real thing today: add an empty
-  // tile to the canvas. There's no statistic-picker component yet, so a
-  // tile's own empty-state button can't do anything more specific than the
-  // canvas-level action — see Tile.mdx / STUDIO_PLAN.md's next build step.
-  //
-  // Derives the tile number from the array itself rather than a mutable
-  // module-level counter — React 18 StrictMode double-invokes setState
-  // updaters to catch exactly this kind of impurity.
+  // The ONLY real action that adds a tile to the canvas — this is TopNav's
+  // "Add Plot" button. Derives the tile number from the array itself rather
+  // than a mutable module-level counter — React 18 StrictMode double-invokes
+  // setState updaters to catch exactly this kind of impurity.
   const addTile = () => {
     setTiles((prev) => [...prev, { id: `tile-${prev.length + 1}`, title: `Panel ${prev.length + 1}` }]);
   };
+
+  // A tile's OWN "Add a plot or simulation" click is real estate reserved
+  // for opening a per-tile statistic picker (see Tile.mdx's Code sample:
+  // `onAddPlot={() => openAddPlotFlow()}`) — that flow isn't built yet, so
+  // this is deliberately inert rather than fabricating "spawn another tile"
+  // behavior for it. Wiring it to `addTile` was the bug: every existing
+  // tile's own click created a new sibling tile instead of doing nothing.
+  const openAddPlotFlow = () => {};
 
   return (
     <div className="app-shell">
@@ -48,16 +52,27 @@ export function App() {
       )}
       <div className="app-shell__main">
         <TopNav folderName="Untitled" projectName="Project 1" onAddPlot={addTile} />
-        <div className="app-shell__toolbar-row">
-          <Toolbar viewMode={viewMode} onViewModeChange={setViewMode} />
-        </div>
+        {/* Real evidence (Figma node 1113:1583's header): the toolbar isn't
+            present at all in the zero-plots skeleton — it only shows once a
+            plot exists on the canvas. */}
+        {tiles.length > 0 && (
+          <div className="app-shell__toolbar-row">
+            <Toolbar viewMode={viewMode} onViewModeChange={setViewMode} />
+          </div>
+        )}
         <div className="app-shell__canvas">
-          {tiles.length === 0 && <CanvasStatsRow stats={CANVAS_STATS} />}
           <Viewer mode={viewMode}>
             {tiles.length === 0 ? (
-              <Tile title="Panel 1" onAddPlot={addTile} />
+              // Real nesting (Figma node 1113:1609 "stats-row" is the last
+              // child inside Panel 1's own card, not a separate row above
+              // it) — see Tile.mdx / CanvasStatsRow.mdx.
+              <Tile
+                title="Panel 1"
+                onAddPlot={openAddPlotFlow}
+                footer={<CanvasStatsRow stats={CANVAS_STATS} />}
+              />
             ) : (
-              tiles.map((tile) => <Tile key={tile.id} title={tile.title} onAddPlot={addTile} />)
+              tiles.map((tile) => <Tile key={tile.id} title={tile.title} onAddPlot={openAddPlotFlow} />)
             )}
           </Viewer>
         </div>
