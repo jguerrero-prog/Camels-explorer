@@ -738,36 +738,83 @@ with tab_explore:
             first_result = next(iter(results.values()))
             st.caption(f"{badge}   ·   {first_result.note}")
 
-            fig, ax = plt.subplots(figsize=(8, 4.5))
-            for r, result in results.items():
-                ax.plot(result.x, result.y, lw=2, label=f"{set_name}_{r}")
-
             show_legend = len(results) > 1
-            if statistic == "SFR History" and show_symbolic_fit:
-                z_curve = np.linspace(z_min, max(z_min + 1e-3, z_max), 200)
-                log_sfr = B.SFRHSymbolicModel.predict_log_sfr(z_curve, Om, s8, A1, A3)
-                ax.plot(z_curve, 10 ** log_sfr, "k--", lw=2, label="symbolic-regression fit (real)")
-                show_legend = True
-            if statistic == "Power Spectrum" and show_linear_pk:
-                lin = B.get_linear_pk_ics(suite, set_name, realization)
-                if lin is not None:
-                    k_lin, Pk_lin = lin
-                    ax.plot(k_lin, Pk_lin, "k--", lw=1.5, label="linear theory, z=0 (from ICs)")
-                    show_legend = True
-                else:
-                    st.caption("Linear-theory Pk isn't available for this suite/set/realization.")
 
-            if first_result.log_x:
-                ax.set_xscale("log")
-            if first_result.log_y:
-                ax.set_yscale("log")
-            ax.set_xlabel(first_result.x_label)
-            ax.set_ylabel(first_result.y_label)
-            ax.grid(alpha=0.3, which="both")
-            if show_legend:
-                ax.legend(fontsize=8)
-            fig.tight_layout()
-            st.pyplot(fig)
+            use_interactive = True
+            if statistic == "Halo Mass Function":
+                use_interactive = st.radio(
+                    "Display", ["Interactive", "Static (PNG)"], horizontal=True,
+                    key="hmf_display_mode",
+                ) == "Interactive"
+
+            if statistic == "Halo Mass Function" and use_interactive:
+                # Interactive Plotly prototype - see how this feels vs. the static
+                # matplotlib version before rolling the same treatment out to the
+                # other statistics that share this generic plotting block (Power
+                # Spectrum, Stellar Mass Function, Baryon Fraction, Bispectrum,
+                # SFR History all use the identical results/first_result shape).
+                fig = go.Figure()
+                for r, result in results.items():
+                    fig.add_trace(go.Scatter(
+                        x=result.x, y=result.y, mode="lines",
+                        line=dict(width=2), name=f"{set_name}_{r}",
+                    ))
+                fig.update_xaxes(
+                    title_text=first_result.x_label, title_font=dict(color="black"),
+                    type="log" if first_result.log_x else "linear",
+                    showgrid=True, gridcolor="rgba(128,128,128,0.3)",
+                    linecolor="black", tickfont=dict(color="black"),
+                    exponentformat="power",  # match matplotlib's 10^N ticks, not Plotly's default SI (10G/1T)
+                )
+                fig.update_yaxes(
+                    title_text=first_result.y_label, title_font=dict(color="black"),
+                    type="log" if first_result.log_y else "linear",
+                    showgrid=True, gridcolor="rgba(128,128,128,0.3)",
+                    linecolor="black", tickfont=dict(color="black"),
+                    exponentformat="power",
+                )
+                fig.update_layout(
+                    showlegend=show_legend,
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    height=430,
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    legend=dict(font=dict(color="black")),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                st.caption("Interactive prototype: hover for exact values, drag to zoom, "
+                           "double-click to reset. Try this before we decide whether to "
+                           "convert the other statistics that share this same plotting code.")
+            else:
+                fig, ax = plt.subplots(figsize=(8, 4.5))
+                for r, result in results.items():
+                    ax.plot(result.x, result.y, lw=2, label=f"{set_name}_{r}")
+
+                if statistic == "SFR History" and show_symbolic_fit:
+                    z_curve = np.linspace(z_min, max(z_min + 1e-3, z_max), 200)
+                    log_sfr = B.SFRHSymbolicModel.predict_log_sfr(z_curve, Om, s8, A1, A3)
+                    ax.plot(z_curve, 10 ** log_sfr, "k--", lw=2, label="symbolic-regression fit (real)")
+                    show_legend = True
+                if statistic == "Power Spectrum" and show_linear_pk:
+                    lin = B.get_linear_pk_ics(suite, set_name, realization)
+                    if lin is not None:
+                        k_lin, Pk_lin = lin
+                        ax.plot(k_lin, Pk_lin, "k--", lw=1.5, label="linear theory, z=0 (from ICs)")
+                        show_legend = True
+                    else:
+                        st.caption("Linear-theory Pk isn't available for this suite/set/realization.")
+
+                if first_result.log_x:
+                    ax.set_xscale("log")
+                if first_result.log_y:
+                    ax.set_yscale("log")
+                ax.set_xlabel(first_result.x_label)
+                ax.set_ylabel(first_result.y_label)
+                ax.grid(alpha=0.3, which="both")
+                if show_legend:
+                    ax.legend(fontsize=8)
+                fig.tight_layout()
+                st.pyplot(fig)
 
 # ---------------------------------------------------------------------------
 # Catalog Browser tab — real Subfind subhalos as a filterable table
