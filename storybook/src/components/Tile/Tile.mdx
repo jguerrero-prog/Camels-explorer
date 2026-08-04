@@ -11,7 +11,7 @@ The single-tile empty state from the "Skeleton" frame (Figma node `1113:1583`, "
 
 - `--color-surface-content` — tile background (distinct from `--color-surface-chrome` used by TopNav/IconRail — content sits one step lighter)
 - `--color-border` — tile border, and the empty-icon's fill
-- `--color-accent-border` (`--brand-purple`) — the empty-icon's outline, the one accent note on an otherwise neutral tile
+- `--color-empty-icon-gradient-1` through `-4` — the empty-icon's border, a real top-to-bottom 4-stop gradient (`--brand-purple` → `#B0336A` → `--brand-golden-amber` → `--brand-bright-red`), given directly by the user reading the real value off the design — see `semantic.css` for why the 50% stop is a literal hex rather than a primitive reference
 - `--font-ui` (Inter) — tile title
 - `--font-label` (Lato) — empty-state caption
 
@@ -22,8 +22,10 @@ The single-tile empty state from the "Skeleton" frame (Figma node `1113:1583`, "
 
 - Container: rounded 12px, 1px border, `0px 10px 24px -10px rgba(0,0,0,0.4)` shadow, 20px/16px padding, flex column with 12px gaps.
 - Title (`Panel 1` in the real frame) — plain text prop, no rename affordance observed.
-- Empty state: centered 56px icon (rounded 16px, accent-outlined) + plus glyph + a caption ("Add a plot or simulation"). Implemented as a single button — the whole empty-state area is the click target for `onAddPlot`.
+- Empty state: centered 56px icon (rounded 16px, gradient-outlined) + plus glyph + a caption ("Add a plot or simulation"). Implemented as a single button — the whole empty-state area is the click target for `onAddPlot`.
 - Optional `footer` slot, rendered as the card's last child, after the empty state.
+
+**Corrected 2026-08-04:** the empty-icon's border was originally implemented as a flat single color (`--brand-purple`). It's actually a 4-stop top-to-bottom gradient — CSS can't apply a gradient directly to a `border`, so it's built with the standard two-background-layers trick (a solid `padding-box` fill layer plus a gradient `border-box` layer), not a real design decision of its own.
 
 **Corrected 2026-08-04:** the four stat chips shown in the same Figma frame ("1,000 LH Realizations" etc.) are **not** part of this component's own implementation — they were originally hardcoded in here, but are a canvas-level "zero plots exist anywhere" concern, not a per-tile one (see `CanvasStatsRow.mdx`). **Re-confirmed against real Figma evidence (node `1113:1609`, "stats-row") that they DO visually nest as the last child inside this same card** — not as a separate row floating above it, which is what an earlier app build incorrectly did. The `footer` prop exists for exactly this: `Tile` still has no opinion on *whether* to show stats (that decision stays canvas-level, in whatever composes `Tile`), it just renders whatever the caller passes.
 
