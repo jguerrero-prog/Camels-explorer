@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import type { ComponentProps } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { SelectField } from './SelectField';
 
@@ -11,11 +13,18 @@ const meta: Meta<typeof SelectField> = {
   args: {
     label: 'Select label',
     value: 'Selected value',
-    onClick: () => {},
+    options: ['Selected value', 'Option B', 'Option C'],
   },
 };
 export default meta;
 
 type Story = StoryObj<typeof SelectField>;
 
-export const Playground: Story = {};
+function Interactive(args: ComponentProps<typeof SelectField>) {
+  const [value, setValue] = useState(args.value);
+  return <SelectField {...args} value={value} onChange={setValue} />;
+}
+
+export const Playground: Story = {
+  render: (args) => <Interactive {...args} />,
+};

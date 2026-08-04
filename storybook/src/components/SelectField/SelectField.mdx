@@ -10,29 +10,43 @@ The closed-state dropdown-styled field used throughout the params panel — Suit
 ## Token
 
 - `--color-surface-control` / `--color-border-subtle` — the input box fill/border
+- `--color-surface-chrome` — the open menu's own background (an elevated surface, distinct from the trigger's control surface)
+- `--color-surface-toggle-active` — option hover state
+- `--color-accent-gradient-start` (`--brand-purple`) — the selected option's checkmark
 - `--font-label` (Lato) — label
-- `--font-ui` (Inter) — the current value
+- `--font-ui` (Inter) — the current value, and every option in the menu
 
 ## Spec
 
 <Canvas of={SelectFieldStories.Playground} />
 <Controls />
 
-- Label above (12px muted), then a box: 10px/12px padding, 8px radius, value left-aligned, a chevron icon right-aligned (rotated 180° from the source SVG's default orientation).
+- Label above (12px muted), then a box: 10px/12px padding, 8px radius, value left-aligned, a chevron icon right-aligned (rotated 180° closed, 0° open).
 
-**This is the "dropdown for fields" that's explicitly not designed yet — flagged directly, not glossed over:** every real frame this was sourced from shows only the **closed** state. There is no real design for what happens on click — no option list, no hover/selected states within a menu, no search/filter. `onClick` here is a plain callback with no default behavior; this component cannot open a real menu because one hasn't been designed.
+**The open menu is a real design now, built 2026-08-04 — not sourced from Figma, since no frame has ever shown this state.** The user asked directly for a dropdown design so the Add Plot modal's Curated tab would have something real to use, rather than leaving this permanently undesigned. Menu: absolutely positioned below the trigger, same width, `--color-surface-chrome` background (an elevated tone distinct from the trigger's own `--color-surface-control`), 8px radius, drop shadow, scrollable past 240px. Each option is a full-width row (8px/10px padding, 6px radius); the selected option is emphasis-weight with a ✓; hovered options get `--color-surface-toggle-active`. Closes on selecting an option, clicking outside, or Escape.
 
 **The Canvas above renders "Select label"/"Selected value," not "Set"/"LH — Latin Hypercube."** This story demonstrates the control's mechanics, not confirmed copy — the real field names are documented in Usecase below instead.
 
 ## Usecase
 
-- Real, confirmed usage: Suite and Set fields inside `ParamsSidebar`.
+- Real, confirmed usage: Suite and Set fields inside `ParamsSidebar`, and Suite/Set/Statistic inside the Add Plot modal's Curated tab (see `AddPlotModal.mdx`) — the first place this component's menu is driven by real, live-fetched data (`GET /api/metadata`) rather than a static prop.
 - Use for exactly-one-value-from-a-fixed-list fields — for open-ended multi-value fields use `MultiSelect` instead; for a value with no fixed option list (a scrubbed number) use `Slider` or `NumberStepper`.
 
 ## Code
 
 ```tsx
+import { useState } from 'react';
 import { SelectField } from '@/components/SelectField/SelectField';
 
-<SelectField label="Suite" value="IllustrisTNG" onClick={openSuiteMenu} />
+function SuiteField() {
+  const [suite, setSuite] = useState('IllustrisTNG');
+  return (
+    <SelectField
+      label="Suite"
+      value={suite}
+      options={['IllustrisTNG', 'SIMBA', 'Astrid', 'Swift-EAGLE']}
+      onChange={setSuite}
+    />
+  );
+}
 ```

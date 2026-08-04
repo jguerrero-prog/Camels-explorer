@@ -1,0 +1,69 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as AddPlotModalStories from './AddPlotModal.stories';
+
+<Meta of={AddPlotModalStories} />
+
+# AddPlotModal
+
+The real Add-a-plot flow: click "Add Plot" (`TopNav`) or a tile's own empty state (`Tile`) → this modal opens with two tabs, **Curated** and **Custom** → filling in Curated's fields and confirming adds a tile to the canvas. Real sources: Figma nodes `971:850` (Curated tab, the default) and `975:141` (Custom tab, "advanced settings expanded").
+
+## Token
+
+- `--color-surface-content` — modal card background
+- `--color-border` / `--color-border-subtle` — card border, dividers, Cancel button border
+- `--color-accent-gradient-start` → `--color-accent-gradient-end` — active tab underline, Add Plot confirm button (same gradient as `TopNav`'s own Add Plot button)
+- `--font-label` (Lato) — title, tabs, field labels, buttons
+- `--font-ui` (Inter) — field values
+
+## Spec
+
+<Canvas of={AddPlotModalStories.CuratedTabDefault} />
+<Controls />
+
+- 440px card, 16px radius, `rgba(0,0,0,0.6)` full-screen backdrop, centered.
+- Header: title + a 28px `×` close button. Divider. Tab row (Curated/Custom, 24px gap, gradient underline on the active tab only). Scrollable fields area (22px/24px padding, 18px gap, capped at the viewport height rather than Figma's fixed 364px/480px — a real, deliberate simplification: one shared modal shell needs one height rule regardless of which tab is showing, not two different fixed heights.
+- Footer: divider, then right-aligned Cancel (outline) + Add Plot (gradient) buttons.
+
+**Real gap, not fabricated:** Figma's Custom tab shows a gradient fade at the bottom of the scroll region (`976:15`, "scroll-fade-bottom"). Not implemented — an absolutely-positioned fade risks clipping real content when a tab's fields are short enough not to scroll (Curated never needs it). Skipped rather than risk a visual bug for a polish detail.
+
+<Canvas of={AddPlotModalStories.CustomTabPlaceholder} />
+
+## Usecase
+
+### Curated tab (real, wired)
+
+- Suite / Set / Statistic use `SelectField`; Realization uses `TextField`. All four options lists come from a **real, live HTTP fetch** — `GET http://localhost:8010/api/metadata`, a new endpoint (`api/routers/metadata.py`) that reads directly from `backend.py`'s own `SUITES`/`SET_REALIZATIONS`/`STATISTICS` constants. Nothing is hardcoded in the frontend.
+- The Set field's caption and the Realization field's `0–N` range update live based on the selected set's real realization count (`PUBLIC_PK_SUITES` → 4 suites; `SET_REALIZATIONS` → LH 1,000 / CV 27 / 1P 66 / EX 4).
+- **Real, honest failure mode:** if the API server isn't running, the tab shows an inline error with the exact command to fix it, rather than hanging on a spinner forever.
+- Confirming calls `onSubmit({ suite, set, realization, statistic })`. What happens with that selection is the caller's job — see `App.tsx`'s composition, which currently adds a new tile titled with the chosen statistic. **Real, still-open gap:** the tile added this way has no actual rendered chart yet — that's the separate, not-yet-built "wire one statistic end-to-end" step (no chart library has been chosen). This modal's job ends at handing off a real, valid selection.
+
+### Custom tab (deliberate placeholder)
+
+- Visually matches Figma exactly: Suite/Set/Realization/Catalog/Chart type/X field/Y field/Color field, plus a "Filters" raw-field tree (`simulation_suite`/`simulation_set`/`type` as required system fields, `params`/`Group — FoF Halos`/`MassType`/`Subhalo — Subfind Subhalos` as browsable groups with `+ Add` rows).
+- **Every field here is inert** — confirmed directly by the user: `backend.py` (and the Streamlit prototype before it) never implemented arbitrary-field/chart-type plotting, so there is nothing real to wire this tab to yet. The static inputs use `cursor: not-allowed`; `+ Add` buttons do nothing. This is the "Version A ad-hoc plot builder" escape hatch from the project's information-architecture notes — designed, not yet buildable.
+- No `onSubmit` path exists from this tab. `AddPlotModal`'s confirm button is disabled whenever Custom is active.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { AddPlotModal } from '@/components/AddPlotModal/AddPlotModal';
+import type { CuratedSelection } from '@/components/AddPlotModal/CuratedTab';
+
+function AddPlotFlow() {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleSubmit = (selection: CuratedSelection) => {
+    // e.g. addTile({ title: selection.statistic, ...selection })
+    setIsOpen(false);
+  };
+
+  return (
+    <AddPlotModal
+      isOpen={isOpen}
+      onClose={() => setIsOpen(false)}
+      onSubmit={handleSubmit}
+    />
+  );
+}
+```

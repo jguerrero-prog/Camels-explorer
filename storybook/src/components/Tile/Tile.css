@@ -57,6 +57,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+/* Very subtle hover cue - not sourced from Figma (no hover state has been
+   designed yet), kept deliberately understated: a faint glow in the
+   gradient's own warm end plus a barely-perceptible scale. */
+.tile__empty-state:hover .tile__empty-icon {
+  transform: scale(1.04);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--color-empty-icon-gradient-4) 35%, transparent);
 }
 
 .tile__empty-icon img {
