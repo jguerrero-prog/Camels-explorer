@@ -23,3 +23,15 @@ function Interactive() {
 export const Playground: Story = {
   render: () => <Interactive />,
 };
+
+function InteractiveWithCaption() {
+  const [value, setValue] = useState(0);
+  return <NumberStepper label="Number label" value={value} onChange={setValue} caption="0–999" />;
+}
+
+/** Real usage: the Add Plot modal's "Realization" field - integer step,
+ * range shown via caption rather than enforced. Try typing a value
+ * directly, not just the +/- buttons. */
+export const WithCaption: Story = {
+  render: () => <InteractiveWithCaption />,
+};

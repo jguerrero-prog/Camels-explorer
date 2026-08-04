@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { SelectField } from '../SelectField/SelectField';
-import { TextField } from '../TextField/TextField';
+import { NumberStepper } from '../NumberStepper/NumberStepper';
 
 export type CuratedSelection = {
   suite: string;
   set: string;
-  realization: string;
+  realization: number;
   statistic: string;
 };
 
@@ -42,7 +42,7 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
         onChange({
           suite: selection.suite || data.suites[0],
           set: selection.set || data.sets[0].name,
-          realization: selection.realization || '0',
+          realization: selection.realization || 0,
           statistic: selection.statistic || data.statistics[0],
         });
       })
@@ -83,13 +83,12 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
         options={catalog.sets.map((s) => s.label)}
         onChange={(label) => {
           const next = catalog.sets.find((s) => s.label === label)!;
-          onChange({ ...selection, set: next.name, realization: '0' });
+          onChange({ ...selection, set: next.name, realization: 0 });
         }}
         caption={`${activeSet.realizations.toLocaleString()} realizations, ${activeSet.description.split(': ')[1] ?? activeSet.description}`}
       />
-      <TextField
+      <NumberStepper
         label="Realization"
-        type="number"
         value={selection.realization}
         onChange={(realization) => onChange({ ...selection, realization })}
         caption={`0–${activeSet.realizations - 1}`}

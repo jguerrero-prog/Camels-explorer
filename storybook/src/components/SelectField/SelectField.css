@@ -40,13 +40,12 @@
 }
 
 /* Open-menu design - not sourced from Figma, built to unblock real
-   interaction (see SelectField.mdx Spec). */
+   interaction (see SelectField.mdx Spec). Renders in a document.body
+   portal (see SelectField.tsx) so it can never be clipped by a scrollable
+   ancestor - position/top/left/width are set inline per-instance from the
+   trigger's real on-screen position; only the visual styling lives here. */
 .select-field__menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 20;
+  z-index: 1000;
   margin: 0;
   padding: 4px;
   list-style: none;

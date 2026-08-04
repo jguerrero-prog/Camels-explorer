@@ -25,9 +25,25 @@
 }
 
 .number-stepper__value {
+  width: 100%;
+  min-width: 0;
   font-family: var(--font-ui);
   font-size: 14px;
   color: var(--color-text-primary);
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.number-stepper__value:focus {
+  outline: none;
+}
+
+.number-stepper__caption {
+  margin: 0;
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--color-text-muted);
 }
 
 .number-stepper__buttons {

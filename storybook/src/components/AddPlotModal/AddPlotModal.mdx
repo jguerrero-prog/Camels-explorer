@@ -26,13 +26,18 @@ The real Add-a-plot flow: click "Add Plot" (`TopNav`) or a tile's own empty stat
 
 **Real gap, not fabricated:** Figma's Custom tab shows a gradient fade at the bottom of the scroll region (`976:15`, "scroll-fade-bottom"). Not implemented — an absolutely-positioned fade risks clipping real content when a tab's fields are short enough not to scroll (Curated never needs it). Skipped rather than risk a visual bug for a polish detail.
 
+**Real bug fixed 2026-08-04:** `SelectField`'s open menu used to be `position: absolute` nested inside this modal's own scrollable fields area — for the last field (Statistic), the menu rendered past the bottom edge and got clipped by that container's `overflow-y: auto`, invisible until the user scrolled the whole modal. Fixed at the `SelectField` level (now portals to `document.body`, positioned via the trigger's real on-screen coordinates) — see `SelectField.mdx`.
+
+**Deliberate deviation from Figma (2026-08-04):** the Set field's label ("LH — Latin Hypercube" in the raw frame) uses a middle dot instead — `"LH · Latin Hypercube"` — per direct user feedback that an em dash here read as "AI generated." Matches the app's own existing separator convention (`ParamsSidebar`'s "PANEL 1 · FOCUSED").
+
 <Canvas of={AddPlotModalStories.CustomTabPlaceholder} />
 
 ## Usecase
 
 ### Curated tab (real, wired)
 
-- Suite / Set / Statistic use `SelectField`; Realization uses `TextField`. All four options lists come from a **real, live HTTP fetch** — `GET http://localhost:8010/api/metadata`, a new endpoint (`api/routers/metadata.py`) that reads directly from `backend.py`'s own `SUITES`/`SET_REALIZATIONS`/`STATISTICS` constants. Nothing is hardcoded in the frontend.
+- Suite / Set / Statistic use `SelectField`; Realization uses `NumberStepper` (typeable, plus +/- — see `NumberStepper.mdx`'s 2026-08-04 update). All four options lists come from a **real, live HTTP fetch** — `GET http://localhost:8010/api/metadata`, a new endpoint (`api/routers/metadata.py`) that reads directly from `backend.py`'s own `SUITES`/`SET_REALIZATIONS`/`STATISTICS` constants. Nothing is hardcoded in the frontend.
+- **Corrected 2026-08-04:** Realization was originally a plain `<input type="number">` (a since-removed `TextField` component) — the browser's own native spinner arrows rendered on top of it, looking nothing like the rest of the design system. Replaced with the real, already-documented `NumberStepper`.
 - The Set field's caption and the Realization field's `0–N` range update live based on the selected set's real realization count (`PUBLIC_PK_SUITES` → 4 suites; `SET_REALIZATIONS` → LH 1,000 / CV 27 / 1P 66 / EX 4).
 - **Real, honest failure mode:** if the API server isn't running, the tab shows an inline error with the exact command to fix it, rather than hanging on a spinner forever.
 - Confirming calls `onSubmit({ suite, set, realization, statistic })`. What happens with that selection is the caller's job — see `App.tsx`'s composition, which currently adds a new tile titled with the chosen statistic. **Real, still-open gap:** the tile added this way has no actual rendered chart yet — that's the separate, not-yet-built "wire one statistic end-to-end" step (no chart library has been chosen). This modal's job ends at handing off a real, valid selection.

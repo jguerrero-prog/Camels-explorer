@@ -27,11 +27,14 @@ _SET_DESCRIPTIONS = {
     "1P": "One-parameter-at-a-time",
     "EX": "Extreme",
 }
+# Middle dot, not an em dash - matches the app's own existing separator
+# convention (ParamsSidebar's "PANEL 1 · FOCUSED"), and per direct user
+# feedback (2026-08-04): an em dash here read as "AI generated."
 _SET_LABELS = {
-    "LH": "LH — Latin Hypercube",
-    "CV": "CV — Cosmic Variance",
-    "1P": "1P — One-Parameter",
-    "EX": "EX — Extreme",
+    "LH": "LH · Latin Hypercube",
+    "CV": "CV · Cosmic Variance",
+    "1P": "1P · One-Parameter",
+    "EX": "EX · Extreme",
 }
 
 

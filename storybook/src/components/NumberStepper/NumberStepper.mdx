@@ -22,16 +22,22 @@ A numeric field with increment/decrement buttons. Real source: Figma node `1055:
 - Label above, 12px muted.
 - Input row: `--color-surface-control` fill, `--color-border-subtle` border, 8px radius, `justify-content: space-between` between the value and the stepper buttons.
 - Stepper: two 14×14 buttons stacked vertically (2px gap), each with a chevron icon, `--color-surface-chrome` fill, `--color-border-subtle` border, 4px radius.
+- Optional `caption` line below (11px muted), same pattern as `SelectField`'s.
+
+**Corrected 2026-08-04 — real bug fixed, not a Figma correction:** the value used to be a plain, non-interactive `<span>` — only the +/- buttons could change it. Caught when this component was needed for the Add Plot modal's Realization field and the user pointed out steppers "are meant to be flexible where I can type a number as well." Now a real editable `<input>`: typing commits on blur or Enter, Escape reverts to the last committed value, and invalid/empty text reverts too rather than silently accepting garbage. The +/- buttons and typing are equally valid, real ways to set the value.
+
+<Canvas of={NumberStepperStories.WithCaption} />
 
 **The Canvas above renders "Number label," not "z max."** This story demonstrates the control's mechanics, not confirmed copy — see Usecase below for why "z max" itself isn't confirmed either.
 
 **Still open:**
-- The real frame shows a fixed display value ("10.0") with no visible min/max — this component doesn't clamp; that's left to whoever wires it to a real field, since `z_max`'s real valid range isn't confirmed anywhere yet.
+- The real frame shows a fixed display value ("10.0") with no visible min/max — this component doesn't clamp; that's left to whoever wires it to a real field, since `z_max`'s real valid range isn't confirmed anywhere yet. (Realization *does* clamp its own valid range via a `caption`, but that's a display hint, not enforcement — typing 5000 into a 0–999 field isn't blocked here.)
 - No held-button repeat-increment behavior is implied by the static frame.
 
 ## Usecase
 
-- Real usage so far: SFR History's "z max" field — but this, and the redshift-range field it may or may not replace, are explicit placeholders (confirmed 2026-08-04, see `ParamsSidebar.mdx`). Which control z_min/z_max actually end up using is intentionally undecided until real data wiring informs the choice — don't treat this component as the final answer for that field.
+- Real usage: SFR History's "z max" field — but this, and the redshift-range field it may or may not replace, are explicit placeholders (confirmed 2026-08-04, see `ParamsSidebar.mdx`). Which control z_min/z_max actually end up using is intentionally undecided until real data wiring informs the choice — don't treat this component as the final answer for that field.
+- Real usage: the Add Plot modal's Curated tab "Realization" field (see `AddPlotModal.mdx`) — the first place this component's typing behavior is actually exercised, not just its buttons.
 - Reach for this over `Slider` when the value has no natural visual range to scrub (or the step size matters more than the position within a range).
 
 ## Code
@@ -49,6 +55,18 @@ function ZMaxField() {
       step={0.1}
       onChange={setValue}
       formatValue={(v) => v.toFixed(1)}
+    />
+  );
+}
+
+function RealizationField() {
+  const [value, setValue] = useState(0);
+  return (
+    <NumberStepper
+      label="Realization"
+      value={value}
+      onChange={setValue}
+      caption="0–999"
     />
   );
 }
