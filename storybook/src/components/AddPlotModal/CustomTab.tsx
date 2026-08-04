@@ -93,7 +93,7 @@ export function CustomTab() {
       <div className="custom-tab__field">
         <p className="custom-tab__label">Set</p>
         <div className="custom-tab__static-input">
-          <span>LH — Latin Hypercube</span>
+          <span>LH · Latin Hypercube</span>
           <span className="custom-tab__chevron">⌄</span>
         </div>
         <p className="custom-tab__caption">1,000 realizations, varied cosmology + astrophysics</p>
@@ -102,6 +102,10 @@ export function CustomTab() {
         <p className="custom-tab__label">Realization</p>
         <div className="custom-tab__static-input">
           <span>42</span>
+          <span className="custom-tab__static-stepper">
+            <span className="custom-tab__static-stepper-btn">⌃</span>
+            <span className="custom-tab__static-stepper-btn">⌄</span>
+          </span>
         </div>
         <p className="custom-tab__caption">0–999</p>
       </div>

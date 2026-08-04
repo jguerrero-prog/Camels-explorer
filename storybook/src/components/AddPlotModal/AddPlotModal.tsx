@@ -16,7 +16,7 @@ export type AddPlotModalProps = {
   initialTab?: 'curated' | 'custom';
 };
 
-const EMPTY_SELECTION: CuratedSelection = { suite: '', set: '', realization: '', statistic: '' };
+const EMPTY_SELECTION: CuratedSelection = { suite: '', set: '', realization: 0, statistic: '' };
 
 export function AddPlotModal({ isOpen, onClose, onSubmit, initialTab = 'curated' }: AddPlotModalProps) {
   const [tab, setTab] = useState<'curated' | 'custom'>(initialTab);
