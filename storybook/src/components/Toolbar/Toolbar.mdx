@@ -1,0 +1,43 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as ToolbarStories from './Toolbar.stories';
+
+<Meta of={ToolbarStories} />
+
+# Toolbar
+
+The tool row that sits in the header between the folder/project name and "Add Plot" — real across all three frames it appears in (Figma nodes `1078:30`, `1068:48`, `1046:40`), identical every time, so this is a stable, confirmed component, not a one-off mock.
+
+## Token
+
+- `--color-border-subtle` — the divider between the tool group and the AI agent icon, and the active-tool background tint
+- `--color-surface-toggle` / `--color-surface-toggle-active` — the grid/stacked view-mode toggle's own background and its selected option
+
+## Spec
+
+<Canvas of={ToolbarStories.Playground} />
+<Controls />
+
+Left to right: **Annotate → Ratio/diff → Ruler → Linked brushing → Copy provenance → Copy as code** (six 36×36 tools, 18×18 icons, 8px radius) → a 1px divider → **AI agent** → an 8px spacer → a grid/stacked **view-mode toggle** (32×32 options inside a padded, rounded container). Every real name matches a toolbar candidate already listed in `STUDIO_PLAN.md`'s "Adding tiles" section almost exactly — this frame is that list, built.
+
+**This is skeleton-level, not a working toolbar:**
+- Every tool prop (`onAnnotate`, `onRatioDiff`, etc.) is optional and does nothing by default — none of these seven tools have real behavior wired yet. This component is the real, named slots, not the features themselves.
+- Only `viewMode`/`onViewModeChange` are functional — the one piece this pass actually needed, since it drives `Viewer`.
+- The real `tool-ratio-diff` icon in Figma has small chevron overlays baked into its own SVG (no separate button chrome around it, unlike its five siblings). This component simplifies it to the same plain icon-button treatment as the others — a deliberate skeleton-level simplification, not a missed detail.
+
+## Usecase
+
+- Lives inside `TopNav`'s header row (not built as part of `TopNav` itself yet — see `TopNav.mdx`, which predates this frame and doesn't include a toolbar slot). Wiring `Toolbar` into `TopNav` is a real follow-up.
+- `viewMode` should be lifted to whatever owns `Viewer` (see `Viewer.mdx`) — this component doesn't own view-mode state itself, it just displays/toggles it.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { Toolbar } from '@/components/Toolbar/Toolbar';
+import type { ViewMode } from '@/components/Toolbar/Toolbar';
+
+function Header() {
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  return <Toolbar viewMode={viewMode} onViewModeChange={setViewMode} />;
+}
+```

@@ -1,0 +1,49 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as TopNavStories from './TopNav.stories';
+
+<Meta of={TopNavStories} />
+
+# TopNav
+
+The 64px header row from the "Skeleton" frame (Figma node `1113:1583`): the folder/project name on the left, the primary "Add Plot" action on the right.
+
+## Token
+
+- `--color-surface-chrome` — background (shared with IconRail — both are "chrome", not content)
+- `--color-border` — bottom border
+- `--font-ui` (Inter) — folder/project text
+- `--font-label` (Lato) — "Add Plot" button label
+- `--color-text-muted` / `--color-text-faint` / `--color-text-emphasis` — the three text weights (folder / separator / project)
+- `--color-accent-gradient-start` → `--color-accent-gradient-end` (`--brand-purple` → `--brand-bright-red`) — the button's background gradient
+
+## Spec
+
+<Canvas of={TopNavStories.Playground} />
+<Controls />
+
+- Height 64px, full width, horizontal padding 28px, `justify-content: space-between`.
+- Path display: `folderName` (muted, weight 500) `/` (faint separator) `projectName` (emphasis white, weight 600) — matching the real frame's "Untitled / Project 1".
+- Add Plot button: 40px tall, 12px radius, the real diagonal purple→red gradient plus a `0px 8px 9px rgba(0,0,0,0.4)` drop shadow, 18×18 plus icon + label.
+
+**Confirmed 2026-08-04, correcting an earlier misreading:** this is **not** a breadcrumb navigation trail — it's the folder name and the project name, two independent pieces of identity, not a clickable hierarchy to navigate up through. Renamed props/classes accordingly (`folderName`/`projectName`, `.top-nav__path*`) so the code doesn't imply breadcrumb semantics that aren't real.
+
+**Still open:**
+- **Whether either segment is editable (rename) isn't shown in this frame.** `folderName`/`projectName` are plain props here, not editable fields.
+- **More views are coming** — the toolbar-visible state of this header, and other TopNav variants, haven't been provided yet. Nothing below should be read as "the only state this component has" until those arrive.
+
+## Usecase
+
+- One `TopNav` per app shell, always visible — this is chrome, not a per-tile control.
+- `onAddPlot` is the entry point into whatever the "add a plot or simulation" flow turns out to be (see `Tile.mdx` — the same action is also reachable per-tile from the empty state). `STUDIO_PLAN.md`'s "Adding tiles" section already settled that this stays a single, low-ceremony action, not a wizard.
+
+## Code
+
+```tsx
+import { TopNav } from '@/components/TopNav/TopNav';
+
+<TopNav
+  folderName="Untitled"
+  projectName="Project 1"
+  onAddPlot={() => openAddPlotFlow()}
+/>
+```

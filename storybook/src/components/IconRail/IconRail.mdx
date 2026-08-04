@@ -1,0 +1,47 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as IconRailStories from './IconRail.stories';
+
+<Meta of={IconRailStories} />
+
+# IconRail
+
+The leftmost 76px column of the app shell — the persistent left sidebar from the "Skeleton" frame (Figma "Denario" file, node `1113:1583`). Three icon buttons plus a placeholder avatar; no logo wired here yet (see Spec).
+
+## Token
+
+- `--color-surface-chrome` — background
+- `--color-border` — right border, and the active-button background tint
+- Icon assets: `assets/icon-rail-project.svg`, `assets/icon-rail-files.svg`, `assets/icon-settings.svg` — real SVGs pulled from Figma, not placeholders
+
+## Spec
+
+<Canvas of={IconRailStories.Playground} />
+<Controls />
+
+- Width: 76px, full height, background `--color-surface-chrome`, 1px right border `--color-border`.
+- Top slot: a 44px circular placeholder avatar — **not the CAMELS logo**. The Figma frame did ship a real logo image here, but per direct instruction this component deliberately does not wire it in; it's an empty avatar until that's revisited.
+- Three 44×44 buttons (rounded 12px), each holding a 20×20 icon: Project, Files, Settings — matching `STUDIO_PLAN.md`'s "Left icon rail: Project and Files panels" section.
+
+**Real gaps, flagged rather than resolved:**
+- **No bottom-pinning observed.** In the real Figma frame, Settings sits directly beneath Files with no spacer pushing it to the bottom of the sidebar — confirmed from the frame's own child y-positions (Project at y=68, Files at y=120, Settings at y=172, all packed with no gap, inside a 1117px-tall frame). This component matches that: top-stacked, not bottom-anchored. Whether Settings *should* be bottom-pinned (a common app convention) is an open design question, not decided here.
+- **Settings has no panel.** Project and Files toggle a 280px panel per `STUDIO_PLAN.md`; Settings is wired as a button in this component but intentionally has no `onSelectPanel` case for it — there's no real design for what it opens yet.
+- **No hover/active visual spec beyond "active".** The Figma frame only shows the default (unselected) state for all three buttons. `icon-rail__button--active` here is a reasonable inference (a tinted background matching the border color), not something confirmed against a real "selected" mock.
+
+## Usecase
+
+- Persistent across the entire app shell — always visible, unlike the params sidebar which is per-tile.
+- **Project** and **Files** panels are mutually exclusive with each other *and* with the per-tile params sidebar (`STUDIO_PLAN.md`: "They compete for the same real estate by design, not by accident") — that exclusivity isn't implemented in this component alone; it belongs to whatever parent layout also owns the params sidebar.
+- Do not add a fourth rail icon casually — each one currently maps to a real, planned panel. A new icon needs its own real design first, the same discipline as the Modal/Stepper gap flagged in `STORYBOOK_STRUCTURE.md`'s inventory.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { IconRail } from '@/components/IconRail/IconRail';
+import type { IconRailPanel } from '@/components/IconRail/IconRail';
+
+function AppShell() {
+  const [activePanel, setActivePanel] = useState<IconRailPanel>(null);
+  return <IconRail activePanel={activePanel} onSelectPanel={setActivePanel} />;
+}
+```

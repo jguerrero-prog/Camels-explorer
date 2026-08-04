@@ -1,0 +1,49 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as CheckboxStories from './Checkbox.stories';
+
+<Meta of={CheckboxStories} />
+
+# Checkbox
+
+Real source: Figma nodes `1055:41` (unchecked, "Compare mode") and `1055:75` (checked, "Show symbolic-regression fit overlay") — both states confirmed directly, not inferred.
+
+## Token
+
+- `--color-border-subtle` — unchecked box border
+- `--color-accent-gradient-start` → `--color-accent-gradient-end` — checked box fill, the same gradient as `Button` and `Slider`
+- `--color-text-primary` — label (both states — the real frames show the same label color whether checked or not, not dimmed-then-brightened)
+- `--font-label` (Lato) — label
+
+## Spec
+
+<Canvas of={CheckboxStories.Unchecked} />
+<Canvas of={CheckboxStories.Checked} />
+<Controls />
+
+- 18×18 box, 5px radius.
+- Unchecked: transparent fill, 1px border.
+- Checked: no border, filled with the accent gradient, a white ✓ (Inter Semibold 12px) centered.
+- 10px gap to the label.
+
+**The Canvas above renders "Checkbox label," not "Compare mode"/"Show symbolic-regression fit overlay."** This story demonstrates the control's mechanics, not confirmed copy — the real label text is documented in Usecase below instead.
+
+**Still open:**
+- No indeterminate state is shown or implied by either real frame.
+- No disabled state is shown.
+
+## Usecase
+
+- Real, confirmed usages: SFR History's "Compare mode" toggle and "Show symbolic-regression fit overlay" toggle, both inside `ParamsSidebar`.
+- Use for any independent on/off setting inside a params panel. `STUDIO_PLAN.md`'s roadmap row 3 (symbolic-regression overlay) and Compare mode (mentioned throughout `STUDIO_PLAN.md`'s "Adding tiles" section) are both real, already-planned features this control serves directly — not a generic checkbox added speculatively.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { Checkbox } from '@/components/Checkbox/Checkbox';
+
+function CompareModeToggle() {
+  const [checked, setChecked] = useState(false);
+  return <Checkbox label="Compare mode" checked={checked} onChange={setChecked} />;
+}
+```

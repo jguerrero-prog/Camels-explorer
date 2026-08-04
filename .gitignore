@@ -3,3 +3,10 @@ vendor/
 __pycache__/
 *.pyc
 .DS_Store
+
+node_modules/
+dist/
+.vite/
+*.local
+*storybook.log
+storybook-static

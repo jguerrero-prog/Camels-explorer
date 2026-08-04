@@ -1,0 +1,5 @@
+/* Storybook's canvas defaults to white - every component built so far only
+   has a dark design, so preview against that instead of white. */
+body {
+  background: var(--color-surface-chrome);
+}

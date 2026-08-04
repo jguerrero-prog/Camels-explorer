@@ -1,0 +1,55 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as NumberStepperStories from './NumberStepper.stories';
+
+<Meta of={NumberStepperStories} />
+
+# NumberStepper
+
+A numeric field with increment/decrement buttons. Real source: Figma node `1055:56` ("field-z max"). Partially resolves the "Stepper" gap flagged in `STORYBOOK_STRUCTURE.md`'s initial inventory — **but that flag meant a multi-step wizard progress indicator, a different thing with the same common name.** This component is the numeric-value kind; the wizard kind remains undesigned.
+
+## Token
+
+- `--color-surface-control` / `--color-border-subtle` — the input row, same as `SelectField`'s
+- `--color-surface-chrome` — the two increment/decrement buttons' own background (matches TopNav/IconRail's chrome tone, not the control surface)
+- `--font-label` (Lato) — label
+- `--font-ui` (Inter) — value
+
+## Spec
+
+<Canvas of={NumberStepperStories.Playground} />
+<Controls />
+
+- Label above, 12px muted.
+- Input row: `--color-surface-control` fill, `--color-border-subtle` border, 8px radius, `justify-content: space-between` between the value and the stepper buttons.
+- Stepper: two 14×14 buttons stacked vertically (2px gap), each with a chevron icon, `--color-surface-chrome` fill, `--color-border-subtle` border, 4px radius.
+
+**The Canvas above renders "Number label," not "z max."** This story demonstrates the control's mechanics, not confirmed copy — see Usecase below for why "z max" itself isn't confirmed either.
+
+**Still open:**
+- The real frame shows a fixed display value ("10.0") with no visible min/max — this component doesn't clamp; that's left to whoever wires it to a real field, since `z_max`'s real valid range isn't confirmed anywhere yet.
+- No held-button repeat-increment behavior is implied by the static frame.
+
+## Usecase
+
+- Real usage so far: SFR History's "z max" field — but this, and the redshift-range field it may or may not replace, are explicit placeholders (confirmed 2026-08-04, see `ParamsSidebar.mdx`). Which control z_min/z_max actually end up using is intentionally undecided until real data wiring informs the choice — don't treat this component as the final answer for that field.
+- Reach for this over `Slider` when the value has no natural visual range to scrub (or the step size matters more than the position within a range).
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { NumberStepper } from '@/components/NumberStepper/NumberStepper';
+
+function ZMaxField() {
+  const [value, setValue] = useState(10.0);
+  return (
+    <NumberStepper
+      label="z max"
+      value={value}
+      step={0.1}
+      onChange={setValue}
+      formatValue={(v) => v.toFixed(1)}
+    />
+  );
+}
+```

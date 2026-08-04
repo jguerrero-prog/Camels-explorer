@@ -1,0 +1,114 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as LogoStories from './Logo.stories';
+
+<Meta of={LogoStories} />
+
+# Logo
+
+The CAMELS brand mark: a camel silhouette filled with a cosmic-nebula texture and overlaid physics/astronomy notation, paired with a "CAMELS" wordmark rendered in the same texture. Source: Figma ("Denario" file, node `1106:1364`, frame "Logo specs").
+
+## Token
+
+The logo's gradient is **not** built from live tokens — it's a flattened raster image per variant (see Spec). What *is* a real, reusable token set is the brand color palette baked into that gradient — 12 named swatches, extracted directly from the Figma frame's own layer names and fills, not invented:
+
+Listed as a single vertical stack, one swatch per row — not a wrapping grid, which reads as a confusing jumble at 12 items:
+
+<div style={{ display: 'flex', flexDirection: 'column', border: '1px solid #e2e2e2', borderRadius: '8px', overflow: 'hidden' }}>
+  {[
+    ['Deep Crimson', '--brand-deep-crimson', '#8B1A1A'],
+    ['Crimson Red', '--brand-crimson-red', '#CC2233'],
+    ['Bright Red', '--brand-bright-red', '#E63946'],
+    ['Burnt Orange', '--brand-burnt-orange', '#D4652A'],
+    ['Golden Amber', '--brand-golden-amber', '#E8A030'],
+    ['Yellow', '--brand-yellow', '#D4C040'],
+    ['Emerald Green', '--brand-emerald-green', '#2D8C4E'],
+    ['Teal', '--brand-teal', '#1A6B5A'],
+    ['Royal Blue', '--brand-royal-blue', '#1B4DCC'],
+    ['Deep Indigo', '--brand-deep-indigo', '#2B2D8E'],
+    ['Purple', '--brand-purple', '#7B2D8E'],
+    ['Magenta', '--brand-magenta', '#C72C8E'],
+  ].map(([name, token, hex]) => (
+    <div key={token} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '10px 16px', borderBottom: '1px solid #e2e2e2' }}>
+      <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: hex, flexShrink: 0 }} />
+      <div style={{ fontWeight: 600, width: '140px', flexShrink: 0 }}>{name}</div>
+      <code style={{ color: '#666', width: '180px', flexShrink: 0 }}>{token}</code>
+      <code style={{ color: '#666' }}>{hex}</code>
+    </div>
+  ))}
+</div>
+
+Defined in `tokens/primitives/color-ramps.css`. These are **brand primitives** — per the primitive/semantic split in `STORYBOOK_STRUCTURE.md`, no UI component should reference `--brand-*` directly. If/when any of these 12 get promoted to a semantic role (e.g. a categorical data-viz scale — see Usecase below), that alias belongs in `semantic/semantic.css`, pointing back to these.
+
+## Spec
+
+<Canvas of={LogoStories.Playground} />
+<Controls />
+
+**Variants that exist today** (both raster PNG, no other format):
+
+| Variant | Asset | Real dimensions | Background |
+|---|---|---|---|
+| Icon (camel mark only) | `camels-icon.png` | 1112 × 1030 px | transparent |
+| Wordmark ("CAMELS" text only) | `camels-wordmark.png` | ~1456 × 336 px | white |
+
+There is currently **no combined icon+wordmark lockup** as its own exported asset — the source Figma frame places them separately (icon at `x:210,y:802`, wordmark at `x:165,y:330`), not as one grouped lockup component. If a lockup is needed, it has to be composed (icon + wordmark side-by-side with a defined gap token), not assumed to exist as a single file.
+
+**Real gaps, flagged rather than papered over:**
+- **No vector (SVG) version.** Both variants are flattened raster exports. This means no crisp small-size rendering (favicon, app icon at 16–32px will show the nebula texture as noise, not a clean mark) and no way to recolor programmatically.
+- **No monochrome / single-color variant.** Every current use of the mark is the full 12-color cosmic gradient. There's no "reversed" (light-on-dark) or flat single-tone version for contexts that need one — e.g. a watermark, a favicon at very small sizes, or (most relevant here) the planned **High-Contrast Dark** theme, where an unverified-contrast raster logo is a real risk, not a hypothetical one.
+- **Dark-theme contrast is unverified.** The wordmark asset's background is opaque white; the icon is transparent but was only ever checked against a light canvas in Figma. Before shipping either into a dark-theme header/nav, confirm visually against the actual `--color-surface` token in System Dark and High-Contrast Dark — don't assume it reads fine.
+- **File sizes are unoptimized production originals** (`camels-icon.png` 1.1MB, `camels-wordmark.png` 350KB) — fine for this documentation pass, but these need compression/resizing before being shipped as real app assets (favicon, nav bar, splash screen each need their own appropriately-sized export, not one oversized PNG scaled down in CSS).
+
+None of the above are resolved decisions — they're open items to close before the logo goes into the real Studio shell, listed here so they don't get silently assumed away.
+
+## Usecase
+
+- **Icon alone** — favicon, app/window icon (`desktop.py`'s pywebview window), loading/splash state, anywhere space is too tight for the wordmark. Blocked today by the no-SVG gap above for anything below ~64px.
+- **Wordmark alone** — top nav / header branding, About screen, anywhere the product name needs to read clearly at a glance without the icon's illustrative detail competing for attention.
+- **Icon + wordmark together** — splash screen, About/credits screen, marketing-style contexts. Needs the lockup composed (see Spec gap above) before use, not assumed to already exist.
+- **The 12-color palette, independent of the logo mark itself** — a real candidate for CAMELS Studio's data-visualization categorical color scale: assigning a consistent color per suite, per halo finder, or per overlaid tile in Compare/overlay mode (`STUDIO_PLAN.md`'s Compare mode and cross-finder comparison features both need exactly this — a stable, distinguishable, on-brand color per series). This is a **recommendation to confirm, not a decision already made** — flagging it here so it's considered rather than each future chart component inventing its own ad hoc color list.
+
+## Code
+
+```css
+/* tokens/primitives/color-ramps.css */
+:root {
+  --brand-deep-crimson: #8B1A1A;
+  --brand-crimson-red: #CC2233;
+  --brand-bright-red: #E63946;
+  --brand-burnt-orange: #D4652A;
+  --brand-golden-amber: #E8A030;
+  --brand-yellow: #D4C040;
+  --brand-emerald-green: #2D8C4E;
+  --brand-teal: #1A6B5A;
+  --brand-royal-blue: #1B4DCC;
+  --brand-deep-indigo: #2B2D8E;
+  --brand-purple: #7B2D8E;
+  --brand-magenta: #C72C8E;
+}
+```
+
+```tsx
+// components/Logo/Logo.tsx
+import wordmark from './assets/camels-wordmark.png';
+import icon from './assets/camels-icon.png';
+
+type LogoProps = {
+  variant: 'icon' | 'wordmark';
+  height?: number;
+};
+
+export function Logo({ variant, height = 32 }: LogoProps) {
+  const src = variant === 'icon' ? icon : wordmark;
+  return <img className="logo" src={src} alt="CAMELS" style={{ height }} />;
+}
+```
+
+```tsx
+<Logo variant="icon" height={24} />
+<Logo variant="wordmark" height={32} />
+```
+
+## Source files
+
+Raw exports from Figma, kept as the canonical source: `design/logo/camels-icon.png`, `design/logo/camels-wordmark.png`. Copy (and optimize) into `storybook/src/components/Logo/assets/` when the component is actually built.

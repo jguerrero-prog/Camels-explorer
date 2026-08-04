@@ -1,0 +1,38 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as SelectFieldStories from './SelectField.stories';
+
+<Meta of={SelectFieldStories} />
+
+# SelectField
+
+The closed-state dropdown-styled field used throughout the params panel — Suite, Set, and originally (incorrectly) Realization too. Real source: Figma nodes `1055:28` ("field-Set") and identically the Suite/Realization fields in `1068:18`. Extracted out of `ParamsSidebar` on 2026-08-04 once it became clear the panel mixes multiple real field kinds (see `ParamsSidebar.mdx`).
+
+## Token
+
+- `--color-surface-control` / `--color-border-subtle` — the input box fill/border
+- `--font-label` (Lato) — label
+- `--font-ui` (Inter) — the current value
+
+## Spec
+
+<Canvas of={SelectFieldStories.Playground} />
+<Controls />
+
+- Label above (12px muted), then a box: 10px/12px padding, 8px radius, value left-aligned, a chevron icon right-aligned (rotated 180° from the source SVG's default orientation).
+
+**This is the "dropdown for fields" that's explicitly not designed yet — flagged directly, not glossed over:** every real frame this was sourced from shows only the **closed** state. There is no real design for what happens on click — no option list, no hover/selected states within a menu, no search/filter. `onClick` here is a plain callback with no default behavior; this component cannot open a real menu because one hasn't been designed.
+
+**The Canvas above renders "Select label"/"Selected value," not "Set"/"LH — Latin Hypercube."** This story demonstrates the control's mechanics, not confirmed copy — the real field names are documented in Usecase below instead.
+
+## Usecase
+
+- Real, confirmed usage: Suite and Set fields inside `ParamsSidebar`.
+- Use for exactly-one-value-from-a-fixed-list fields — for open-ended multi-value fields use `MultiSelect` instead; for a value with no fixed option list (a scrubbed number) use `Slider` or `NumberStepper`.
+
+## Code
+
+```tsx
+import { SelectField } from '@/components/SelectField/SelectField';
+
+<SelectField label="Suite" value="IllustrisTNG" onClick={openSuiteMenu} />
+```

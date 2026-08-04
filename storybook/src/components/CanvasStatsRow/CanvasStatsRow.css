@@ -1,0 +1,31 @@
+.canvas-stats-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+}
+
+.canvas-stats-row__chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 0 0;
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.canvas-stats-row__value {
+  font-family: var(--font-label);
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.canvas-stats-row__label {
+  font-family: var(--font-label);
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
