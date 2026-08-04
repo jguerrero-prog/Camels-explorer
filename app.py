@@ -75,36 +75,57 @@ with st.sidebar:
         else:
             st.caption(f"Real folder: **{sb_folder}** ({B.SB_REALIZATIONS_FOR_SUITE[suite]} "
                        "realizations)")
+            st.caption(
+                "Confirmed real for SB (2026-08-04, direct directory listings): Power "
+                "Spectrum, FOF/Subfind catalog (→ HMF/SMF/Baryon Fraction/Galaxy Scaling "
+                "Relations/Catalog Browser), Rockstar, SubLink, and the raw SFR history "
+                "file. **Not published for SB**: CAESAR, AHF, Photometry - those tabs will "
+                "show real, honest \"no data\" rather than a fabricated result, this isn't a bug."
+            )
         set_name = sb_folder or "SB"  # fetches fail gracefully (honest "no data") if unsupported
 
-    onep_supported = fetch_public and set_name == "1P" and suite == "IllustrisTNG"
+    onep_supported = fetch_public and set_name == "1P" and suite in B.ONEP_MAX_INDEX_FOR_SUITE
     if fetch_public and set_name == "1P" and not onep_supported:
         st.caption(
             "⚠️ 1P's real public folders are named by parameter+variation (e.g. "
-            "`1P_p11_2`), not `1P_{realization}` like LH/CV/EX. Real support for this "
-            "is only built for **IllustrisTNG** so far (every other suite either uses "
-            "a different, unmapped parameter scheme, or doesn't expose enough real "
-            "metadata to identify its parameters at all - see backend.py for the full "
-            "finding). For this suite, statistics with a synthetic fallback (Pk, HMF, "
-            "SMF, Baryon Fraction, SFR History) will silently show 🟡 synthetic data "
-            "here even in Public data release mode; real-data-only features show "
-            "honest \"no data\" instead."
+            "`1P_p11_2`), not `1P_{realization}` like LH/CV/EX. This suite doesn't use "
+            "that naming scheme (or hasn't been checked yet) - see backend.py for the "
+            "full finding. Statistics with a synthetic fallback (Pk, HMF, SMF, Baryon "
+            "Fraction, SFR History) will silently show 🟡 synthetic data here even in "
+            "Public data release mode; real-data-only features show honest \"no data\" "
+            "instead."
         )
 
     n_real = B.SET_REALIZATIONS.get(set_name) or B.SB_REALIZATIONS_FOR_SUITE.get(suite) or 1
     if onep_supported:
-        param_options = {p["index"]: p for p in B.ONEP_TNG_PARAMS}
-        onep_param_idx = st.selectbox(
-            "1P Parameter", list(param_options.keys()),
-            format_func=lambda i: f"p{i}: {param_options[i]['name']} ({param_options[i]['category']})",
-            help="All 28 real parameters IllustrisTNG's 1P set varies, identified by "
-                 "diffing the real FOF_Subfind file's header/config between two "
-                 "variations of each index (2026-08-02) - not guessed from docs. "
-                 "sigma_8 and n_s (p2, p9) are cosmological parameters set only at "
-                 "initial-condition time - they never appear in any output file, so "
-                 "they're identified here by elimination against the documented "
-                 "5-cosmological/23-astrophysical count, not read directly.",
-        )
+        onep_is_tng = suite == "IllustrisTNG"
+        if onep_is_tng:
+            param_options = {p["index"]: p for p in B.ONEP_TNG_PARAMS}
+            onep_param_idx = st.selectbox(
+                "1P Parameter", list(param_options.keys()),
+                format_func=lambda i: f"p{i}: {param_options[i]['name']} ({param_options[i]['category']})",
+                help="All 28 real parameters IllustrisTNG's 1P set varies, identified by "
+                     "diffing the real FOF_Subfind file's header/config between two "
+                     "variations of each index (2026-08-02) - not guessed from docs. "
+                     "sigma_8 and n_s (p2, p9) are cosmological parameters set only at "
+                     "initial-condition time - they never appear in any output file, so "
+                     "they're identified here by elimination against the documented "
+                     "5-cosmological/23-astrophysical count, not read directly.",
+            )
+            onep_param_name = param_options[onep_param_idx]["name"]
+        else:
+            max_idx = B.ONEP_MAX_INDEX_FOR_SUITE[suite]
+            onep_param_idx = st.selectbox(
+                "1P Parameter", list(range(1, max_idx + 1)),
+                format_func=lambda i: f"p{i}",
+                help=f"{suite}'s real 1P set varies {max_idx} parameters (confirmed via a "
+                     "real directory listing, 2026-08-04) using the same folder-naming "
+                     "scheme as IllustrisTNG's 1P set. Unlike IllustrisTNG, which physical "
+                     f"parameter each index corresponds to for {suite} hasn't been "
+                     "individually verified yet - shown as a plain index rather than "
+                     "guessing it matches IllustrisTNG's order.",
+            )
+            onep_param_name = f"p{onep_param_idx}"
         onep_variation = st.select_slider(
             "Variation", options=[-2, -1, 0, 1, 2], value=0,
             help="0 is the fiducial (shared baseline) simulation. Real per-parameter "
@@ -112,15 +133,15 @@ with st.sidebar:
                  "for whatever you pick is shown below once data is fetched, not "
                  "precomputed or interpolated.",
         )
-        missing = B.ONEP_TNG_MISSING_VARIATIONS.get(onep_param_idx, set())
+        missing = B.ONEP_TNG_MISSING_VARIATIONS.get(onep_param_idx, set()) if onep_is_tng else set()
         if onep_variation in missing:
             st.warning(f"p{onep_param_idx} has no published variation={onep_variation:+d} "
                        "simulation (a real gap in the public release, not a bug) - pick "
                        "another variation.")
         realization = B.onep_realization_id(onep_param_idx, onep_variation)
-        real_value = B.get_onep_param_value(suite, onep_param_idx, onep_variation)
+        real_value = B.get_onep_param_value(suite, onep_param_idx, onep_variation) if onep_is_tng else None
         if real_value is not None:
-            st.caption(f"🟢 real value: **{param_options[onep_param_idx]['name']} = {real_value:.4g}**")
+            st.caption(f"🟢 real value: **{onep_param_name} = {real_value:.4g}**")
         elif onep_variation not in missing:
             st.caption("Real value not directly readable from any output file for this "
                        "parameter (see help above) - only the variation step is shown.")
@@ -161,6 +182,30 @@ with st.sidebar:
         )
         ptype = {"Gas [0]": [0], "DM [1]": [1], "Stars [4]": [4], "Black holes [5]": [5],
                  "Total [0,1,4]": [0, 1, 4]}[ptype_label]
+
+        pk_k_range = st.radio(
+            "k range", ["Standard (k ≤ ~25 h/Mpc)", "All-k (HIPSTER, up to k~1000 h/Mpc)"],
+            horizontal=True, key="pk_k_range",
+            help="All-k combines PYLIANS (low-k) with the HIPSTER pair-counting estimator "
+                 "(high-k) - real for the same suites/sets as the standard Pk files.",
+        )
+        pk_rsd_axis, pk_multipole = None, "P0"
+        if pk_k_range.startswith("All-k"):
+            pk_rsd_label = st.selectbox(
+                "Redshift-space distortion", ["Real space (none)", "Axis 0", "Axis 1", "Axis 2"],
+                key="pk_rsd_axis",
+                help="Real space is the standard (non-RSD) power spectrum. Each axis applies "
+                     "RSD along that Cartesian direction - the file's own multipole "
+                     "decomposition (monopole/quadrupole/hexadecapole), not something computed "
+                     "here.",
+            )
+            if pk_rsd_label != "Real space (none)":
+                pk_rsd_axis = int(pk_rsd_label.split()[-1])
+                pk_multipole = st.radio(
+                    "Multipole", ["P0", "P2", "P4"], horizontal=True, key="pk_multipole",
+                    help="P0 = monopole, P2 = quadrupole, P4 = hexadecapole - the file's own "
+                         "real Legendre-multipole columns.",
+                )
 
         show_linear_pk = st.checkbox(
             "Overlay linear-theory Pk (z=0, from ICs)", value=False,
@@ -342,8 +387,10 @@ def _compute_result(statistic: str, realization: int) -> B.Result:
     current parameter selections (grid/MAS/RMmin/etc. are closed over from
     module scope since Streamlit scripts run top-to-bottom on every rerun)."""
     if statistic == "Power Spectrum":
+        k_range = "allk" if pk_k_range.startswith("All-k") else "standard"
         return B.get_power_spectrum(suite, set_name, realization, snapnum, grid, MAS, threads, ptype,
-                                     snapshot_path=local_path or None, fetch_public=fetch_public)
+                                     snapshot_path=local_path or None, fetch_public=fetch_public,
+                                     k_range=k_range, rsd_axis=pk_rsd_axis, multipole=pk_multipole)
     if statistic == "Halo Mass Function":
         return B.get_halo_mass_function(suite, set_name, realization, snapnum, RMmin, RMmax, bins,
                                          subfind_path=local_path or None, fetch_public=fetch_public)
@@ -1213,6 +1260,61 @@ with tab_catalog:
                                "helps distinguish a genuine major merger (both jump together) "
                                "from a low-resolution subhalo being absorbed (particle count was "
                                "already small).")
+
+        if finder == "Rockstar":
+            st.divider()
+            with st.expander("📈 Trace a halo's merger history (Consistent Trees)"):
+                st.caption(
+                    "Real for IllustrisTNG/SIMBA/Astrid - Rockstar's own companion merger-tree "
+                    "product, distinct from SubLink (which traces Subfind subhalos instead). "
+                    "Pick an **id** from the table above. Only works at the **root snapshot** "
+                    "(the last one, z≈0) - the tree file only indexes halos by their id at that "
+                    "timestep, the same way SubLink's SubfindID only means something at its own "
+                    "root snapshot."
+                )
+                if snapnum != B.N_SNAPSHOTS - 1:
+                    st.warning(
+                        f"Snapshot slider isn't at the root (currently {snapnum}, root is "
+                        f"{B.N_SNAPSHOTS - 1}) - move it there first, the ids shown above won't "
+                        "match locations.dat otherwise."
+                    )
+                else:
+                    default_ct_id = int(sorted_frame["id"].iloc[0]) if len(sorted_frame) else 0
+                    ct_halo_id = st.number_input(
+                        "Halo id", min_value=0, value=default_ct_id, step=1, key="ct_halo_id",
+                    )
+                    ct_history = B.get_consistent_trees_history(
+                        suite, set_name, realization, int(ct_halo_id), fetch_public=fetch_public,
+                    )
+                    if ct_history is None:
+                        st.warning(
+                            "No merger history for this id - either this suite isn't supported "
+                            "(IllustrisTNG/SIMBA/Astrid only) or the id doesn't exist in this "
+                            "realization's tree."
+                        )
+                    else:
+                        st.caption(f"🟢 real data   ·   {ct_history.note}")
+                        fig, (ax, ax2) = plt.subplots(1, 2, figsize=(11, 4))
+                        ax.plot(ct_history.redshift, ct_history.mass, "o-", lw=1.5, ms=4)
+                        ax.set_yscale("log")
+                        ax.invert_xaxis()
+                        ax.set_xlabel("Redshift")
+                        ax.set_ylabel("Halo Mass [Msun/h]")
+                        ax.grid(alpha=0.3, which="both")
+                        ax2.plot(ct_history.redshift, ct_history.num_particles, "o-", lw=1.5,
+                                  ms=4, color="tab:orange")
+                        ax2.set_yscale("log")
+                        ax2.invert_xaxis()
+                        ax2.set_xlabel("Redshift")
+                        ax2.set_ylabel("Number of progenitors")
+                        ax2.grid(alpha=0.3, which="both")
+                        fig.tight_layout()
+                        st.pyplot(fig)
+                        st.caption("Redshift decreases left to right; z=0 is on the right. "
+                                   "Number of progenitors (right panel) is Consistent Trees' own "
+                                   "per-snapshot count, a resolution/merger-activity proxy - not "
+                                   "the same quantity as SubLink's NumParticles above, so the two "
+                                   "panels aren't directly comparable across finders.")
 
 # ---------------------------------------------------------------------------
 # CAMELS-SAM tab — a separate dataset, not tied to any hydro suite, so it

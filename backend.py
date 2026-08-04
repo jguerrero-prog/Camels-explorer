@@ -71,6 +71,17 @@ SUITE_VIDEOS = {
 SB_FOLDER_FOR_SUITE = {"IllustrisTNG": "SB28", "Astrid": "SB7"}
 SB_REALIZATIONS_FOR_SUITE = {"IllustrisTNG": 2048, "Astrid": 1024}
 
+# Per-product SB coverage (confirmed real, 2026-08-04, direct directory listings
+# against IllustrisTNG/SB28_0 - all existing fetchers below already build their
+# URLs generically from suite/set_name/realization, so no code changes were
+# needed for the products that do have real SB data, only this documentation
+# of which ones don't):
+#   real:      Pk, FOF_Subfind, Rockstar, SubLink, Sims/extra_files (SFR history)
+#   not real:  CAESAR, AHF, Photometry (all confirmed 404 - not yet computed for
+#              this set, not a bug in any fetcher below)
+# Bispectrum is already scoped to LH only (see get_bispectrum), so it was not
+# re-checked here.
+
 SET_REALIZATIONS = {
     "LH": 1000,   # Latin Hypercube: varied cosmology + astrophysics
     "CV": 27,     # Cosmic Variance: fixed params, varied initial phases
@@ -158,6 +169,19 @@ ONEP_TNG_PARAMS = [
 # all 5. Not hidden - the UI should let p15 be picked and simply show
 # "no data" for the two missing variations, same as any other real gap.
 ONEP_TNG_MISSING_VARIATIONS = {15: {-2, -1}}
+
+# Confirmed real (2026-08-04, direct directory listings): every suite uses
+# this same "1P_p{index}_{suffix}" modern naming scheme for the products
+# that use it (Pk, FOF_Subfind, Sims, Rockstar, Caesar, SubLink, Photometry -
+# see onep_realization_id) - it's not an IllustrisTNG-only convention. What
+# differs per suite is only the real parameter *count*, and - unverified so
+# far - whether each index means the same physical parameter as
+# IllustrisTNG's. Only IllustrisTNG's parameter identities have actually been
+# checked (see ONEP_TNG_PARAMS's own diffing method) - the other suites are
+# wired up as generic "p{N}" indices, honest about not (yet) knowing what
+# each one physically represents, rather than guessing they match
+# IllustrisTNG's order.
+ONEP_MAX_INDEX_FOR_SUITE = {"IllustrisTNG": 28, "SIMBA": 28, "Astrid": 7, "Swift-EAGLE": 6}
 
 N_SNAPSHOTS = 34  # snapshots 000-033
 
@@ -1016,9 +1040,68 @@ def _fetch_and_grid_snapshot(suite, set_name, realization, grid_res, field=DEFAU
 # Power spectrum  (mirrors camels_library.compute_Pk)
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=32)
+def _fetch_public_pk_allk(suite, set_name, realization, redshift, ptype, rsd_axis=None):
+    """Real all-k power spectrum: PYLIANS (k < ~25 h/Mpc) combined with the
+    HIPSTER pair-counting estimator (k > 25 h/Mpc, up to k~1000 h/Mpc) -
+    confirmed real via a direct fetch (2026-08-04), same suites/sets as the
+    standard Pk files. `rsd_axis=None` is real-space (2 columns: k, P(k)).
+    `rsd_axis` in {0, 1, 2} is redshift-space along that Cartesian axis (4
+    columns: k, P_0(k) monopole, P_2(k) quadrupole, P_4(k) hexadecapole -
+    confirmed real from the file's own header, not assumed)."""
+    if suite not in PUBLIC_PK_SUITES:
+        return None
+    suffix = PK_SUFFIX_FOR_PTYPE.get(ptype)
+    if suffix is None:
+        return None
+
+    rs_part = f"_RS{rsd_axis}" if rsd_axis is not None else ""
+    url = (f"{PUBLIC_DATA_URL}/Pk/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
+           f"Pk_{suffix}_allk{rs_part}_z={redshift:.2f}.txt")
+    try:
+        with urllib.request.urlopen(url, timeout=15) as response:
+            raw = response.read().decode()
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    cols = np.loadtxt(raw.splitlines(), unpack=True)
+    return cols  # shape (2, N) real-space, or (4, N) redshift-space
+
+
 def get_power_spectrum(suite, set_name, realization, snapnum, grid, MAS, threads, ptype,
-                        snapshot_path: str | None = None, fetch_public: bool = False) -> Result:
+                        snapshot_path: str | None = None, fetch_public: bool = False,
+                        k_range: str = "standard", rsd_axis: int | None = None,
+                        multipole: str = "P0") -> Result:
     z = _snapshot_to_redshift(snapnum)
+
+    if fetch_public and k_range == "allk":
+        fetched = _fetch_public_pk_allk(suite, set_name, realization, z, tuple(ptype), rsd_axis)
+        if fetched is not None:
+            k = fetched[0]
+            if rsd_axis is None:
+                y = fetched[1]
+                mode_label = "real-space"
+            else:
+                col = {"P0": 1, "P2": 2, "P4": 3}[multipole]
+                y = fetched[col]
+                mode_label = f"redshift-space, axis {rsd_axis}, {multipole}"
+            # P0 (monopole) is always positive, like the standard Pk, so log-y is fine
+            # (and is the Result default). P2/P4 (quadrupole/hexadecapole) are signed -
+            # confirmed real, e.g. P2 is negative at several k-bins in the raw file - a
+            # log-scale axis can't render negative values at all, so those must use a
+            # linear y-axis or the plot silently drops/breaks on most of the curve.
+            return Result(
+                x=k, y=y,
+                x_label="k [h/Mpc]", y_label="P(k) [(Mpc/h)$^3$]",
+                log_y=(multipole == "P0" or rsd_axis is None),
+                source="real",
+                note=(f"z = {z:.2f}, ptype = {ptype}, all-k ({mode_label}) - public CAMELS "
+                      f"data release (Pk/{suite}/L25n256/{set_name}/{set_name}_{realization}, "
+                      f"PYLIANS k<25 h/Mpc + HIPSTER k>25 h/Mpc up to k~1000 h/Mpc)"),
+            )
+        # Falls through to the standard/synthetic paths below if all-k isn't
+        # published for this suite/set/realization - same honest-fallback
+        # pattern as everywhere else, not a special case for this mode.
 
     if fetch_public:
         fetched = _fetch_public_pk(suite, set_name, realization, z, tuple(ptype))
@@ -2069,6 +2152,9 @@ def _fetch_rockstar_halos(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1)
     df = pd.DataFrame(rows, columns=columns).apply(pd.to_numeric, errors="coerce")
 
     frame = pd.DataFrame({
+        "id": df["id"],  # real Rockstar halo id at this snapshot - only meaningful here
+                         # (like Subfind's SubfindID), kept so a row can be picked and
+                         # traced via Consistent Trees at the root snapshot.
         "Halo Mass [Msun/h]": df["Mvir"],
         "Stellar Mass [Msun/h]": df["SM"],
         "Gas Mass [Msun/h]": df["Gas"],
@@ -2085,7 +2171,7 @@ def _fetch_rockstar_halos(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1)
     # total) - the escape hatch, same row order as frame.
     raw_extra = df[mask.to_numpy()].reset_index(drop=True)
     raw_extra = raw_extra[[c for c in raw_extra.columns if c not in
-                           ("Mvir", "SM", "Gas", "BH_Mass", "vmax", "x", "y", "z", "Type")]]
+                           ("id", "Mvir", "SM", "Gas", "BH_Mass", "vmax", "x", "y", "z", "Type")]]
     raw_frame = pd.concat([frame, raw_extra], axis=1)
     real_z = 1.0 / best_a - 1.0
     return Catalog(
@@ -2330,6 +2416,146 @@ def get_merger_history(suite, set_name, realization, subfind_id, root_snapnum=SU
               f"snapshots back to z={redshifts.max():.2f} - public CAMELS data release "
               f"({SUBLINK_VARIANTS[variant]}/{suite}/{set_name}_{realization}/tree.hdf5, "
               f"following FirstProgenitorID)"),
+    )
+
+
+# Consistent Trees - Rockstar's own real companion merger-tree product (a
+# `trees/` folder sits alongside `hlists/` for every real Rockstar
+# realization), distinct from SubLink/SubLink_gal which trace Subfind
+# subhalos instead. Same suites as Rockstar itself (both come from the same
+# real per-suite Rockstar run).
+PUBLIC_CONSISTENT_TREES_SUITES = PUBLIC_ROCKSTAR_SUITES
+
+# Confirmed real, 2026-08-04: locations.dat's "TreeRootID" is exactly the
+# real Rockstar halo "id" at the root (last/z=0, a=1.0) timestep - checked
+# directly against IllustrisTNG/LH_0's own hlist_1.00000.list, whose first
+# two real halo ids (349562, 352985) are the first two TreeRootIDs in
+# locations.dat, in the same order. So a halo picked from the Catalog
+# Browser's Rockstar table (at the root snapshot) can be looked up directly
+# by its own "id" column - no separate ID-translation step needed.
+
+
+@lru_cache(maxsize=8)
+def _fetch_consistent_trees_locations(suite, set_name, realization):
+    """Real locations.dat: maps every tree's root halo ID to an exact byte
+    offset (and filename) within the real tree_*.dat file(s), so one halo's
+    branch can be range-fetched without downloading the whole (~100MB+)
+    file. Small file (~KB-hundreds of KB), fetched and parsed whole, then
+    reused for every halo looked up in this realization."""
+    if suite not in PUBLIC_CONSISTENT_TREES_SUITES:
+        return None
+    url = (f"{PUBLIC_DATA_URL}/Rockstar/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
+           f"trees/locations.dat")
+    try:
+        with urllib.request.urlopen(url, timeout=30) as resp:
+            text = resp.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    rows = []
+    for line in text.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) != 4:
+            continue
+        root_id, _file_id, offset, filename = parts
+        rows.append((int(root_id), int(offset), filename))
+    return tuple(rows) if rows else None
+
+
+@lru_cache(maxsize=8)
+def _fetch_consistent_trees_header(suite, set_name, realization, filename):
+    """Real column header for a tree file - every tree in the same file
+    shares one schema, so this is fetched once (a few KB, one Range request)
+    and reused for every halo's branch in that file."""
+    url = (f"{PUBLIC_DATA_URL}/Rockstar/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
+           f"trees/{filename}")
+    req = urllib.request.Request(url, headers={"Range": "bytes=0-4000", "User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            text = resp.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+    header_line = next((ln for ln in text.splitlines()
+                        if ln.startswith("#") and "Tree_root_ID" in ln), None)
+    return _parse_indexed_header(header_line) if header_line else None
+
+
+def get_consistent_trees_history(suite, set_name, realization, halo_id, fetch_public: bool = False):
+    """Real main-branch mass accretion history for one Rockstar halo, walking
+    Consistent Trees' desc_id/mmp? relationship backward from `halo_id` at
+    the root (z=0) timestep. `halo_id` must be a real "id" value from the
+    Catalog Browser's Rockstar table *at the root snapshot* - like SubLink's
+    SubfindID, Consistent Trees' ids are only meaningful at the snapshot
+    they came from, and the root snapshot is the only one this function
+    supports (that's what locations.dat's TreeRootID indexes)."""
+    if not fetch_public:
+        return None
+    locations = _fetch_consistent_trees_locations(suite, set_name, realization)
+    if locations is None:
+        return None
+
+    matches = [loc for loc in locations if loc[0] == halo_id]
+    if not matches:
+        return None
+    _root_id, offset, filename = matches[0]
+
+    # Exact byte range for just this tree: from its own offset to the next
+    # larger offset in the same file (or a generous cap if it's the last one).
+    same_file_offsets = sorted(o for (_, o, f) in locations if f == filename)
+    later = [o for o in same_file_offsets if o > offset]
+    end = later[0] if later else offset + 20_000_000
+
+    columns = _fetch_consistent_trees_header(suite, set_name, realization, filename)
+    if columns is None:
+        return None
+
+    url = f"{PUBLIC_DATA_URL}/Rockstar/{suite}/L25n256/{set_name}/{set_name}_{realization}/trees/{filename}"
+    req = urllib.request.Request(
+        url, headers={"Range": f"bytes={offset}-{end - 1}", "User-Agent": "Mozilla/5.0"})
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            text = resp.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    rows = [line.split() for line in text.splitlines() if line.strip() and not line.startswith("#")]
+    rows = [r for r in rows if len(r) == len(columns)]
+    if not rows:
+        return None
+    df = pd.DataFrame(rows, columns=columns).apply(pd.to_numeric, errors="coerce")
+
+    id_to_row = {int(v): i for i, v in enumerate(df["id"])}
+    row = id_to_row.get(halo_id)
+    if row is None:
+        return None
+
+    scales, masses, nparts = [], [], []
+    seen = set()
+    current_id = halo_id
+    while row is not None and row not in seen:
+        seen.add(row)
+        scales.append(float(df["scale"].iloc[row]))
+        masses.append(float(df["Mvir"].iloc[row]))
+        nparts.append(int(df["num_prog"].iloc[row]))  # progenitor count as a resolution/activity proxy
+        # Main progenitor: the row whose desc_id is this one and mmp?==1 -
+        # Consistent Trees' own convention for "most massive progenitor".
+        candidates = df.index[(df["desc_id"] == current_id) & (df["mmp?"] == 1)]
+        if len(candidates) == 0:
+            row = None
+        else:
+            row = int(candidates[0])
+            current_id = int(df["id"].iloc[row])
+
+    redshifts = np.array([1.0 / s - 1.0 for s in scales])
+    return MergerHistory(
+        redshift=redshifts, mass=np.array(masses), subfind_id=halo_id,
+        num_particles=np.array(nparts),
+        note=(f"Main-branch mass history for Rockstar halo id {halo_id} at the root "
+              f"snapshot, {len(scales)} snapshots back to z={redshifts.max():.2f} - public "
+              f"CAMELS data release (Rockstar/{suite}/L25n256/{set_name}_{realization}/"
+              f"trees/{filename}, following desc_id/mmp?)"),
     )
 
 
