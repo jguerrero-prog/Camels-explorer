@@ -1,0 +1,49 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as RadioStories from './Radio.stories';
+
+<Meta of={RadioStories} />
+
+# Radio
+
+A new primitive, added 2026-08-05 — no Figma frame in this file shows a radio control yet. Built because `app.py` uses `st.radio(..., horizontal=True)` for several real, mutually-exclusive 2-3 option choices where every option should be visible and directly comparable at a glance (a `SelectField` dropdown would hide the other options behind a click, which is wrong for a binary/ternary choice): Power Spectrum's "k range" and "Multipole", Color-Mass Diagram's "Spectra".
+
+## Token
+
+- `--color-surface-toggle` — the group's own background (same token `Toolbar`'s grid/stacked view-mode switch uses).
+- `--color-surface-toggle-active` — the selected option's background.
+- `--font-label` (Lato) — the field label, matching `SelectField`'s own label typography exactly.
+- `--font-ui` (Inter) — each option's text.
+
+## Spec
+
+<Canvas of={RadioStories.KRange} />
+<Canvas of={RadioStories.Multipole} />
+<Controls />
+
+- Label above (`--color-text-muted`, matches `SelectField.mdx`'s own label spec), then a segmented group of equal-width pill buttons, optional caption below.
+- **Deliberately not a new visual language.** This reuses `Toolbar`'s existing view-mode-toggle treatment (`--color-surface-toggle` container, `--color-surface-toggle-active` selected state) rather than inventing new colors for what's structurally the same "pick one of a few visible options" interaction — see `Toolbar.mdx`.
+- All options render at equal width (`flex: 1`) regardless of label length — real usage never has more than 3 options, so this doesn't get cramped in practice.
+
+## Usecase
+
+- Real usage: `PowerSpectrumSidebar`'s "k range" (2 options: Standard / All-k) and conditionally-shown "Multipole" (3 options: P0/P2/P4, only visible once an RSD axis is picked) — see `PowerSpectrumSidebar.mdx`.
+- **Not a replacement for `SelectField`.** Use `Radio` when every option needs to stay visible for direct comparison and there are only a handful (2-3); use `SelectField` when there are many options or screen space is tight. `st.radio` vs. `st.selectbox` in `app.py` draws this same line — Suite/Set/Field pickers (many options) stay `SelectField`/`SelectField`-backed, while k-range/multipole/spectra (2-3 mutually exclusive, comparison-worthy options) become `Radio`.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { Radio } from '@/components/Radio/Radio';
+
+function KRangePicker() {
+  const [kRange, setKRange] = useState('Standard (k ≤ ~25 h/Mpc)');
+  return (
+    <Radio
+      label="k range"
+      value={kRange}
+      options={['Standard (k ≤ ~25 h/Mpc)', 'All-k (HIPSTER, up to k~1000 h/Mpc)']}
+      onChange={setKRange}
+    />
+  );
+}
+```
