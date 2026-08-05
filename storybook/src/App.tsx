@@ -162,7 +162,6 @@ export function App() {
   };
 
   const focusedTile = tiles.find((t) => t.id === focusedTileId);
-  const focusedIndex = tiles.findIndex((t) => t.id === focusedTileId);
 
   return (
     <div className="app-shell">
@@ -176,7 +175,6 @@ export function App() {
       )}
       {!activePanel && focusedTile?.kind === 'stellar-mass-function' && (
         <StellarMassFunctionSidebar
-          panelLabel={`Panel ${focusedIndex + 1} · Focused`}
           params={focusedTile.params}
           onChange={(params) => refetchTile(focusedTile.id, params)}
           onRemove={() => removeTile(focusedTile.id)}

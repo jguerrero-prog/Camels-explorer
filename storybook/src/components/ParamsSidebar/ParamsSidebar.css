@@ -10,16 +10,6 @@
   box-sizing: border-box;
 }
 
-.params-sidebar__eyebrow {
-  margin: 0;
-  font-family: var(--font-label);
-  font-weight: 700;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-}
-
 .params-sidebar__title {
   margin: 0;
   font-family: var(--font-ui);

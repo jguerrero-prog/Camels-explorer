@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Plotly from 'plotly.js-dist-min';
 import createPlotlyComponent from 'react-plotly.js/factory';
 import './PlotChart.css';
@@ -29,6 +29,8 @@ const LINE_COLORS = ['#7B2D8E', '#E8A030', '#3D8BE8', '#E63946'];
 export function PlotChart({ series, xLabel, yLabel, logX = true, logY = true, imageUrl }: PlotChartProps) {
   const [mode, setMode] = useState<'static' | 'interactive'>(imageUrl ? 'static' : 'interactive');
   const [imageError, setImageError] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const graphDivRef = useRef<HTMLElement | null>(null);
 
   const data = useMemo(
     () =>
@@ -60,8 +62,24 @@ export function PlotChart({ series, xLabel, yLabel, logX = true, logY = true, im
 
   const showStatic = imageUrl && mode === 'static';
 
+  // react-plotly.js's own `useResizeHandler` only listens for *window*
+  // resize events - it never fires when this container shrinks/grows
+  // because a flex sibling changed (e.g. UnderlyingHalos expanding below
+  // it), a real bug caught directly: toggling to Interactive then
+  // expanding "View underlying halos" left Plotly rendered at its old,
+  // larger size, visually overlapping the table below. A ResizeObserver on
+  // the actual container catches every resize cause, not just the window's.
+  useEffect(() => {
+    if (mode !== 'interactive' || !containerRef.current) return;
+    const observer = new ResizeObserver(() => {
+      if (graphDivRef.current) Plotly.Plots.resize(graphDivRef.current);
+    });
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [mode]);
+
   return (
-    <div className="plot-chart">
+    <div className="plot-chart" ref={containerRef}>
       {imageUrl && (
         <div className="plot-chart__toggle">
           <button
@@ -104,6 +122,12 @@ export function PlotChart({ series, xLabel, yLabel, logX = true, logY = true, im
           config={{ displayModeBar: false, responsive: true }}
           style={{ width: '100%', height: '100%' }}
           useResizeHandler
+          onInitialized={(_figure, graphDiv) => {
+            graphDivRef.current = graphDiv;
+          }}
+          onUpdate={(_figure, graphDiv) => {
+            graphDivRef.current = graphDiv;
+          }}
         />
       )}
     </div>

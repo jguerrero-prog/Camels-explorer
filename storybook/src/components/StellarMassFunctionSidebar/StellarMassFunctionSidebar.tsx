@@ -24,7 +24,6 @@ type CatalogSet = { name: string; label: string; realizations: number; descripti
 type Catalog = { suites: string[]; sets: CatalogSet[]; statistics: string[] };
 
 export type StellarMassFunctionSidebarProps = {
-  panelLabel: string;
   params: StellarMassFunctionParams;
   onChange: (params: StellarMassFunctionParams) => void;
   onRemove: () => void;
@@ -35,7 +34,7 @@ export type StellarMassFunctionSidebarProps = {
  * (the shell) with the exact real fields this statistic's backend call
  * consumes: Suite, Set, Compare mode, Realizations (or a single Realization
  * when Compare mode is off), Min/Max stellar mass, Bins, Remove plot. */
-export function StellarMassFunctionSidebar({ panelLabel, params, onChange, onRemove }: StellarMassFunctionSidebarProps) {
+export function StellarMassFunctionSidebar({ params, onChange, onRemove }: StellarMassFunctionSidebarProps) {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
 
   useEffect(() => {
@@ -52,7 +51,7 @@ export function StellarMassFunctionSidebar({ panelLabel, params, onChange, onRem
   const activeSet = catalog?.sets.find((s) => s.name === params.setName);
 
   return (
-    <ParamsSidebar panelLabel={panelLabel} title="Stellar Mass Function">
+    <ParamsSidebar title="Stellar Mass Function">
       <SelectField
         label="Suite"
         value={params.suite}
@@ -88,6 +87,8 @@ export function StellarMassFunctionSidebar({ panelLabel, params, onChange, onRem
             if (remaining.length > 0) onChange({ ...params, realizations: remaining });
           }}
           placeholder="Add realization…"
+          caption={activeSet ? `${activeSet.realizations.toLocaleString()} realizations available` : undefined}
+          options={activeSet ? Array.from({ length: activeSet.realizations }, (_, i) => String(i)) : undefined}
         />
       ) : (
         <NumberStepper

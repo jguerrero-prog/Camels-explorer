@@ -6,6 +6,7 @@
   width: 76px;
   height: 100%;
   padding: 16px 0 24px;
+  box-sizing: border-box;
   background: var(--color-surface-chrome);
   border-right: 1px solid var(--color-border);
 }
