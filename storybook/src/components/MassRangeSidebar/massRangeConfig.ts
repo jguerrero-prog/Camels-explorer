@@ -19,6 +19,9 @@ export type MassRangeConfig = {
   maxParam: 'SMmax' | 'RMmax';
   minLabel: string;
   maxLabel: string;
+  /** ParamsReadout's own label for the combined min-max range (PlotTile's
+   * readout column, not the sidebar's own two NumberSteppers above). */
+  rangeLabel: string;
   defaultMin: number;
   defaultMax: number;
   minStep: number;
@@ -42,6 +45,7 @@ export const MASS_RANGE_CONFIGS: Record<MassRangeStatistic, MassRangeConfig> = {
     maxParam: 'SMmax',
     minLabel: 'Min stellar mass [Msun/h]',
     maxLabel: 'Max stellar mass [Msun/h]',
+    rangeLabel: 'Stellar mass range',
     defaultMin: 1e9,
     defaultMax: 5e11,
     minStep: 1e8,
@@ -58,6 +62,7 @@ export const MASS_RANGE_CONFIGS: Record<MassRangeStatistic, MassRangeConfig> = {
     maxParam: 'RMmax',
     minLabel: 'Min reduced mass [Msun/h]',
     maxLabel: 'Max reduced mass [Msun/h]',
+    rangeLabel: 'Reduced mass range',
     defaultMin: 1e10,
     defaultMax: 1e14,
     minStep: 1e9,
@@ -74,6 +79,7 @@ export const MASS_RANGE_CONFIGS: Record<MassRangeStatistic, MassRangeConfig> = {
     maxParam: 'RMmax',
     minLabel: 'Min reduced mass [Msun/h]',
     maxLabel: 'Max reduced mass [Msun/h]',
+    rangeLabel: 'Reduced mass range',
     defaultMin: 1e10,
     defaultMax: 1e14,
     minStep: 1e9,

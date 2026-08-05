@@ -5,7 +5,7 @@ import * as PlotChartStories from './PlotChart.stories';
 
 # PlotChart
 
-The rendered-plot card from Figma node `1019:10` ("Stellar Mass Function drill-down"). Renders two genuinely different ways, matching a real precedent already established in `app.py`: a **static, server-rendered matplotlib PNG** (`backend.py`'s `render_stellar_mass_function_png`, served by `GET /api/stellar-mass-function/plot.png`) is the **default**, with an **Interactive** toggle to the same data rendered live via `plotly.js-dist-min` + `react-plotly.js/factory`.
+The rendered-plot card from Figma node `1019:10` ("Stellar Mass Function drill-down"). Renders two genuinely different ways, matching a real precedent already established in `app.py`: a **static, server-rendered matplotlib PNG** (`backend.py`'s `_render_mass_range_png`, served by each statistic's own `.../plot.png` endpoint — see `MassRangeSidebar.mdx`) is the **default**, with an **Interactive** toggle to the same data rendered live via `plotly.js-dist-min` + `react-plotly.js/factory`.
 
 **Corrected 2026-08-04, real bug fixed:** an earlier version of this component only ever rendered Plotly, no static option. Direct user feedback: *"It's suppose to render the matplotlib first, with an option to make it interactive with plotly via a toggle perhaps."* Checked against `app.py` directly rather than guessing — its generic 1D-statistics plotting block (the one Stellar Mass Function, Power Spectrum, Baryon Fraction, and SFR History all share) initializes `use_interactive = True` but only *acts* on it `if statistic == "Halo Mass Function"` — every other statistic, Stellar Mass Function included, has always rendered through `st.pyplot()` (static matplotlib). Plotly was only ever an experimental toggle for one statistic. This component now matches that real precedent instead of inventing its own.
 
@@ -36,17 +36,20 @@ The rendered-plot card from Figma node `1019:10` ("Stellar Mass Function drill-d
 
 ## Usecase
 
-- Real usage: `PlotTile`'s chart panel. `imageUrl` is built once from the tile's real params (suite/set/realizations/snapnum/SMmin/SMmax/bins) — see `lib/api.ts`'s `stellarMassFunctionImageUrl`. `series`/`xLabel`/`yLabel`/`logX`/`logY` come from the same tile's `GET /api/stellar-mass-function` JSON fetch, so switching to Interactive never triggers a second network request — both modes render from data already in hand (the image fetch and the JSON fetch happen independently, in parallel).
-- `series` accepts more than one entry specifically for compare/overlay mode — a single-series chart is just the `series.length === 1` case, not a separate code path. Compare mode's `imageUrl` includes one `realizations=` query param per selected realization, matching `render_stellar_mass_function_png`'s real per-realization legend.
+- Real usage: `PlotTile`'s chart panel. `imageUrl` is built once from the tile's real params (suite/set/realizations/snapnum/mass range/bins) — see `lib/api.ts`'s `massRangeImageUrl`. `series`/`xLabel`/`yLabel`/`logX`/`logY` come from the same tile's own JSON fetch, so switching to Interactive never triggers a second network request — both modes render from data already in hand (the image fetch and the JSON fetch happen independently, in parallel).
+- `series` accepts more than one entry specifically for compare/overlay mode — a single-series chart is just the `series.length === 1` case, not a separate code path. Compare mode's `imageUrl` includes one `realizations=` query param per selected realization, matching `_render_mass_range_png`'s real per-realization legend.
 - Any chart with no real matplotlib render built yet should omit `imageUrl` entirely (Interactive-only, no toggle) rather than pointing at a nonexistent endpoint — do not fabricate a URL just to show the toggle UI.
+- **Extended 2026-08-05** beyond Stellar Mass Function to Halo Mass Function and Baryon Fraction — same component, unchanged; only the caller's `imageUrl`/`series` source differs (see `MassRangeSidebar.mdx`). Baryon Fraction is the one real case so far where `logY` is `false` (its own `get_baryon_fraction` sets `log_y=False`, a genuinely linear axis, not an oversight) — worth remembering if a future statistic's chart looks unexpectedly compressed on a log axis.
 
 ## Code
 
 ```tsx
 import { PlotChart } from '@/components/PlotChart/PlotChart';
-import { stellarMassFunctionImageUrl } from '@/lib/api';
+import { massRangeImageUrl } from '@/lib/api';
+import { MASS_RANGE_CONFIGS } from '@/components/MassRangeSidebar/massRangeConfig';
 
-function StellarMassFunctionChart({ result, params }) {
+function MassRangeChart({ statistic, result, params }) {
+  const config = MASS_RANGE_CONFIGS[statistic];
   return (
     <PlotChart
       series={[{ label: `${params.setName}_${params.realizations[0]}`, x: result.x, y: result.y }]}
@@ -54,7 +57,7 @@ function StellarMassFunctionChart({ result, params }) {
       yLabel={result.y_label}
       logX={result.log_x}
       logY={result.log_y}
-      imageUrl={stellarMassFunctionImageUrl(params)}
+      imageUrl={massRangeImageUrl(config, params)}
     />
   );
 }

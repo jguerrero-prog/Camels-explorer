@@ -14,55 +14,66 @@ export type Result = {
   note: string;
 };
 
-export async function fetchStellarMassFunction(params: {
-  suite: string;
-  setName: string;
-  realization: number;
-  snapnum: number;
-  SMmin: number;
-  SMmax: number;
-  bins: number;
-}): Promise<Result> {
+/** Real fetch for any of the three "mass range" statistics (Stellar Mass
+ * Function, Halo Mass Function, Baryon Fraction) - see
+ * MassRangeSidebar/massRangeConfig.ts. `config` supplies the real endpoint
+ * path and mass-param names (SMmin/SMmax vs. RMmin/RMmax), which are the
+ * only real differences in these three statistics' backend.py signatures. */
+export async function fetchMassRangeResult(
+  config: { endpoint: string; minParam: string; maxParam: string },
+  params: {
+    suite: string;
+    setName: string;
+    realization: number;
+    snapnum: number;
+    min: number;
+    max: number;
+    bins: number;
+  },
+): Promise<Result> {
   const qs = new URLSearchParams({
     suite: params.suite,
     set_name: params.setName,
     realization: String(params.realization),
     snapnum: String(params.snapnum),
-    SMmin: String(params.SMmin),
-    SMmax: String(params.SMmax),
     bins: String(params.bins),
     fetch_public: 'true',
   });
-  const res = await fetch(`${API_BASE}/stellar-mass-function?${qs}`);
+  qs.set(config.minParam, String(params.min));
+  qs.set(config.maxParam, String(params.max));
+  const res = await fetch(`${API_BASE}/${config.endpoint}?${qs}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
 /** Deterministic URL for the real, server-rendered matplotlib PNG (see
- * backend.py's render_stellar_mass_function_png / PlotChart.mdx). Query
- * params are always added in the same order and `realizations` is joined
- * in array order (not sorted) - given the same params object, this always
- * returns the identical string, so passing it to an <img src> never causes
- * a spurious re-fetch from an incidentally-reordered query string. */
-export function stellarMassFunctionImageUrl(params: {
-  suite: string;
-  setName: string;
-  realizations: number[];
-  snapnum: number;
-  SMmin: number;
-  SMmax: number;
-  bins: number;
-}): string {
+ * backend.py's _render_mass_range_png / PlotChart.mdx). Query params are
+ * always added in the same order and `realizations` is joined in array
+ * order (not sorted) - given the same params object, this always returns
+ * the identical string, so passing it to an <img src> never causes a
+ * spurious re-fetch from an incidentally-reordered query string. */
+export function massRangeImageUrl(
+  config: { endpoint: string; minParam: string; maxParam: string },
+  params: {
+    suite: string;
+    setName: string;
+    realizations: number[];
+    snapnum: number;
+    min: number;
+    max: number;
+    bins: number;
+  },
+): string {
   const qs = new URLSearchParams();
   qs.set('suite', params.suite);
   qs.set('set_name', params.setName);
   qs.set('snapnum', String(params.snapnum));
-  qs.set('SMmin', String(params.SMmin));
-  qs.set('SMmax', String(params.SMmax));
+  qs.set(config.minParam, String(params.min));
+  qs.set(config.maxParam, String(params.max));
   qs.set('bins', String(params.bins));
   for (const realization of params.realizations) qs.append('realizations', String(realization));
   qs.set('fetch_public', 'true');
-  return `${API_BASE}/stellar-mass-function/plot.png?${qs}`;
+  return `${API_BASE}/${config.endpoint}/plot.png?${qs}`;
 }
 
 export type HaloCatalogRow = Record<string, number>;

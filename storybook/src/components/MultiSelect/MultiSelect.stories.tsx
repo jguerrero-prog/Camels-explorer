@@ -32,7 +32,7 @@ export const Playground: Story = {
   render: () => <Interactive />,
 };
 
-/** Real usage: StellarMassFunctionSidebar's "Realizations to compare" -
+/** Real usage: MassRangeSidebar's "Realizations to compare" -
  * caption shows the total available count, and the chevron opens a
  * dropdown of every valid value not already added (real usage: every
  * realization 0-999 for a 1,000-realization set). */

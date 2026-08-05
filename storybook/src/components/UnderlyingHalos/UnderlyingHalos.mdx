@@ -52,6 +52,10 @@ The collapsible "View underlying halos" section under a rendered plot, from Figm
 - Download CSV and every column-management action (hide/pin/show/fullscreen) are genuinely functional in every context (Storybook or the real app) since they operate entirely on props already in memory — no network call involved.
 - Hidden/pinned column state is independent per mode (curated vs. raw) — the two column sets have different keys, so toggling "Show all fields" doesn't carry over or reset the other mode's customization.
 
+**Real gap disclosed, not hidden — added 2026-08-05 when `MassRangeSidebar` generalized beyond Stellar Mass Function.** `get_halo_catalog()` always returns the same real per-*subhalo* Subfind catalog, regardless of which statistic the tile is showing. That's an exact match for Stellar Mass Function (its own `Stellar Mass` column is literally the histogrammed quantity), but Halo Mass Function and Baryon Fraction are actually binned by each halo's *FoF group* mass (`catalog["group_mass"]` in `backend.py` — confirmed by reading `get_halo_mass_function`/`get_baryon_fraction` directly), a coarser, halo-level quantity with **no column in this table at all**. Rather than relabel the "Minimum stellar mass" filter to imply it's filtering halo mass (it isn't — the real column doesn't exist here), `App.tsx` passes a `massContextNote` string for those two statistics, rendered as a muted disclosure line above the table (both inline and in fullscreen) stating the mismatch plainly. `massContextNote` is `undefined` for Stellar Mass Function, so nothing renders there.
+
+<Canvas of={UnderlyingHalosStories.WithMassContextNote} />
+
 ## Code
 
 ```tsx
