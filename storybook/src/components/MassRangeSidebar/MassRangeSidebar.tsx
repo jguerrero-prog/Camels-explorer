@@ -6,36 +6,43 @@ import { Slider } from '../Slider/Slider';
 import { Checkbox } from '../Checkbox/Checkbox';
 import { MultiSelect } from '../MultiSelect/MultiSelect';
 import { Button } from '../Button/Button';
+import type { MassRangeStatistic } from './massRangeConfig';
+import { MASS_RANGE_CONFIGS } from './massRangeConfig';
 
 // Dev-only, matches AddPlotModal/CuratedTab.tsx's own API_BASE.
 const API_BASE = 'http://localhost:8010/api';
 
-export type StellarMassFunctionParams = {
+export type MassRangeParams = {
   suite: string;
   setName: string;
   compareMode: boolean;
   realizations: number[];
-  SMmin: number;
-  SMmax: number;
+  min: number;
+  max: number;
   bins: number;
 };
 
 type CatalogSet = { name: string; label: string; realizations: number; description: string };
 type Catalog = { suites: string[]; sets: CatalogSet[]; statistics: string[] };
 
-export type StellarMassFunctionSidebarProps = {
-  params: StellarMassFunctionParams;
-  onChange: (params: StellarMassFunctionParams) => void;
+export type MassRangeSidebarProps = {
+  statistic: MassRangeStatistic;
+  params: MassRangeParams;
+  onChange: (params: MassRangeParams) => void;
   onRemove: () => void;
 };
 
-/** The real per-tile params panel for Stellar Mass Function, from Figma
- * node 1019:10 - see StellarMassFunctionSidebar.mdx. Composes ParamsSidebar
- * (the shell) with the exact real fields this statistic's backend call
- * consumes: Suite, Set, Compare mode, Realizations (or a single Realization
- * when Compare mode is off), Min/Max stellar mass, Bins, Remove plot. */
-export function StellarMassFunctionSidebar({ params, onChange, onRemove }: StellarMassFunctionSidebarProps) {
+/** The real, wired `ParamsSidebar` composition shared by the three
+ * statistics with an identical suite/set/realization/mass-range/bins shape
+ * (Stellar Mass Function, Halo Mass Function, Baryon Fraction - see
+ * massRangeConfig.ts). Originally built statistic-specific as
+ * `StellarMassFunctionSidebar` (Figma node `1019:10`); generalized
+ * 2026-08-05 once Halo Mass Function/Baryon Fraction's real backend.py
+ * signatures were confirmed to differ only in mass-param names and
+ * per-statistic defaults, not shape - see MassRangeSidebar.mdx. */
+export function MassRangeSidebar({ statistic, params, onChange, onRemove }: MassRangeSidebarProps) {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const config = MASS_RANGE_CONFIGS[statistic];
 
   useEffect(() => {
     let cancelled = false;
@@ -51,7 +58,7 @@ export function StellarMassFunctionSidebar({ params, onChange, onRemove }: Stell
   const activeSet = catalog?.sets.find((s) => s.name === params.setName);
 
   return (
-    <ParamsSidebar title="Stellar Mass Function">
+    <ParamsSidebar title={statistic}>
       <SelectField
         label="Suite"
         value={params.suite}
@@ -99,23 +106,23 @@ export function StellarMassFunctionSidebar({ params, onChange, onRemove }: Stell
         />
       )}
       <NumberStepper
-        label="Min stellar mass [Msun/h]"
-        value={params.SMmin}
-        step={1e8}
+        label={config.minLabel}
+        value={params.min}
+        step={config.minStep}
         formatValue={(v) => v.toExponential(1)}
-        onChange={(SMmin) => onChange({ ...params, SMmin })}
+        onChange={(min) => onChange({ ...params, min })}
       />
       <NumberStepper
-        label="Max stellar mass [Msun/h]"
-        value={params.SMmax}
-        step={1e10}
+        label={config.maxLabel}
+        value={params.max}
+        step={config.maxStep}
         formatValue={(v) => v.toExponential(1)}
-        onChange={(SMmax) => onChange({ ...params, SMmax })}
+        onChange={(max) => onChange({ ...params, max })}
       />
       <Slider
         label="Bins"
-        min={5}
-        max={60}
+        min={config.binsMin}
+        max={config.binsMax}
         value={params.bins}
         onChange={(bins) => onChange({ ...params, bins })}
       />

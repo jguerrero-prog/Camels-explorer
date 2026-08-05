@@ -1,0 +1,68 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as MassRangeSidebarStories from './MassRangeSidebar.stories';
+
+<Meta of={MassRangeSidebarStories} />
+
+# MassRangeSidebar
+
+The real, wired `ParamsSidebar` composition shared by the three statistics whose real `backend.py` call has the same shape: suite/set/realization/snapnum + a log-spaced mass range + bins, returning the same `Result` dataclass (`get_stellar_mass_function`, `get_halo_mass_function`, `get_baryon_fraction`). Originally built Stellar-Mass-Function-only as `StellarMassFunctionSidebar` (Figma node `1019:10`'s left params column); generalized 2026-08-05 once Halo Mass Function's and Baryon Fraction's real signatures were confirmed (`sed -n` on `backend.py`) to differ from Stellar Mass Function only in mass-param names (`SMmin`/`SMmax` vs. shared `RMmin`/`RMmax`) and per-statistic defaults — not shape.
+
+**Deliberately not a wider config system.** Power Spectrum (grid/MAS/threads/ptype/k_range/rsd_axis/multipole) and SFR History (z-range + a symbolic-regression-fit overlay) have real, different control surfaces — forcing them through this same `massRangeConfig.ts` table would be the premature abstraction this project's own instructions warn against. Those get their own components when built.
+
+## Token
+
+Inherits everything from `ParamsSidebar.mdx`. Individual fields carry their own tokens — see `SelectField.mdx`, `NumberStepper.mdx`, `Slider.mdx`, `Checkbox.mdx`, `MultiSelect.mdx`, `Button.mdx`.
+
+## Spec
+
+<Canvas of={MassRangeSidebarStories.StellarMassFunction} />
+<Canvas of={MassRangeSidebarStories.HaloMassFunction} />
+<Canvas of={MassRangeSidebarStories.BaryonFraction} />
+<Controls />
+
+- `title` (passed straight through to `ParamsSidebar`) is the statistic name itself — no separate label prop.
+- Suite / Set: `SelectField`, options from the same real `GET /api/metadata` endpoint `AddPlotModal`'s Curated tab uses.
+- Compare mode: `Checkbox`. Off → a single `NumberStepper` "Realization". On → a `MultiSelect` "Realizations to compare" (chips, add by typing a number + Enter) — this is what drives `PlotTile`'s multi-series overlay.
+- Min/Max mass: two `NumberStepper`s, exponential-formatted (`1.0e+9`) — label text and step size come from `massRangeConfig.ts` per statistic (real values from `app.py`'s own sidebar block: Stellar Mass Function "Min/Max stellar mass", Halo Mass Function/Baryon Fraction "Min/Max reduced mass").
+- Bins: a `Slider` — range and default come from the same config table, matching `app.py`'s three real slider ranges exactly (Stellar Mass Function 5–60/10, Halo Mass Function 5–60/30, Baryon Fraction 5–30/15 — Baryon Fraction's own real range is narrower, not a copy-paste of the other two).
+- Remove plot: `Button` `variant="secondary"`.
+
+**Real, deliberate deviation from the Figma frame:** the frame's Min/Max mass fields render as a plain white box with raw, unstyled ▲▼ glyphs — not this app's actual `NumberStepper` design (dark chrome, styled +/- buttons, editable text). Given this app's own very recent, direct correction that steppers must use the real `NumberStepper` component (see `NumberStepper.mdx`'s 2026-08-04 entry), that raw frame rendering is treated as an unstyled Figma placeholder, not a confirmed alternate stepper design.
+
+## Usecase
+
+- Real usage: `App.tsx`'s left 280px slot, shown only when a `PlotTile` of one of these three statistics is focused (mutually exclusive with `IconRail`'s Project/Files panels, matching `ParamsSidebar.mdx`'s existing rule).
+- Every field here maps 1:1 to a real `backend.py` parameter (`suite`, `set_name`, `realization`, min/max mass, `bins`) — nothing here is decorative. Changing any field triggers a real refetch of both the statistic's own JSON endpoint (one call per selected realization) and `GET /api/halo-catalog`.
+- Compare mode's `MultiSelect` always keeps at least one realization — removing the last remaining chip is a no-op rather than leaving the chart with zero series.
+- **Still open (same as before generalizing):** the halo table shown below each of these three statistics' chart is the same real per-*subhalo* Subfind catalog every time — Halo Mass Function and Baryon Fraction are actually binned by each FoF *group's* total mass, a different, coarser quantity that has no column in this per-subhalo table at all. See `UnderlyingHalos.mdx`'s 2026-08-05 note for how this is disclosed rather than silently glossed over.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { MassRangeSidebar } from '@/components/MassRangeSidebar/MassRangeSidebar';
+import type { MassRangeParams } from '@/components/MassRangeSidebar/MassRangeSidebar';
+import { MASS_RANGE_CONFIGS } from '@/components/MassRangeSidebar/massRangeConfig';
+
+function FocusedTileSidebar() {
+  const config = MASS_RANGE_CONFIGS['Halo Mass Function'];
+  const [params, setParams] = useState<MassRangeParams>({
+    suite: 'IllustrisTNG',
+    setName: 'LH',
+    compareMode: false,
+    realizations: [42],
+    min: config.defaultMin,
+    max: config.defaultMax,
+    bins: config.defaultBins,
+  });
+
+  return (
+    <MassRangeSidebar
+      statistic="Halo Mass Function"
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```
