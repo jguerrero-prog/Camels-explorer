@@ -62,3 +62,77 @@
 .multi-select__input::placeholder {
   color: var(--color-text-muted);
 }
+
+.multi-select__trigger {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+
+.multi-select__trigger:hover {
+  background: var(--color-surface-toggle-active);
+}
+
+.multi-select__chevron {
+  width: 10px;
+  height: 6px;
+  transition: transform 120ms ease;
+}
+
+/* Portal-rendered dropdown - same technique as SelectField's own open
+   menu (document.body portal, position: fixed set inline from the
+   trigger's real on-screen rect) so it can never be clipped by a
+   scrollable ancestor. */
+.multi-select__menu {
+  z-index: 1000;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--color-surface-chrome);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  box-shadow: 0px 10px 24px -6px rgba(0, 0, 0, 0.5);
+  max-height: 240px;
+  overflow-y: auto;
+  box-sizing: border-box;
+}
+
+.multi-select__option {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.multi-select__option:hover {
+  background: var(--color-surface-toggle-active);
+}
+
+.multi-select__menu-empty {
+  padding: 8px 10px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.multi-select__caption {
+  margin: 0;
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--color-text-muted);
+}

@@ -24,6 +24,8 @@ Inherits everything from `ParamsSidebar.mdx`. Individual fields carry their own 
 
 **Real, deliberate deviation from the Figma frame:** the frame's Min/Max stellar-mass fields render as a plain white box with raw, unstyled ▲▼ glyphs — not this app's actual `NumberStepper` design (dark chrome, styled +/- buttons, editable text). Given this app's own very recent, direct correction that steppers must use the real `NumberStepper` component (see `NumberStepper.mdx`'s 2026-08-04 entry), that raw frame rendering is treated as an unstyled Figma placeholder, not a confirmed alternate stepper design — `NumberStepper` is used here for consistency with every other numeric field in this app.
 
+**Removed 2026-08-04, real bug fixed:** this component originally took a `panelLabel` prop ("Panel 1 · Focused") and passed it through to `ParamsSidebar`'s eyebrow — removed on direct user feedback along with the eyebrow itself, see `ParamsSidebar.mdx`.
+
 ## Usecase
 
 - Real usage: `App.tsx`'s left 280px slot, shown only when a `PlotTile` is focused (mutually exclusive with `IconRail`'s Project/Files panels, matching `ParamsSidebar.mdx`'s existing rule).
@@ -50,7 +52,6 @@ function FocusedTileSidebar() {
 
   return (
     <StellarMassFunctionSidebar
-      panelLabel="Panel 1 · Focused"
       params={params}
       onChange={setParams}
       onRemove={() => {/* remove this tile from the canvas */}}

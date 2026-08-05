@@ -31,3 +31,27 @@ function Interactive() {
 export const Playground: Story = {
   render: () => <Interactive />,
 };
+
+/** Real usage: StellarMassFunctionSidebar's "Realizations to compare" -
+ * caption shows the total available count, and the chevron opens a
+ * dropdown of every valid value not already added (real usage: every
+ * realization 0-999 for a 1,000-realization set). */
+function WithOptionsDemo() {
+  const [values, setValues] = useState(['278', '3']);
+  const allRealizations = Array.from({ length: 1000 }, (_, i) => String(i));
+  return (
+    <MultiSelect
+      label="Realizations to compare"
+      values={values}
+      onRemove={(v) => setValues((prev) => prev.filter((x) => x !== v))}
+      onAdd={(v) => setValues((prev) => (prev.includes(v) ? prev : [...prev, v]))}
+      placeholder="Add realization…"
+      caption="1,000 realizations available"
+      options={allRealizations}
+    />
+  );
+}
+
+export const WithOptions: Story = {
+  render: () => <WithOptionsDemo />,
+};

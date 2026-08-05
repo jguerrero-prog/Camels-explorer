@@ -11,28 +11,33 @@ A chip-based multi-value field. Real source: Figma node `1019:37` ("field-Realiz
 
 - `--color-surface-control` / `--color-border-subtle` — the outer box, same as `SelectField`'s
 - `--color-surface-chip` (`--neutral-920`, new) — each chip's fill, distinct from any other surface token in the system so far
-- `--font-ui` (Inter) — chip values and the add-input's typed text
-- `--color-text-muted` — the × remove glyph and the input's placeholder
+- `--color-surface-chrome` — the dropdown menu's own background (matches `SelectField`'s menu)
+- `--font-ui` (Inter) — chip values, the add-input's typed text, and dropdown option labels
+- `--color-text-muted` — the × remove glyph, the input's placeholder, and the caption
 
 ## Spec
 
 <Canvas of={MultiSelectStories.Playground} />
 <Controls />
 
-- Label above (12px muted), then a wrapping box (8px padding, 8px border radius) holding chips and an inline text input.
+- Label above (12px muted), then a wrapping box (8px padding, 8px border radius) holding chips, an inline text input, and (when `options` is passed) a chevron trigger.
 - Each chip: 6px radius, `--color-surface-chip` fill, value + a muted "×", the whole chip clickable to remove.
 - The add-input has no visible border of its own — it sits flush inside the shared box, `flex: 1 0 80px` so it always has room to grow/type even with several chips present.
+- Optional `caption` line below the box (11px muted), same pattern as `SelectField`'s/`NumberStepper`'s.
 
-**The Canvas above renders "Multi-select label" and generic chip values, not "Realizations to compare"/"278"/"3"/"Add realization…".** This story demonstrates the control's mechanics, not confirmed copy — the real labels/values are documented in Usecase below and in the Code snippet's illustrative real usage instead.
+**Real bug fixed 2026-08-04 — dropdown affordance added:** this component's own "Still open" note previously flagged that free-typing alone left "which values are actually valid" undiscoverable. Direct user feedback confirmed exactly that gap: real usage should let people pick from a dropdown, not only type. `options` (when passed) renders a chevron trigger that opens a portal-based menu (`document.body`, `position: fixed` from the trigger's real on-screen rect — identical technique to `SelectField`'s own open menu, including its clipping fix) listing every option not already added; picking one calls `onAdd` directly. Typing + Enter still works exactly as before — the dropdown is an addition, not a replacement.
 
-**Still open:**
-- The real frame shows two literal chips ("278", "3") and placeholder text ("Add realization…") — there's no visible autocomplete/suggestion list, so this component's `onAdd` just accepts free text typed then Enter. Whether real usage should constrain input to actual valid realizations (e.g. an autocomplete against the real dataset) is unconfirmed.
-- No visible "already added" / duplicate-prevention state in the real frame — not implemented here.
+<Canvas of={MultiSelectStories.WithOptions} />
+
+**The `Playground` Canvas renders "Multi-select label" and generic chip values, not "Realizations to compare"/"278"/"3"/"Add realization…".** This story demonstrates the control's mechanics, not confirmed copy — the real labels/values are documented in Usecase below and in the Code snippet's illustrative real usage instead. `WithOptions` above is the real shape: caption showing a total count, dropdown listing every valid realization not yet added.
+
+**Still open:** no visible "already added" / duplicate-prevention state beyond simply excluding already-added values from the dropdown list — typing a duplicate value directly is still possible and silently deduplicated by the caller (see `StellarMassFunctionSidebar`'s `onAdd`, which checks `!params.realizations.includes(n)` before adding).
 
 ## Usecase
 
-- Real, confirmed usage: SFR History's "Realizations to compare" field — directly powers Compare mode (see `Checkbox.mdx`) once more than one realization is selected.
+- Real, confirmed usage: `StellarMassFunctionSidebar`'s "Realizations to compare" field — directly powers Compare mode (see `Checkbox.mdx`) once more than one realization is selected. `caption` shows the selected set's real total realization count; `options` is every integer from `0` to `realizations - 1`.
 - Use for any field where a user picks an open-ended set of discrete values, as opposed to `SelectField` (exactly one value from a fixed list).
+- Omit `options` for a field with no fixed valid-value list — the component falls back to free-typing only, no chevron/dropdown rendered at all (see `Playground` above).
 
 ## Code
 
@@ -40,15 +45,17 @@ A chip-based multi-value field. Real source: Figma node `1019:37` ("field-Realiz
 import { useState } from 'react';
 import { MultiSelect } from '@/components/MultiSelect/MultiSelect';
 
-function RealizationsToCompare() {
+function RealizationsToCompare({ totalRealizations }) {
   const [values, setValues] = useState(['278', '3']);
   return (
     <MultiSelect
       label="Realizations to compare"
       values={values}
       onRemove={(v) => setValues((prev) => prev.filter((x) => x !== v))}
-      onAdd={(v) => setValues((prev) => [...prev, v])}
+      onAdd={(v) => setValues((prev) => (prev.includes(v) ? prev : [...prev, v]))}
       placeholder="Add realization…"
+      caption={`${totalRealizations.toLocaleString()} realizations available`}
+      options={Array.from({ length: totalRealizations }, (_, i) => String(i))}
     />
   );
 }

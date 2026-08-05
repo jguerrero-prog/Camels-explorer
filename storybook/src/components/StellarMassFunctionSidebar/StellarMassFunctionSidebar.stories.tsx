@@ -28,7 +28,6 @@ function Interactive() {
   });
   return (
     <StellarMassFunctionSidebar
-      panelLabel="Panel 1 · Focused"
       params={params}
       onChange={setParams}
       onRemove={() => {}}
