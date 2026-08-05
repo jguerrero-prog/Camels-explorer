@@ -6,12 +6,17 @@
 /* Real background (Figma node 1019:133, "underlying-halos-footer") - its
    own distinct surface, not the tile's --color-surface-content bleeding
    through (corrected 2026-08-05, previously `background: none`). */
+/* Real bug fixed 2026-08-05: horizontal padding was 4px (an old value
+   left over from before this had its own background), sitting the
+   chevron/label/count flush against the container's edges. Figma's real
+   value is 20px/14px, matching .underlying-halos__reveal's own 20px
+   horizontal padding below it exactly. */
 .underlying-halos__header {
   width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 4px;
+  padding: 14px 20px;
   background: var(--color-surface-table);
   border: none;
   border-radius: 8px;
