@@ -15,4 +15,32 @@
 .plotly-3d-chart {
   min-height: 520px;
   background: transparent;
+  position: relative;
+}
+
+/* Real feature, added 2026-08-05 on direct request: clicking a point in
+   the 3D scene drops a persistent annotation there (see Plotly3DChart.tsx's
+   `pinned` state) - unlike the default hover label, it survives while the
+   user rotates/pans/zooms elsewhere. This button only appears once a pin
+   exists; dark-chrome pill styling since this chart's own surface is dark
+   now (not PlotChart's white one), matching this app's other small
+   floating controls (e.g. UnderlyingHalos' table toolbar). */
+.plotly-3d-chart__clear-pin {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 2;
+  padding: 6px 12px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  background: var(--color-surface-chrome);
+  color: var(--color-text-primary);
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.plotly-3d-chart__clear-pin:hover {
+  background: var(--color-surface-toggle-active);
 }

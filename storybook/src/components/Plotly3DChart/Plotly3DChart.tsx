@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Plotly from 'plotly.js-dist-min';
 import createPlotlyComponent from 'react-plotly.js/factory';
 import '../PlotChart/PlotChart.css';
@@ -12,6 +12,7 @@ const Plot = createPlotlyComponent(Plotly);
 // '#1A1A1A' text / '#E5E5E5' gridlines for its white surface.
 const AXIS_TEXT_COLOR = '#e5e7eb';
 const AXIS_GRID_COLOR = 'rgba(229, 231, 235, 0.15)';
+const PIN_COLOR = '#e63946'; // matches Radio/Button's own accent-adjacent red, distinct from any trace color
 
 function axisConfig(title: string) {
   return {
@@ -23,6 +24,8 @@ function axisConfig(title: string) {
     zerolinecolor: AXIS_GRID_COLOR,
   };
 }
+
+type PinnedPoint = { x: number; y: number; z: number; text: string };
 
 export type Plotly3DChartProps = {
   /** Pre-built go.Volume/go.Scatter3d-shaped trace objects - callers
@@ -47,6 +50,7 @@ export type Plotly3DChartProps = {
 export function Plotly3DChart({ data }: Plotly3DChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphDivRef = useRef<HTMLElement | null>(null);
+  const [pinned, setPinned] = useState<PinnedPoint | null>(null);
 
   // Same real bug class PlotChart's own Interactive mode already fixed:
   // react-plotly.js's useResizeHandler only catches *window* resizes, not
@@ -63,6 +67,11 @@ export function Plotly3DChart({ data }: Plotly3DChartProps) {
 
   return (
     <div className="plot-chart plotly-3d-chart" ref={containerRef}>
+      {pinned && (
+        <button type="button" className="plotly-3d-chart__clear-pin" onClick={() => setPinned(null)}>
+          Clear pin
+        </button>
+      )}
       <Plot
         data={data}
         layout={{
@@ -72,6 +81,25 @@ export function Plotly3DChart({ data }: Plotly3DChartProps) {
             zaxis: axisConfig('z [Mpc/h]'),
             aspectmode: 'cube',
             bgcolor: 'transparent',
+            // A pinned point renders as a real Plotly 3D scene annotation
+            // (anchored to its own x/y/z, not screen space) - it moves
+            // naturally with the camera as the user rotates/pans/zooms,
+            // and stays put while they explore elsewhere in the scene,
+            // unlike the default hover label which disappears the moment
+            // the pointer leaves that point.
+            annotations: pinned
+              ? [{
+                  x: pinned.x, y: pinned.y, z: pinned.z,
+                  text: pinned.text,
+                  showarrow: true,
+                  arrowhead: 2,
+                  arrowcolor: PIN_COLOR,
+                  font: { color: AXIS_TEXT_COLOR, size: 12 },
+                  bgcolor: 'rgba(20, 20, 26, 0.9)',
+                  bordercolor: PIN_COLOR,
+                  borderpad: 4,
+                }]
+              : [],
           },
           margin: { l: 0, r: 0, t: 0, b: 0 },
           paper_bgcolor: 'transparent',
@@ -85,6 +113,19 @@ export function Plotly3DChart({ data }: Plotly3DChartProps) {
         }}
         onUpdate={(_figure, graphDiv) => {
           graphDivRef.current = graphDiv;
+        }}
+        onClick={(event) => {
+          const point = event.points?.[0] as unknown as
+            { x?: number; y?: number; z?: number; value?: number; text?: string } | undefined;
+          if (!point || point.x === undefined || point.y === undefined || point.z === undefined) return;
+          const lines = [
+            `x: ${point.x.toFixed(2)}`,
+            `y: ${point.y.toFixed(2)}`,
+            `z: ${point.z.toFixed(2)}`,
+          ];
+          if (typeof point.value === 'number') lines.push(`value: ${point.value.toPrecision(4)}`);
+          else if (point.text) lines.push(String(point.text));
+          setPinned({ x: point.x, y: point.y, z: point.z, text: lines.join('<br>') });
         }}
       />
     </div>
