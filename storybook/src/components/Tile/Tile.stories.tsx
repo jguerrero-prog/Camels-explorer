@@ -3,7 +3,7 @@ import { Tile } from './Tile';
 import { CanvasStatsRow } from '../CanvasStatsRow/CanvasStatsRow';
 
 const meta: Meta<typeof Tile> = {
-  title: 'App Shell/Tile',
+  title: 'Sections/Tile',
   component: Tile,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '640px', padding: '16px' }}><Story /></div>],

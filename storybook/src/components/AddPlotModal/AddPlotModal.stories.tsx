@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { AddPlotModal } from './AddPlotModal';
 
 const meta: Meta<typeof AddPlotModal> = {
-  title: 'App Shell/AddPlotModal',
+  title: 'Flows/AddPlotModal',
   component: AddPlotModal,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '100vh', background: 'var(--color-surface-content)' }}><Story /></div>],

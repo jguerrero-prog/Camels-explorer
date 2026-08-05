@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Slider } from './Slider';
 
 const meta: Meta<typeof Slider> = {
-  title: 'Controls/Slider',
+  title: 'Primitives/Slider',
   component: Slider,
   parameters: { layout: 'centered' },
   decorators: [(Story) => <div style={{ width: '280px', background: 'var(--color-surface-chrome)', padding: '16px' }}><Story /></div>],

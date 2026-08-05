@@ -4,7 +4,7 @@ import { StellarMassFunctionSidebar } from './StellarMassFunctionSidebar';
 import type { StellarMassFunctionParams } from './StellarMassFunctionSidebar';
 
 const meta: Meta<typeof StellarMassFunctionSidebar> = {
-  title: 'App Shell/StellarMassFunctionSidebar',
+  title: 'Sections/StellarMassFunctionSidebar',
   component: StellarMassFunctionSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '640px' }}><Story /></div>],

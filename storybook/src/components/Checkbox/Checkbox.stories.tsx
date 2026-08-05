@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Checkbox } from './Checkbox';
 
 const meta: Meta<typeof Checkbox> = {
-  title: 'Controls/Checkbox',
+  title: 'Primitives/Checkbox',
   component: Checkbox,
   parameters: { layout: 'centered' },
   decorators: [(Story) => <div style={{ background: 'var(--color-surface-chrome)', padding: '16px' }}><Story /></div>],
