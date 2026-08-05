@@ -1,0 +1,54 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as DensityField3DSidebarStories from './DensityField3DSidebar.stories';
+
+<Meta of={DensityField3DSidebarStories} />
+
+# DensityField3DSidebar
+
+3D Density Field's real per-tile sidebar, from `app.py`'s own `elif statistic == "3D Density Field":` block — the last statistic to complete all 15.
+
+## Token
+
+Composed entirely from existing fields — see `SingleRealizationFields.mdx`, `SelectField.mdx`, `OptionSlider.mdx`, `Slider.mdx`, `Checkbox.mdx`, `Button.mdx`. Reuses `ParamsSidebar`'s own `__divider` rule directly, same as `SFRHistorySidebar`.
+
+## Spec
+
+<Canvas of={DensityField3DSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Realization: `SingleRealizationFields`.
+- Snapshot: a `Slider`, `0` to `n_snapshots - 1`.
+- Field: `SelectField`, all 13 real CMD fields.
+- Grid resolution: `OptionSlider` over `[16, 32, 64, 128]`, default `32` — matches `app.py`'s own real default and range exactly.
+- Iso-surfaces: a `Slider`, `4`–`25`, default `12`.
+- Opacity: a `Slider`, `0.02`–`0.3`, default `0.08` — needs the real `step={0.01}` fix (see `Slider.mdx`'s 2026-08-05 note); without it this range is too narrow for the browser's default integer step to do anything.
+- A divider, then "Overlay VIDE void catalog": `Checkbox`, default unchecked.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/density-field-3d` (and `GET /api/void-catalog` when the checkbox is on), rendered via `DensityFieldChart` inside `PlotTile`'s `chart.kind: 'plotly-3d'`.
+- **Always has a value** — `get_density_field_3d()` has a real synthetic fallback (a lognormal cosmic-web-like field) when neither the CMD grid nor raw-snapshot gridding path has real data.
+- **No static-image alternative, by design** — this is the one statistic (with 3D Particle Cloud) `app.py` renders exclusively via live interactive Plotly; a screenshot would lose the actual point of rotating/zooming through the volume. See `Plotly3DChart.mdx`.
+- No halos table under this tile — a gridded density field has no per-halo concept.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { DensityField3DSidebar } from '@/components/DensityField3DSidebar/DensityField3DSidebar';
+import type { DensityField3DParams } from '@/components/DensityField3DSidebar/DensityField3DSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<DensityField3DParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 42, snapnum: 33,
+    field: 'Mtot', grid: 32, isoSurfaces: 12, opacity: 0.08, showVoids: false,
+  });
+  return (
+    <DensityField3DSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

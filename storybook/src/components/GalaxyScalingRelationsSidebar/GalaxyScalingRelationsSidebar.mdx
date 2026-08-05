@@ -1,0 +1,50 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as GalaxyScalingRelationsSidebarStories from './GalaxyScalingRelationsSidebar.stories';
+
+<Meta of={GalaxyScalingRelationsSidebarStories} />
+
+# GalaxyScalingRelationsSidebar
+
+Galaxy Scaling Relations' real per-tile sidebar, from `app.py`'s own `elif statistic == "Galaxy Scaling Relations":` block.
+
+## Token
+
+Composed entirely from existing fields — see `SingleRealizationFields.mdx`, `NumberStepper.mdx`, `Slider.mdx`, `Button.mdx`. No tokens of its own.
+
+## Spec
+
+<Canvas of={GalaxyScalingRelationsSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Realization: `SingleRealizationFields` — one of `app.py`'s own `SINGLE_REALIZATION_STATISTICS` (real caption: *"Compare mode doesn't apply to this 4-panel view"*).
+- Snapshot: a `Slider`, `0` to `n_snapshots - 1` — real z-dependence of galaxy scaling relations, same 34-snapshot schedule as Pk/SFRH.
+- Min/Max stellar mass: two `NumberStepper`s, real defaults `1e9`/`5e11` — same shape as `MassRangeSidebar`'s own fields, **not routed through it** since this statistic is single-realization only (`massRangeConfig.ts` is deliberately scoped to the three Compare-mode-capable statistics).
+- Bins: a `Slider`, `5`–`30`, default `12` — matches `app.py`'s own real range exactly (narrower than any `MassRangeSidebar` statistic, since this bins a 2x2-panel scatter, not a histogram).
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/scaling-relations` (JSON) and `/plot.png` (the real combined-image render — see `backend.py`'s `render_scaling_relations_png`).
+- **Always has a value** — `get_scaling_relations()` has a real synthetic fallback (illustrative power-law scalings) for suites/sets without real data, unlike most statistics wired this pass. The one exception: the mass-metallicity panel (`result.metallicity`) is real-data only — `None` in the synthetic path, so the combined image is a 2x2 grid without the 5th row when running synthetic.
+- No halos table under this tile — the 2x2 panel already shows every real per-bin average from the same Subfind catalog a halos table would draw from; a separate `UnderlyingHalos` table would be redundant with what the chart displays.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { GalaxyScalingRelationsSidebar } from '@/components/GalaxyScalingRelationsSidebar/GalaxyScalingRelationsSidebar';
+import type { GalaxyScalingRelationsParams } from '@/components/GalaxyScalingRelationsSidebar/GalaxyScalingRelationsSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<GalaxyScalingRelationsParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 42, snapnum: 33,
+    SMmin: 1e9, SMmax: 5e11, bins: 12,
+  });
+  return (
+    <GalaxyScalingRelationsSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

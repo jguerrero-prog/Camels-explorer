@@ -1,0 +1,51 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as DensityFieldChartStories from './DensityFieldChart.stories';
+
+<Meta of={DensityFieldChartStories} />
+
+# DensityFieldChart
+
+3D Density Field's real chart, from `app.py`'s own `elif statistic == "3D Density Field":` block — a `go.Volume` trace built from the exact same meshgrid + isomin/isomax-by-percentile recipe, plus a real optional VIDE void overlay.
+
+## Token
+
+Composed from `Plotly3DChart` — no tokens of its own. Colors are real, not app tokens: `colorscale: "Inferno"` (matching `app.py`'s literal string) and the void overlay's `cyan`/`lightcyan` markers.
+
+## Spec
+
+<Canvas of={DensityFieldChartStories.Default} />
+<Controls />
+
+- Builds `x`/`y`/`z`/`value` flat arrays from the real `(grid, grid, grid)` density array and `box_size`, matching `app.py`'s own `np.meshgrid(coords, coords, coords, indexing="ij")` exactly (coordinates run `0` to `box_size` in `grid` steps).
+- `isomin`/`isomax` are the real 60th/99.5th percentile of the value array — same real thresholds `app.py` uses (`np.percentile(vals, 60)`/`np.percentile(vals, 99.5)`), not arbitrary round numbers.
+- `colorbar.title` is `"ρ/ρ̄"` for the four mass-type fields (Mtot/Mgas/Mcdm/Mstar) or the raw field name otherwise — matches `app.py`'s own `colorbar_title` conditional.
+
+<Canvas of={DensityFieldChartStories.WithVoidOverlay} />
+
+- **Void overlay** (`voids` prop): a second `go.Scatter3d` trace, cyan markers sized by real radius (`Math.min(40, Math.max(6, r * 3))`, matching `app.py`'s own `np.clip(voids.radius * 3, 6, 40)`), real hover text built from `voids.extra`'s real columns (`void_id`, `num_part`, `vol`, `tree_level`, `n_children`) when present, or just radius/density-contrast otherwise — matches `app.py`'s own two-branch hover-text f-string exactly.
+- **Real, disclosed follow-up**: `app.py` also shows the void catalog as its own real, downloadable table (`st.dataframe` + CSV export) in an expander below the chart when voids are shown. That table isn't built here — routing it through `UnderlyingHalos` would be wrong (its curated columns/"Minimum stellar mass" filter/"halos" footer are Subfind-specific, not VIDE-specific — the same reasoning `UnderlyingHalos.mdx` already gives for Halo Gas Profiles' own separate `metadata` table). A real, deferred follow-up, not silently dropped.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas, via `PlotTile`'s `chart.kind: 'plotly-3d'` — fed real data from `GET /api/density-field-3d` (and `GET /api/void-catalog` when the "Overlay VIDE void catalog" checkbox is on).
+- Always has a value (real CMD grid, real raw-snapshot gridding, or a synthetic lognormal-field fallback) — `get_density_field_3d()` never returns `None`.
+- Performance note, matching `app.py`'s own real help text ("Higher = finer structure but slower to rotate"): building the flat `x`/`y`/`z`/`value` arrays is a real `O(grid³)` operation in JS — the default grid (32³) is fast; the max (128³, ~2M points) is real and works, just slower, the same real tradeoff Streamlit's own slider warns about.
+
+## Code
+
+```tsx
+import { DensityFieldChart } from '@/components/DensityFieldChart/DensityFieldChart';
+
+function DensityFieldTile({ result, isoSurfaces, opacity, voids }) {
+  return (
+    <DensityFieldChart
+      density={result.density}
+      boxSize={result.box_size}
+      colorbarTitle="ρ/ρ̄"
+      isoSurfaces={isoSurfaces}
+      opacity={opacity}
+      voids={voids}
+    />
+  );
+}
+```

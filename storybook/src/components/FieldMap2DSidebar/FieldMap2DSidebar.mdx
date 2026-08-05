@@ -1,0 +1,49 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as FieldMap2DSidebarStories from './FieldMap2DSidebar.stories';
+
+<Meta of={FieldMap2DSidebarStories} />
+
+# FieldMap2DSidebar
+
+2D Field Map's real per-tile sidebar, from `app.py`'s own `elif statistic == "2D Field Map":` block — the simplest sidebar with a Field picker in this app.
+
+## Token
+
+Composed entirely from `SingleRealizationFields`/`SelectField`/`Button` — no tokens of its own.
+
+## Spec
+
+<Canvas of={FieldMap2DSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Realization: `SingleRealizationFields` — one of `app.py`'s own `SINGLE_REALIZATION_STATISTICS`.
+- Field: `SelectField`, options from `GET /api/metadata`'s `cmd_fields` (all 13 real CMD field names).
+- **No Snapshot control** — CMD only publishes `z=0.00` for 2D maps (unlike the 3D grids, which have 5 real redshifts), confirmed directly from `backend.py`'s own `get_field_map_2d` docstring. Matches `XrayHaloProfilesSidebar`'s same reasoning for omitting a control with nothing real behind it.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/field-map-2d` (JSON) and `/plot.png` (the real log-normed heatmap render).
+- **Always has a value** — `get_field_map_2d()` has a real synthetic fallback (a 2D analogue of the 3D density field's white-noise-to-lognormal recipe) for suites without real CMD 2D maps.
+- Broad real suite coverage: **IllustrisTNG/SIMBA/Astrid/Swift-EAGLE**, all 13 fields.
+- No halos table under this tile — a field map is a per-pixel spatial projection, with no per-halo concept at all.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { FieldMap2DSidebar } from '@/components/FieldMap2DSidebar/FieldMap2DSidebar';
+import type { FieldMap2DParams } from '@/components/FieldMap2DSidebar/FieldMap2DSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<FieldMap2DParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 42, field: 'Mtot',
+  });
+  return (
+    <FieldMap2DSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

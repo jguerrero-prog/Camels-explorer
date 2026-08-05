@@ -1,0 +1,7 @@
+/* Real 3D views (Density Field volume, Particle Cloud scatter) genuinely
+   benefit from more vertical room than a 2D line chart to rotate/explore -
+   matches app.py's own real height=650 figure, taller than PlotChart's
+   320px minimum. */
+.plotly-3d-chart {
+  min-height: 520px;
+}

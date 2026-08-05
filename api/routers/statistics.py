@@ -201,6 +201,22 @@ def scaling_relations(
     return to_jsonable(result)
 
 
+@router.get("/scaling-relations/plot.png")
+def scaling_relations_plot(
+    suite: str, set_name: str, realization: int,
+    SMmin: float, SMmax: float, bins: int,
+    snapnum: int = 33,
+    fetch_public: bool = False,
+):
+    """Static matplotlib render (2x2 panel + conditional metallicity row) -
+    always has a value (real or synthetic fallback, like the JSON endpoint)."""
+    png = B.render_scaling_relations_png(
+        suite, set_name, realization, SMmin, SMmax, bins,
+        snapnum=snapnum, fetch_public=fetch_public,
+    )
+    return Response(content=png, media_type="image/png")
+
+
 @router.get("/bispectrum")
 def bispectrum(
     suite: str, set_name: str, realization: int, field: str,

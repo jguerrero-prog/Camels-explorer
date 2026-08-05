@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { PlotTile } from './PlotTile';
 import type { HaloRow } from '../UnderlyingHalos/UnderlyingHalos';
+import { ParticleCloudChart } from '../ParticleCloudChart/ParticleCloudChart';
 
 const meta: Meta<typeof PlotTile> = {
   title: 'Sections/PlotTile',
@@ -91,6 +92,35 @@ export const NoHalosTable: Story = {
       { label: 'Suite / Set', value: 'IllustrisTNG · LH' },
       { label: 'Realizations (compare)', value: '278' },
       { label: 'Grid / MAS', value: '512 · CIC' },
+    ],
+    halos: null,
+  },
+};
+
+// Real usage: 3D Density Field/3D Particle Cloud (added 2026-08-05,
+// completing all 15 statistics) - app.py renders these exclusively via
+// live interactive Plotly 3D, no static-image equivalent at all.
+// `chart.content` is a rendered node (DensityFieldChart/ParticleCloudChart),
+// not raw trace data - each owns its own real trace-building logic.
+function clusteredCloud(n: number): number[][] {
+  const clusters = Array.from({ length: 5 }, () => [Math.random() * 25, Math.random() * 25, Math.random() * 25]);
+  return Array.from({ length: n }, () => {
+    const c = clusters[Math.floor(Math.random() * clusters.length)];
+    return [c[0] + (Math.random() - 0.5) * 4, c[1] + (Math.random() - 0.5) * 4, c[2] + (Math.random() - 0.5) * 4];
+  });
+}
+
+export const Plotly3DTile: Story = {
+  args: {
+    title: '3D Particle Cloud',
+    chart: {
+      kind: 'plotly-3d',
+      content: <ParticleCloudChart positions={clusteredCloud(3000)} />,
+    },
+    readoutGroups: [
+      { label: 'Suite / Set', value: 'IllustrisTNG · LH' },
+      { label: 'Realization', value: '42' },
+      { label: 'Particles', value: '3,000' },
     ],
     halos: null,
   },

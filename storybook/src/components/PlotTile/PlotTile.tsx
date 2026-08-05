@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { PlotChart } from '../PlotChart/PlotChart';
 import type { PlotSeries } from '../PlotChart/PlotChart';
 import { StaticImageChart } from '../StaticImageChart/StaticImageChart';
@@ -27,6 +28,19 @@ export type PlotTileChart =
       kind: 'static-image';
       imageUrl: string;
       alt: string;
+    }
+  | {
+      /** The inverse of 'static-image': statistics app.py renders
+       * exclusively via live interactive Plotly 3D (go.Volume/go.Scatter3d),
+       * with no static-image equivalent at all - a screenshot would lose
+       * the actual point of a rotate/zoom 3D view. See Plotly3DChart.mdx.
+       * A rendered node, not raw trace data - DensityFieldChart/
+       * ParticleCloudChart each own real, different trace-building logic
+       * (percentile isomin/isomax, void-overlay merging) on top of the
+       * shared Plotly3DChart shell; PlotTile stays agnostic to which one
+       * a given statistic uses. */
+      kind: 'plotly-3d';
+      content: ReactNode;
     };
 
 export type PlotTileProps = {
@@ -63,6 +77,8 @@ export function PlotTile({ title, chart, readoutGroups, halos, onFocus }: PlotTi
       <div className="plot-tile__body">
         {chart.kind === 'static-image' ? (
           <StaticImageChart imageUrl={chart.imageUrl} alt={chart.alt} />
+        ) : chart.kind === 'plotly-3d' ? (
+          chart.content
         ) : (
           <PlotChart
             series={chart.series}

@@ -30,6 +30,16 @@ import { FieldPDFSidebar } from './components/FieldPDFSidebar/FieldPDFSidebar';
 import type { FieldPDFParams } from './components/FieldPDFSidebar/FieldPDFSidebar';
 import { LymanAlphaSpectrumSidebar } from './components/LymanAlphaSpectrumSidebar/LymanAlphaSpectrumSidebar';
 import type { LymanAlphaSpectrumParams } from './components/LymanAlphaSpectrumSidebar/LymanAlphaSpectrumSidebar';
+import { GalaxyScalingRelationsSidebar } from './components/GalaxyScalingRelationsSidebar/GalaxyScalingRelationsSidebar';
+import type { GalaxyScalingRelationsParams } from './components/GalaxyScalingRelationsSidebar/GalaxyScalingRelationsSidebar';
+import { FieldMap2DSidebar } from './components/FieldMap2DSidebar/FieldMap2DSidebar';
+import type { FieldMap2DParams } from './components/FieldMap2DSidebar/FieldMap2DSidebar';
+import { DensityField3DSidebar } from './components/DensityField3DSidebar/DensityField3DSidebar';
+import type { DensityField3DParams } from './components/DensityField3DSidebar/DensityField3DSidebar';
+import { ParticleCloud3DSidebar } from './components/ParticleCloud3DSidebar/ParticleCloud3DSidebar';
+import type { ParticleCloud3DParams } from './components/ParticleCloud3DSidebar/ParticleCloud3DSidebar';
+import { DensityFieldChart } from './components/DensityFieldChart/DensityFieldChart';
+import { ParticleCloudChart } from './components/ParticleCloudChart/ParticleCloudChart';
 import {
   fetchMassRangeResult, fetchHaloCatalog, toHaloRows, massRangeImageUrl,
   fetchPowerSpectrum, powerSpectrumImageUrl,
@@ -40,8 +50,12 @@ import {
   fetchColorMassDiagramMeta, colorMassDiagramImageUrl,
   fetchFieldPDFMeta, fieldPDFImageUrl,
   fetchLymanAlphaSpectrumMeta, lymanAlphaSpectrumImageUrl,
+  fetchScalingRelationsMeta, scalingRelationsImageUrl,
+  fetchFieldMap2DMeta, fieldMap2DImageUrl,
+  fetchDensityField3D, fetchVoidCatalog,
+  fetchParticleCloud,
 } from './lib/api';
-import type { Result } from './lib/api';
+import type { Result, VoidCatalog } from './lib/api';
 import './App.css';
 
 /** DEFAULT_SNAPNUM mirrors backend.py's N_SNAPSHOTS - 1 (highest snapshot,
@@ -173,6 +187,58 @@ type LymanAlphaSpectrumTileState = {
   error?: string;
 };
 
+/** Galaxy Scaling Relations/2D Field Map/3D Density Field/3D Particle Cloud
+ * (added 2026-08-05) - the final four statistics, completing all 15.
+ * Galaxy Scaling Relations/2D Field Map are static-image (always have a
+ * value - both have real synthetic fallbacks); 3D Density Field/3D
+ * Particle Cloud are plotly-3d (also always have a value) and store their
+ * own raw fetched data (density grid, positions, void overlay) rather
+ * than a pre-built chart node, so the tile-render switch below can build
+ * the real DensityFieldChart/ParticleCloudChart element fresh each render. */
+type GalaxyScalingRelationsTileState = {
+  id: string;
+  kind: 'galaxy-scaling-relations';
+  params: GalaxyScalingRelationsParams;
+  note: string;
+  source: string;
+  loading: boolean;
+  error?: string;
+};
+
+type FieldMap2DTileState = {
+  id: string;
+  kind: 'field-map-2d';
+  params: FieldMap2DParams;
+  note: string;
+  source: string;
+  loading: boolean;
+  error?: string;
+};
+
+type DensityField3DTileState = {
+  id: string;
+  kind: 'density-field-3d';
+  params: DensityField3DParams;
+  density: number[][][];
+  boxSize: number;
+  note: string;
+  source: string;
+  voids: VoidCatalog | null;
+  loading: boolean;
+  error?: string;
+};
+
+type ParticleCloud3DTileState = {
+  id: string;
+  kind: 'particle-cloud-3d';
+  params: ParticleCloud3DParams;
+  positions: number[][];
+  note: string;
+  source: string;
+  loading: boolean;
+  error?: string;
+};
+
 /** Every other statistic still adds this title-only tile - see
  * PlotTile.mdx's Usecase for which statistics have a real wired chart
  * so far. */
@@ -188,6 +254,10 @@ type CanvasTile =
   | ColorMassDiagramTileState
   | FieldPDFTileState
   | LymanAlphaSpectrumTileState
+  | GalaxyScalingRelationsTileState
+  | FieldMap2DTileState
+  | DensityField3DTileState
+  | ParticleCloud3DTileState
   | EmptyTileState;
 
 async function loadMassRangeTile(id: string, statistic: MassRangeStatistic, params: MassRangeParams): Promise<PlotTileState> {
@@ -346,6 +416,34 @@ async function loadLymanAlphaSpectrumTile(id: string, params: LymanAlphaSpectrum
   return { id, kind: 'lyman-alpha-spectrum', params, note: meta.note, loading: false };
 }
 
+async function loadGalaxyScalingRelationsTile(id: string, params: GalaxyScalingRelationsParams): Promise<GalaxyScalingRelationsTileState> {
+  const meta = await fetchScalingRelationsMeta(params);
+  return { id, kind: 'galaxy-scaling-relations', params, note: meta.note, source: meta.source, loading: false };
+}
+
+async function loadFieldMap2DTile(id: string, params: FieldMap2DParams): Promise<FieldMap2DTileState> {
+  const meta = await fetchFieldMap2DMeta(params);
+  return { id, kind: 'field-map-2d', params, note: meta.note, source: meta.source, loading: false };
+}
+
+async function loadDensityField3DTile(id: string, params: DensityField3DParams): Promise<DensityField3DTileState> {
+  const result = await fetchDensityField3D(params);
+  const voids = params.showVoids ? await fetchVoidCatalog(params) : null;
+  return {
+    id, kind: 'density-field-3d', params,
+    density: result.density, boxSize: result.box_size, note: result.note, source: result.source,
+    voids, loading: false,
+  };
+}
+
+async function loadParticleCloud3DTile(id: string, params: ParticleCloud3DParams): Promise<ParticleCloud3DTileState> {
+  const result = await fetchParticleCloud(params);
+  return {
+    id, kind: 'particle-cloud-3d', params,
+    positions: result.positions, note: result.note, source: result.source, loading: false,
+  };
+}
+
 export function App() {
   const [activePanel, setActivePanel] = useState<IconRailPanel>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -498,6 +596,58 @@ export function App() {
       );
   };
 
+  const refetchGalaxyScalingRelationsTile = (id: string, params: GalaxyScalingRelationsParams) => {
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'galaxy-scaling-relations' ? { ...t, params, loading: true } : t)),
+    );
+    loadGalaxyScalingRelationsTile(id, params)
+      .then((updated) => setTiles((prev) => prev.map((t) => (t.id === id ? updated : t))))
+      .catch((err) =>
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'galaxy-scaling-relations' ? { ...t, loading: false, error: String(err) } : t)),
+        ),
+      );
+  };
+
+  const refetchFieldMap2DTile = (id: string, params: FieldMap2DParams) => {
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'field-map-2d' ? { ...t, params, loading: true } : t)),
+    );
+    loadFieldMap2DTile(id, params)
+      .then((updated) => setTiles((prev) => prev.map((t) => (t.id === id ? updated : t))))
+      .catch((err) =>
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'field-map-2d' ? { ...t, loading: false, error: String(err) } : t)),
+        ),
+      );
+  };
+
+  const refetchDensityField3DTile = (id: string, params: DensityField3DParams) => {
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'density-field-3d' ? { ...t, params, loading: true } : t)),
+    );
+    loadDensityField3DTile(id, params)
+      .then((updated) => setTiles((prev) => prev.map((t) => (t.id === id ? updated : t))))
+      .catch((err) =>
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'density-field-3d' ? { ...t, loading: false, error: String(err) } : t)),
+        ),
+      );
+  };
+
+  const refetchParticleCloud3DTile = (id: string, params: ParticleCloud3DParams) => {
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'particle-cloud-3d' ? { ...t, params, loading: true } : t)),
+    );
+    loadParticleCloud3DTile(id, params)
+      .then((updated) => setTiles((prev) => prev.map((t) => (t.id === id ? updated : t))))
+      .catch((err) =>
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'particle-cloud-3d' ? { ...t, loading: false, error: String(err) } : t)),
+        ),
+      );
+  };
+
   const handleSubmit = (selection: CuratedSelection) => {
     setIsModalOpen(false);
     const id = pendingTileId ?? `tile-${tiles.length + 1}`;
@@ -640,6 +790,65 @@ export function App() {
       return;
     }
 
+    if (selection.statistic === 'Galaxy Scaling Relations') {
+      const params: GalaxyScalingRelationsParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+        snapnum: DEFAULT_SNAPNUM, SMmin: 1e9, SMmax: 5e11, bins: 12,
+      };
+      const placeholder: GalaxyScalingRelationsTileState = {
+        id, kind: 'galaxy-scaling-relations', params, note: '', source: '', loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchGalaxyScalingRelationsTile(id, params);
+      return;
+    }
+
+    if (selection.statistic === '2D Field Map') {
+      const params: FieldMap2DParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+        field: 'Mtot',
+      };
+      const placeholder: FieldMap2DTileState = {
+        id, kind: 'field-map-2d', params, note: '', source: '', loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchFieldMap2DTile(id, params);
+      return;
+    }
+
+    if (selection.statistic === '3D Density Field') {
+      const params: DensityField3DParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+        snapnum: DEFAULT_SNAPNUM, field: 'Mtot', grid: 32, isoSurfaces: 12, opacity: 0.08,
+        showVoids: false,
+      };
+      const placeholder: DensityField3DTileState = {
+        id, kind: 'density-field-3d', params,
+        density: [], boxSize: 25, note: '', source: '', voids: null, loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchDensityField3DTile(id, params);
+      return;
+    }
+
+    if (selection.statistic === '3D Particle Cloud') {
+      const params: ParticleCloud3DParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+        snapnum: DEFAULT_SNAPNUM, maxParticles: 50_000,
+      };
+      const placeholder: ParticleCloud3DTileState = {
+        id, kind: 'particle-cloud-3d', params,
+        positions: [], note: '', source: '', loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchParticleCloud3DTile(id, params);
+      return;
+    }
+
     // Real, honest gap (see PlotTile.mdx's Usecase): every other statistic
     // still adds a title-only empty tile, rather than fabricate a chart.
     replaceTile({ id, kind: 'empty', title: selection.statistic });
@@ -724,6 +933,34 @@ export function App() {
         <LymanAlphaSpectrumSidebar
           params={focusedTile.params}
           onChange={(params) => refetchLymanAlphaSpectrumTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'galaxy-scaling-relations' && (
+        <GalaxyScalingRelationsSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchGalaxyScalingRelationsTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'field-map-2d' && (
+        <FieldMap2DSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchFieldMap2DTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'density-field-3d' && (
+        <DensityField3DSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchDensityField3DTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'particle-cloud-3d' && (
+        <ParticleCloud3DSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchParticleCloud3DTile(focusedTile.id, params)}
           onRemove={() => removeTile(focusedTile.id)}
         />
       )}
@@ -990,6 +1227,114 @@ export function App() {
                         { label: 'Realization', value: String(tile.params.realization) },
                         { label: 'Snapshot', value: String(tile.params.snapnum) },
                         { label: 'Sightline', value: String(tile.params.sightline) },
+                      ]}
+                      halos={null}
+                      onFocus={() => focusTile(tile.id)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'galaxy-scaling-relations') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      title="Galaxy Scaling Relations"
+                      chart={{
+                        kind: 'static-image',
+                        imageUrl: scalingRelationsImageUrl(tile.params),
+                        alt: 'Stellar half-mass radius, BH mass, SFR, Vmax, and metallicity vs. stellar mass',
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Stellar mass range', value: `${tile.params.SMmin.toExponential()} – ${tile.params.SMmax.toExponential()}` },
+                        { label: 'Bins', value: String(tile.params.bins) },
+                      ]}
+                      halos={null}
+                      onFocus={() => focusTile(tile.id)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'field-map-2d') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      title="2D Field Map"
+                      chart={{
+                        kind: 'static-image',
+                        imageUrl: fieldMap2DImageUrl(tile.params),
+                        alt: `${tile.params.field} 2D column-density-style projection`,
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Field', value: tile.params.field },
+                      ]}
+                      halos={null}
+                      onFocus={() => focusTile(tile.id)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'density-field-3d') {
+                  // Real, fixed set (backend.py's own CMD_MASS_TYPE_FIELDS) -
+                  // mass-type fields plot as overdensity rho/mean(rho), every
+                  // other field in its own raw CMD units. Same precedent as
+                  // PowerSpectrumSidebar's PTYPE_OPTIONS: a small, stable
+                  // constant mirrored directly rather than round-tripped
+                  // through metadata for a 4-item set.
+                  const massTypeFields = new Set(['Mtot', 'Mgas', 'Mcdm', 'Mstar']);
+                  const colorbarTitle = massTypeFields.has(tile.params.field) ? 'ρ/ρ̄' : tile.params.field;
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      title="3D Density Field"
+                      chart={{
+                        kind: 'plotly-3d',
+                        content: (
+                          <DensityFieldChart
+                            density={tile.density}
+                            boxSize={tile.boxSize}
+                            colorbarTitle={colorbarTitle}
+                            isoSurfaces={tile.params.isoSurfaces}
+                            opacity={tile.params.opacity}
+                            voids={
+                              tile.voids && {
+                                positions: tile.voids.positions,
+                                radius: tile.voids.radius,
+                                densityContrast: tile.voids.density_contrast,
+                                extra: tile.voids.extra,
+                              }
+                            }
+                          />
+                        ),
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Field', value: tile.params.field },
+                        { label: 'Grid', value: String(tile.params.grid) },
+                      ]}
+                      halos={null}
+                      onFocus={() => focusTile(tile.id)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'particle-cloud-3d') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      title="3D Particle Cloud"
+                      chart={{
+                        kind: 'plotly-3d',
+                        content: <ParticleCloudChart positions={tile.positions} />,
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Particles', value: tile.positions.length.toLocaleString() },
                       ]}
                       halos={null}
                       onFocus={() => focusTile(tile.id)}

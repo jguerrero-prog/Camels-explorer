@@ -1,0 +1,49 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as ParticleCloud3DSidebarStories from './ParticleCloud3DSidebar.stories';
+
+<Meta of={ParticleCloud3DSidebarStories} />
+
+# ParticleCloud3DSidebar
+
+3D Particle Cloud's real per-tile sidebar, from `app.py`'s own `elif statistic == "3D Particle Cloud":` block — completing all 15 statistics.
+
+## Token
+
+Composed entirely from `SingleRealizationFields`/`OptionSlider`/`Slider`/`Button` — no tokens of its own.
+
+## Spec
+
+<Canvas of={ParticleCloud3DSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Realization: `SingleRealizationFields`.
+- Snapshot: a `Slider`, `0` to `n_snapshots - 1`.
+- Particles to show: `OptionSlider` over `[5000, 20000, 50000, 100000, 200000]`, default `50000` — matches `app.py`'s own `st.select_slider` real options and default exactly, formatted with thousands separators.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/particle-cloud`, rendered via `ParticleCloudChart` inside `PlotTile`'s `chart.kind: 'plotly-3d'`.
+- **Always has a value** — `get_particle_cloud()` has a real synthetic clustered fallback when real DM particle positions aren't available.
+- Higher particle counts are real and work, just slower to fetch/render (a real stride-vs-fetch-size tradeoff, not a bug) — matches `app.py`'s own real help text.
+- No halos table under this tile — a raw particle scatter has no per-halo concept.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { ParticleCloud3DSidebar } from '@/components/ParticleCloud3DSidebar/ParticleCloud3DSidebar';
+import type { ParticleCloud3DParams } from '@/components/ParticleCloud3DSidebar/ParticleCloud3DSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<ParticleCloud3DParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 42, snapnum: 33, maxParticles: 50_000,
+  });
+  return (
+    <ParticleCloud3DSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```
