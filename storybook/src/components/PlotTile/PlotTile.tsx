@@ -15,19 +15,32 @@ export type PlotTileProps = {
     yLabel: string;
     logX?: boolean;
     logY?: boolean;
+    /** Real, server-rendered matplotlib PNG URL - see PlotChart.mdx. Omit
+     * for a chart with no static render built yet (Interactive-only). */
+    imageUrl?: string;
   };
   readoutGroups: ParamsReadoutGroup[];
   haloRows: HaloRow[];
-  focused?: boolean;
+  /** Fires on any click on the tile - App.tsx uses this to decide which
+   * tile's ParamsSidebar shows (its own focusedTileId state, not a prop
+   * here). No visual effect on the tile itself - see PlotTile.mdx's
+   * 2026-08-04 correction. */
   onFocus?: () => void;
 };
 
-export function PlotTile({ title, chart, readoutGroups, haloRows, focused = false, onFocus }: PlotTileProps) {
+export function PlotTile({ title, chart, readoutGroups, haloRows, onFocus }: PlotTileProps) {
   return (
-    <div className={`tile plot-tile ${focused ? 'plot-tile--focused' : ''}`} onClick={onFocus}>
+    <div className="tile plot-tile" onClick={onFocus}>
       <h3 className="tile__title">{title}</h3>
       <div className="plot-tile__body">
-        <PlotChart series={chart.series} xLabel={chart.xLabel} yLabel={chart.yLabel} logX={chart.logX} logY={chart.logY} />
+        <PlotChart
+          series={chart.series}
+          xLabel={chart.xLabel}
+          yLabel={chart.yLabel}
+          logX={chart.logX}
+          logY={chart.logY}
+          imageUrl={chart.imageUrl}
+        />
         <ParamsReadout groups={readoutGroups} />
       </div>
       <UnderlyingHalos rows={haloRows} />

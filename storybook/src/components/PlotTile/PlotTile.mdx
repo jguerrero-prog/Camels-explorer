@@ -9,9 +9,7 @@ The populated (has-a-plot) tile, from Figma node `1019:10`. `Tile.mdx` explicitl
 
 ## Token
 
-Inherits `.tile`'s tokens from `Tile.mdx` (`--color-surface-content`, `--color-border`, `--font-ui`). Adds:
-
-- `--color-accent-gradient-start` — the focused-tile border color (see Spec).
+Inherits `.tile`'s tokens from `Tile.mdx` (`--color-surface-content`, `--color-border`, `--font-ui`) unmodified — see Spec below for why `PlotTile` doesn't add its own.
 
 Composed children carry their own tokens — see `PlotChart.mdx`, `ParamsReadout.mdx`, `UnderlyingHalos.mdx`.
 
@@ -21,44 +19,45 @@ Composed children carry their own tokens — see `PlotChart.mdx`, `ParamsReadout
 <Controls />
 
 - Title row (reuses `.tile__title`), then a body row (`PlotChart` + `ParamsReadout` side by side), then `UnderlyingHalos` as the last child — matches the frame's vertical stacking exactly.
-- Clicking anywhere on the tile calls `onFocus` — real wiring, not decorative: `App.tsx` uses this to swap the left 280px slot to this tile's own `ParamsSidebar` (see Usecase). `focused` draws a thin accent-colored border so the currently-controlled tile is visually unambiguous once more than one populated tile exists on the canvas — not sourced from Figma (the frame only ever shows one tile), a real necessary addition once tile-focus became real state.
+- Clicking anywhere on the tile calls `onFocus` — real wiring, not decorative: `App.tsx` uses this to swap the left 280px slot to this tile's own `ParamsSidebar` (see Usecase). Which tile is focused lives entirely in `App.tsx`'s own `focusedTileId` state — `PlotTile` has no `focused` prop of its own to reflect it.
+
+**Corrected 2026-08-04: removed a `focused` prop and its visual border entirely, not just the styling.** An earlier pass took a `focused` prop and drew a thin `--color-accent-gradient-start` border with it — both removed on direct user feedback that the border was an unrequested addition, not sourced from any frame. `onFocus` alone is enough: `PlotTile` doesn't need to know whether it's currently focused, only to report clicks.
 
 <Canvas of={PlotTileStories.CompareMode} />
 
 **Real, deliberate scope decision — why this isn't just `Tile` with a prop:** `Tile.mdx`'s own "Usecase" section already ruled this out ("that's a different enough anatomy... deserves its own documented variant"). The populated anatomy (chart + readout + collapsible halos table) shares nothing structurally with the empty state's single centered button, so a shared prop would mean two unrelated render branches inside one component — a separate component sharing only the outer card CSS is the honest shape.
 
-<Canvas of={PlotTileStories.Focusable} />
-
 ## Usecase
 
-- Real usage: `App.tsx`'s canvas, replacing the empty-state `Tile` once the Add Plot modal's Curated tab submits **"Stellar Mass Function"** specifically — the only statistic with real end-to-end chart wiring built so far (`GET /api/stellar-mass-function` for `chart`, `GET /api/halo-catalog` for `haloRows`). Submitting any other statistic still adds the old title-only empty `Tile` — a real, honest gap, not silently papered over with fake chart data for statistics that aren't wired yet.
-- `focused`/`onFocus` are real, wired state in `App.tsx`: the focused tile's real Suite/Set/Realization/Compare-mode/stellar-mass-range/Bins live in a `ParamsSidebar` composition in the left 280px slot (same slot `IconRail`'s Project/Files panels use — mutually exclusive, per `STUDIO_PLAN.md`), and editing those fields refetches this tile's chart + halo catalog.
-- Compare mode (`chart.series.length > 1`) is driven by `ParamsSidebar`'s "Realizations to compare" `MultiSelect` — one `GET /api/stellar-mass-function` fetch per selected realization, same suite/set/params, overlaid.
+- Real usage: `App.tsx`'s canvas, replacing the empty-state `Tile` once the Add Plot modal's Curated tab submits **"Stellar Mass Function"** specifically — the only statistic with real end-to-end chart wiring built so far (`GET /api/stellar-mass-function` for `chart.series`, the same real matplotlib PNG endpoint for `chart.imageUrl`, `GET /api/halo-catalog` for `haloRows`). Submitting any other statistic still adds the old title-only empty `Tile` — a real, honest gap, not silently papered over with fake chart data for statistics that aren't wired yet.
+- `onFocus` is real, wired state in `App.tsx`: clicking sets `focusedTileId`, and the focused tile's real Suite/Set/Realization/Compare-mode/stellar-mass-range/Bins then live in a `ParamsSidebar` composition in the left 280px slot (same slot `IconRail`'s Project/Files panels use — mutually exclusive, per `STUDIO_PLAN.md`); editing those fields refetches this tile's chart + halo catalog.
+- Compare mode (`chart.series.length > 1`) is driven by `ParamsSidebar`'s "Realizations to compare" `MultiSelect` — one `GET /api/stellar-mass-function` fetch per selected realization, same suite/set/params, overlaid; `chart.imageUrl` gains one `realizations=` query param per selection the same way.
 
 ## Code
 
 ```tsx
 import { PlotTile } from '@/components/PlotTile/PlotTile';
+import { stellarMassFunctionImageUrl } from '@/lib/api';
 
-function StellarMassFunctionTile({ result, catalog, focused, onFocus }) {
+function StellarMassFunctionTile({ result, params, catalog, onFocus }) {
   return (
     <PlotTile
       title="Stellar Mass Function"
       chart={{
-        series: [{ label: `${result.setName}_${result.realization}`, x: result.x, y: result.y }],
+        series: [{ label: `${params.setName}_${params.realizations[0]}`, x: result.x, y: result.y }],
         xLabel: result.x_label,
         yLabel: result.y_label,
         logX: result.log_x,
         logY: result.log_y,
+        imageUrl: stellarMassFunctionImageUrl(params),
       }}
       readoutGroups={[
-        { label: 'Suite / Set', value: `${result.suite} · ${result.setName}` },
-        { label: 'Realizations (compare)', value: String(result.realization) },
-        { label: 'Stellar mass range', value: `${result.SMmin.toExponential()} – ${result.SMmax.toExponential()}` },
-        { label: 'Bins', value: String(result.bins) },
+        { label: 'Suite / Set', value: `${params.suite} · ${params.setName}` },
+        { label: 'Realizations (compare)', value: params.realizations.join(', ') },
+        { label: 'Stellar mass range', value: `${params.SMmin.toExponential()} – ${params.SMmax.toExponential()}` },
+        { label: 'Bins', value: String(params.bins) },
       ]}
       haloRows={catalog}
-      focused={focused}
       onFocus={onFocus}
     />
   );

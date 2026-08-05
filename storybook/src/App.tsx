@@ -12,7 +12,7 @@ import { AddPlotModal } from './components/AddPlotModal/AddPlotModal';
 import type { CuratedSelection } from './components/AddPlotModal/CuratedTab';
 import { StellarMassFunctionSidebar } from './components/StellarMassFunctionSidebar/StellarMassFunctionSidebar';
 import type { StellarMassFunctionParams } from './components/StellarMassFunctionSidebar/StellarMassFunctionSidebar';
-import { fetchStellarMassFunction, fetchHaloCatalog, toHaloRows } from './lib/api';
+import { fetchStellarMassFunction, fetchHaloCatalog, toHaloRows, stellarMassFunctionImageUrl } from './lib/api';
 import './App.css';
 
 /** Real defaults from app.py's own Stellar Mass Function sidebar (SMmin/
@@ -209,7 +209,22 @@ export function App() {
                   <PlotTile
                     key={tile.id}
                     title="Stellar Mass Function"
-                    chart={{ series: tile.series, xLabel: tile.xLabel, yLabel: tile.yLabel, logX: tile.logX, logY: tile.logY }}
+                    chart={{
+                      series: tile.series,
+                      xLabel: tile.xLabel,
+                      yLabel: tile.yLabel,
+                      logX: tile.logX,
+                      logY: tile.logY,
+                      imageUrl: stellarMassFunctionImageUrl({
+                        suite: tile.params.suite,
+                        setName: tile.params.setName,
+                        realizations: tile.params.compareMode ? tile.params.realizations : [tile.params.realizations[0]],
+                        snapnum: DEFAULT_SNAPNUM,
+                        SMmin: tile.params.SMmin,
+                        SMmax: tile.params.SMmax,
+                        bins: tile.params.bins,
+                      }),
+                    }}
                     readoutGroups={[
                       { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
                       { label: 'Realizations (compare)', value: tile.params.realizations.join(', ') },
@@ -217,7 +232,6 @@ export function App() {
                       { label: 'Bins', value: String(tile.params.bins) },
                     ]}
                     haloRows={tile.haloRows}
-                    focused={tile.id === focusedTileId}
                     onFocus={() => focusTile(tile.id)}
                   />
                 ) : (

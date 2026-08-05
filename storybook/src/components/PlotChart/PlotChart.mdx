@@ -5,47 +5,54 @@ import * as PlotChartStories from './PlotChart.stories';
 
 # PlotChart
 
-The rendered-plot card from Figma node `1019:10` ("Stellar Mass Function drill-down"). This is a genuinely functional chart, not a static image — `plotly.js-dist-min` + `react-plotly.js/factory` (a smaller Plotly bundle than the full `plotly.js`, wired via Plotly's own documented custom-bundle pattern), the same plotting library the Streamlit prototype (`app.py`) already uses for every 1D statistic, so real data from `backend.py` needs no reshaping to render here.
+The rendered-plot card from Figma node `1019:10` ("Stellar Mass Function drill-down"). Renders two genuinely different ways, matching a real precedent already established in `app.py`: a **static, server-rendered matplotlib PNG** (`backend.py`'s `render_stellar_mass_function_png`, served by `GET /api/stellar-mass-function/plot.png`) is the **default**, with an **Interactive** toggle to the same data rendered live via `plotly.js-dist-min` + `react-plotly.js/factory`.
+
+**Corrected 2026-08-04, real bug fixed:** an earlier version of this component only ever rendered Plotly, no static option. Direct user feedback: *"It's suppose to render the matplotlib first, with an option to make it interactive with plotly via a toggle perhaps."* Checked against `app.py` directly rather than guessing — its generic 1D-statistics plotting block (the one Stellar Mass Function, Power Spectrum, Baryon Fraction, and SFR History all share) initializes `use_interactive = True` but only *acts* on it `if statistic == "Halo Mass Function"` — every other statistic, Stellar Mass Function included, has always rendered through `st.pyplot()` (static matplotlib). Plotly was only ever an experimental toggle for one statistic. This component now matches that real precedent instead of inventing its own.
 
 ## Token
 
-- `--color-surface-chart` — a new, deliberate white surface token (see `semantic.css`), distinct from every other dark-chrome surface in this app. Real, not a bug: a log-log scientific line plot needs to read against white, matching the frame exactly.
-- `--font-ui` (Inter) — chart axis/legend text (Plotly's own `layout.font`, not a CSS rule, since Plotly renders its own SVG/canvas text).
+- `--color-surface-chart` — the white surface both render modes sit on (see `semantic.css`).
+- `--font-ui` (Inter) — Plotly's axis/legend text (`layout.font`, not CSS, since Plotly renders its own SVG/canvas text).
+- The Static/Interactive toggle's own colors are **not** semantic tokens — see Spec below for why.
 
 ## Spec
 
-<Canvas of={PlotChartStories.SingleSeries} />
+<Canvas of={PlotChartStories.StaticDefault} />
 <Controls />
 
-- Fills its container (`width: 100%; height: 100%`), 8px padding, 8px radius, transparent Plotly paper/plot background over the white card.
-- Log-log by default (`logX`/`logY`, both default `true`) — matches every real `Result`-shaped statistic in `backend.py` (`log_x`/`log_y` fields).
-- `displayModeBar: false` — Plotly's own zoom/pan/download toolbar is hidden; this app has its own `Toolbar` component for that role (annotate/ratio-diff/ruler/copy-as-code/etc.), so Plotly's default chrome would be a confusing second toolbar.
-- Legend only shows when `series.length > 1` (compare mode).
+- Fills its container (`width: 100%; height: 100%`), 8px padding, 8px radius.
+- **`imageUrl` present → defaults to Static.** A small Static/Interactive toggle appears, top-right, over the chart. **`imageUrl` absent → always Interactive, no toggle rendered at all** — this keeps every pre-existing usage (and any future chart with no matplotlib render yet) working unchanged.
+- Static mode is a plain `<img src={imageUrl}>`. A real failure (server not running, non-200 response) is caught via the image's own `onError` and shown as the same honest inline message `AddPlotModal`/`CuratedTab` uses for a dead API server — an `<img>` tag fails silently (broken-image icon) otherwise, which would look like a rendering bug rather than a real, diagnosable server problem.
+- Interactive mode is the original Plotly chart, unchanged: log-log by default (`logX`/`logY`), `displayModeBar: false` (this app's own `Toolbar` owns that role, not Plotly's default chrome), legend only when `series.length > 1`.
+- **Which surface owns the toggle, and why:** `PlotChart` itself, not `Toolbar` or `PlotTile`. This is this component's own render-mode switch — the same reasoning `PlotChart`'s original doc already gave for hiding Plotly's `displayModeBar` (`Toolbar` owns *tile-level* actions; a chart's own static-vs-interactive choice is local to the chart). If a future frame shows a real toolbar control for this, reconcile there — don't let a second, uncoordinated toggle appear.
 
 <Canvas of={PlotChartStories.CompareMode} />
 
-**The Canvas above renders synthetic declining power-law curves, not real fetched values.** A Storybook story must render without a live API — see `PlotTile.mdx` and `App.tsx` for where this component receives a real `GET /api/stellar-mass-function` response instead.
+**The `CompareMode`/`SingleSeries` Canvases above render synthetic declining power-law curves, not real fetched values — Interactive-only, no `imageUrl`.** `StaticDefault` above is the one Canvas pointed at the real running API server (`GET /api/stellar-mass-function/plot.png`) — if it shows the inline error instead of a chart, the API server isn't running (`uvicorn api.main:app --port 8010`), not a bug in this component.
 
-**Real, deliberate scope decision:** line color is chosen from a fixed 4-color palette (`LINE_COLORS`, sourced from this app's own brand primitives) cycling by series index, not per-suite or per-set — the Figma frame's own trace colors aren't semantically tied to anything else in this app (unlike, say, the empty-icon gradient), so no meaning is lost by picking a simple deterministic order.
+**Real, deliberate scope decision:** Interactive-mode line color is a fixed 4-color palette (`LINE_COLORS`, this app's own brand primitives) cycling by series index — the Figma frame's own trace colors aren't semantically tied to anything else in this app, so no meaning is lost picking a simple deterministic order. Static mode's colors come from matplotlib's own default cycle instead (server-rendered, not controlled from here) — the two modes are not guaranteed to use identical per-series colors, a real, minor, accepted inconsistency rather than something worth synchronizing across a Python/JS boundary for a cosmetic detail.
 
 ## Usecase
 
-- Real usage: `PlotTile`'s chart panel, fed live `x`/`y`/`x_label`/`y_label`/`log_x`/`log_y` from `GET /api/stellar-mass-function` (single series) or one fetch per selected realization when Compare mode is on (`ParamsSidebar`'s "Realizations to compare" `MultiSelect`).
-- `series` accepts more than one entry specifically for compare/overlay mode — a single-series chart is just the `series.length === 1` case, not a separate code path.
+- Real usage: `PlotTile`'s chart panel. `imageUrl` is built once from the tile's real params (suite/set/realizations/snapnum/SMmin/SMmax/bins) — see `lib/api.ts`'s `stellarMassFunctionImageUrl`. `series`/`xLabel`/`yLabel`/`logX`/`logY` come from the same tile's `GET /api/stellar-mass-function` JSON fetch, so switching to Interactive never triggers a second network request — both modes render from data already in hand (the image fetch and the JSON fetch happen independently, in parallel).
+- `series` accepts more than one entry specifically for compare/overlay mode — a single-series chart is just the `series.length === 1` case, not a separate code path. Compare mode's `imageUrl` includes one `realizations=` query param per selected realization, matching `render_stellar_mass_function_png`'s real per-realization legend.
+- Any chart with no real matplotlib render built yet should omit `imageUrl` entirely (Interactive-only, no toggle) rather than pointing at a nonexistent endpoint — do not fabricate a URL just to show the toggle UI.
 
 ## Code
 
 ```tsx
 import { PlotChart } from '@/components/PlotChart/PlotChart';
+import { stellarMassFunctionImageUrl } from '@/lib/api';
 
-function StellarMassFunctionChart({ result }) {
+function StellarMassFunctionChart({ result, params }) {
   return (
     <PlotChart
-      series={[{ label: 'LH_278', x: result.x, y: result.y }]}
+      series={[{ label: `${params.setName}_${params.realizations[0]}`, x: result.x, y: result.y }]}
       xLabel={result.x_label}
       yLabel={result.y_label}
       logX={result.log_x}
       logY={result.log_y}
+      imageUrl={stellarMassFunctionImageUrl(params)}
     />
   );
 }
