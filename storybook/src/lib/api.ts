@@ -298,6 +298,109 @@ export function haloProfilesImageUrl(params: {
   return `${API_BASE}/halo-profiles/plot.png?${qs}`;
 }
 
+export type ColorMassDiagramMeta = { note: string; nGalaxies: number };
+
+export async function fetchColorMassDiagramMeta(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  snapnum: number;
+  band1: string;
+  band2: string;
+  spsModel: string;
+  spectraType: string;
+}): Promise<ColorMassDiagramMeta | null> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    snapnum: String(params.snapnum), band1: params.band1, band2: params.band2,
+    sps_model: params.spsModel, spectra_type: params.spectraType, fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/color-mass-diagram?${qs}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return { note: data.note, nGalaxies: data.color.length };
+}
+
+export function colorMassDiagramImageUrl(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  snapnum: number;
+  band1: string;
+  band2: string;
+  spsModel: string;
+  spectraType: string;
+}): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    snapnum: String(params.snapnum), band1: params.band1, band2: params.band2,
+    sps_model: params.spsModel, spectra_type: params.spectraType, fetch_public: 'true',
+  });
+  return `${API_BASE}/color-mass-diagram/plot.png?${qs}`;
+}
+
+export type FieldPDFMeta = { note: string };
+
+export async function fetchFieldPDFMeta(params: {
+  suite: string;
+  field: string;
+  grid: number;
+  redshift: number;
+}): Promise<FieldPDFMeta | null> {
+  const qs = new URLSearchParams({
+    suite: params.suite, field: params.field, grid: String(params.grid),
+    redshift: String(params.redshift), fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/field-pdf?${qs}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return { note: data.note };
+}
+
+export function fieldPDFImageUrl(params: { suite: string; field: string; grid: number; redshift: number }): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, field: params.field, grid: String(params.grid),
+    redshift: String(params.redshift), fetch_public: 'true',
+  });
+  return `${API_BASE}/field-pdf/plot.png?${qs}`;
+}
+
+export type LymanAlphaSpectrumMeta = { note: string };
+
+export async function fetchLymanAlphaSpectrumMeta(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  snapnum: number;
+  sightline: number;
+}): Promise<LymanAlphaSpectrumMeta | null> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    snapnum: String(params.snapnum), sightline: String(params.sightline), fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/lyman-alpha-spectrum?${qs}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return { note: data.note };
+}
+
+export function lymanAlphaSpectrumImageUrl(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  snapnum: number;
+  sightline: number;
+}): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    snapnum: String(params.snapnum), sightline: String(params.sightline), fetch_public: 'true',
+  });
+  return `${API_BASE}/lyman-alpha-spectrum/plot.png?${qs}`;
+}
+
 export type HaloCatalogRow = Record<string, number>;
 export type HaloCatalog = {
   frame: HaloCatalogRow[];

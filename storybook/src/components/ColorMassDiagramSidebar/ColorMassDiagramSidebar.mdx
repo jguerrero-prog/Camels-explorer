@@ -1,0 +1,55 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as ColorMassDiagramSidebarStories from './ColorMassDiagramSidebar.stories';
+
+<Meta of={ColorMassDiagramSidebarStories} />
+
+# ColorMassDiagramSidebar
+
+Color-Mass Diagram's real per-tile sidebar, from `app.py`'s own `elif statistic == "Color-Mass Diagram":` block.
+
+## Token
+
+Composed entirely from existing fields — see `SingleRealizationFields.mdx`, `SelectField.mdx`, `Slider.mdx`, `Radio.mdx`, `Button.mdx`. No tokens of its own.
+
+## Spec
+
+<Canvas of={ColorMassDiagramSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Realization: `SingleRealizationFields` — one of `app.py`'s own `SINGLE_REALIZATION_STATISTICS`.
+- Snapshot: a `Slider`, `0` to `n_snapshots - 1` — this product uses the same 34-snapshot Pk/SFRH schedule, confirmed by `app.py`'s own real caption ("using the Snapshot slider above").
+- SPS model: `SelectField` (`BC03`/`BPASS`, real `PHOTOMETRY_SPS_MODELS`).
+- Spectra: `Radio` (`attenuated`/`intrinsic`) — dust-attenuated vs. dust-free, a real, meaningful comparison per `app.py`'s own help text.
+- Filter family: `SelectField`, options from `GET /api/metadata`'s `photometry.filter_groups` keys (`SLOAN`/`Generic (Johnson)`/`HST`/`JWST`/`UKIRT`/`UV / GALEX`).
+- Band 1 / Band 2: two `SelectField`s, options are the chosen family's real bands — `app.py`'s own frame lays these out in two columns; this sidebar stacks them vertically, consistent with every other field in this single-column sidebar (not a regression, a deliberate layout consistency choice).
+- Changing Filter family resets Band 1/Band 2 to that family's first two bands (or fewer if the family has under 3) — matches `app.py`'s own `min(2, len(family_bands) - 1)` default.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/color-mass-diagram` (JSON, for the real galaxy count) and `/plot.png` (the real scatter render).
+- **Real-data only, no synthetic fallback** — `get_color_mass_diagram()` returns `None` outright for unsupported combinations. Broadest suite coverage of any real-data feature in this app: **IllustrisTNG/SIMBA/Astrid/Swift-EAGLE**.
+- Colors are band-ratio magnitudes only (zero-point-independent) — the raw photometry files don't document an absolute zero-point/distance convention, so no absolute magnitude is ever shown, only ratios where the zero-point cancels.
+- No halos table under this tile — the chart itself already shows every cross-matched galaxy; a separate Subfind table would need a different join (`SubhaloIndex`) this tile doesn't otherwise use. Deferred as a real, flagged follow-up rather than routed through `UnderlyingHalos`.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { ColorMassDiagramSidebar } from '@/components/ColorMassDiagramSidebar/ColorMassDiagramSidebar';
+import type { ColorMassDiagramParams } from '@/components/ColorMassDiagramSidebar/ColorMassDiagramSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<ColorMassDiagramParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 42, snapnum: 33,
+    spsModel: 'BC03', spectraType: 'attenuated',
+    filterFamily: 'SLOAN', band1: 'SDSS.g', band2: 'SDSS.r',
+  });
+  return (
+    <ColorMassDiagramSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

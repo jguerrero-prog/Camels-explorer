@@ -2977,6 +2977,32 @@ def get_color_mass_diagram(suite, set_name, realization, color=None, band1=None,
     )
 
 
+def render_color_mass_diagram_png(suite, set_name, realization, band1=None, band2=None,
+                                   snapnum=N_SNAPSHOTS - 1, sps_model="BC03", spectra_type="attenuated",
+                                   fetch_public: bool = False) -> bytes | None:
+    """Mirrors app.py's own "Color-Mass Diagram" block exactly: a plain
+    scatter of color vs. log10 stellar mass. Returns None (real-data only,
+    no synthetic fallback) when get_color_mass_diagram itself does."""
+    result = get_color_mass_diagram(
+        suite, set_name, realization, band1=band1, band2=band2, snapnum=snapnum,
+        sps_model=sps_model, spectra_type=spectra_type, fetch_public=fetch_public,
+    )
+    if result is None:
+        return None
+
+    fig, ax = plt.subplots(figsize=(7, 5.5))
+    ax.scatter(result.log_mass, result.color, s=14, alpha=0.5, c="#2b5f8a")
+    ax.set_xlabel("log10 Stellar Mass [Msun/h]")
+    ax.set_ylabel(f"{result.color_label} [mag]")
+    ax.grid(alpha=0.3, which="both")
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, facecolor="white")
+    plt.close(fig)
+    return buf.getvalue()
+
+
 @lru_cache(maxsize=32)
 def _fetch_bispectrum(suite, set_name, realization, bk_type, mu_index=BK_EQUILATERAL_MU_INDEX):
     """Real low-k (FFT-based) k1=k2 bispectrum at one mu bin, real-space,
@@ -3077,6 +3103,33 @@ def get_field_pdf(suite, field, grid=128, redshift=0.0, fetch_public: bool = Fal
     )
 
 
+def render_field_pdf_png(suite, field, grid=128, redshift=0.0, fetch_public: bool = False) -> bytes | None:
+    """Mirrors app.py's own "Field PDF" block exactly: mean line +/- 1 std
+    band (fill_between) across the ensemble, log-y. Returns None
+    (real-data only, no synthetic fallback) when get_field_pdf itself
+    does."""
+    pdf = get_field_pdf(suite, field, grid=grid, redshift=redshift, fetch_public=fetch_public)
+    if pdf is None:
+        return None
+
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    ax.plot(pdf.bin_index, pdf.mean_counts, lw=2, color="#2b5f8a", label="mean")
+    lower = np.clip(pdf.mean_counts - pdf.std_counts, 1e-3, None)
+    ax.fill_between(pdf.bin_index, lower, pdf.mean_counts + pdf.std_counts,
+                     alpha=0.3, color="#2b5f8a", label="±1 std across realizations")
+    ax.set_yscale("log")
+    ax.set_xlabel("bin index (0-499, uncalibrated)")
+    ax.set_ylabel(f"count [{pdf.field}]")
+    ax.grid(alpha=0.3, which="both")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, facecolor="white")
+    plt.close(fig)
+    return buf.getvalue()
+
+
 def get_lya_spectrum(suite, set_name, realization, snapnum, sightline,
                       fetch_public: bool = False) -> LymanAlphaSpectrum | None:
     """Real Lyman-alpha transmission spectrum for one of 5000 sightlines at
@@ -3111,3 +3164,31 @@ def get_lya_spectrum(suite, set_name, realization, snapnum, sightline,
               f"is applied (fake_spectra's own dv isn't safely re-derivable from the file's "
               f"stored header alone)."),
     )
+
+
+def render_lya_spectrum_png(suite, set_name, realization, snapnum, sightline,
+                             fetch_public: bool = False) -> bytes | None:
+    """Mirrors app.py's own "Lyman-alpha Spectrum" block exactly: a 2-row
+    shared-x figure (transmitted flux on top, HI column density below,
+    log-y). Returns None (real-data only, no synthetic fallback) when
+    get_lya_spectrum itself does."""
+    lya = get_lya_spectrum(suite, set_name, realization, snapnum, sightline, fetch_public=fetch_public)
+    if lya is None:
+        return None
+
+    fig, (ax, ax2) = plt.subplots(2, 1, figsize=(9, 6), sharex=True)
+    ax.plot(lya.pixel, lya.flux, lw=1.2, color="#2b5f8a")
+    ax.set_ylim(0, 1.05)
+    ax.set_ylabel("transmitted flux (e^-tau)")
+    ax.grid(alpha=0.3)
+    ax2.plot(lya.pixel, lya.colden, lw=1.2, color="#8a4a2b")
+    ax2.set_yscale("log")
+    ax2.set_xlabel("spectral pixel (uncalibrated)")
+    ax2.set_ylabel("HI column density")
+    ax2.grid(alpha=0.3, which="both")
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, facecolor="white")
+    plt.close(fig)
+    return buf.getvalue()

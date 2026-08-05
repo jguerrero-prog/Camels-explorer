@@ -1,0 +1,52 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as FieldPDFSidebarStories from './FieldPDFSidebar.stories';
+
+<Meta of={FieldPDFSidebarStories} />
+
+# FieldPDFSidebar
+
+Field PDF's real per-tile sidebar, from `app.py`'s own `elif statistic == "Field PDF":` block — structurally unique among every sidebar in this app.
+
+## Token
+
+Composed entirely from existing fields — see `SelectField.mdx`, `OptionSlider.mdx`, `Button.mdx`. No tokens of its own.
+
+## Spec
+
+<Canvas of={FieldPDFSidebarStories.Playground} />
+<Controls />
+
+- Suite: `SelectField` — the only field shared with any other sidebar.
+- Field: `SelectField`, options from `GET /api/metadata`'s `cmd_fields` (all 13 real CMD field names + labels).
+- Grid resolution: `OptionSlider` over `pdf_grids` (`128`/`256` — real, published resolutions; `512` is listed in the upstream docs but doesn't exist in the real directory, per `backend.py`'s own comment, so it's correctly absent here too).
+- Redshift: `OptionSlider` over `pdf_redshifts` (`0.0`–`2.0` in 5 real steps).
+
+**No Set/Realization fields at all — not even `SingleRealizationFields`.** This is the one real structural difference from every other sidebar: `get_field_pdf()`'s own single small file already covers the mean ± std shape across **all 1000 LH realizations at once**, so picking one Set/Realization would be meaningless for this statistic — matches `app.py`'s own real caption ("Uses the Suite selector above but ignores Set/Realization").
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/field-pdf` (JSON) and `/plot.png` (the real mean±std band render).
+- **Real-data only, no synthetic fallback.** Only **IllustrisTNG/SIMBA**.
+- **Real, load-bearing documentation gap, disclosed not hidden**: the x-axis is a raw histogram bin index (0–499), not a physical field value — no bin-edge or value-range/transform is published anywhere in the upstream release. The chart's own x-axis label ("bin index (0-499, uncalibrated)") states this directly, matching `backend.py`'s own `FieldPDF` dataclass comment.
+- No halos table under this tile — Field PDF is an ensemble-level field statistic with no per-realization or per-halo concept at all.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { FieldPDFSidebar } from '@/components/FieldPDFSidebar/FieldPDFSidebar';
+import type { FieldPDFParams } from '@/components/FieldPDFSidebar/FieldPDFSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<FieldPDFParams>({
+    suite: 'IllustrisTNG', field: 'Mtot', grid: 128, redshift: 0.0,
+  });
+  return (
+    <FieldPDFSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```
