@@ -183,15 +183,16 @@ export function App() {
         />
       )}
       <div className="app-shell__main">
-        <TopNav folderName="Untitled" projectName="Project 1" onAddPlot={() => openAddPlotModal(null)} />
-        {/* Real evidence (Figma node 1113:1583's header): the toolbar isn't
-            present at all in the zero-plots skeleton — it only shows once a
-            plot exists on the canvas. */}
-        {tiles.length > 0 && (
-          <div className="app-shell__toolbar-row">
-            <Toolbar viewMode={viewMode} onViewModeChange={setViewMode} />
-          </div>
-        )}
+        <TopNav
+          folderName="Untitled"
+          projectName="Project 1"
+          onAddPlot={() => openAddPlotModal(null)}
+          // Real evidence (Figma node 1113:1583's header, and 1012:1124's
+          // merged header/toolbar): the toolbar isn't present at all in the
+          // zero-plots skeleton, and lives in the SAME row as the
+          // breadcrumbs/Add Plot button, not a separate row beneath it.
+          toolbar={tiles.length > 0 ? <Toolbar viewMode={viewMode} onViewModeChange={setViewMode} /> : undefined}
+        />
         <div className="app-shell__canvas">
           <Viewer mode={viewMode}>
             {tiles.length === 0 ? (

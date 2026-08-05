@@ -11,8 +11,10 @@
 
 :root {
   --neutral-black: #000000;
+  --neutral-960: #0b0b0f;  /* canvas surface: the Viewer area behind tiles - new from Stellar Mass Function drill-down (1019:112, "2x2 panel") - darker than chrome despite the higher index; naming here is an ad hoc slot, not a strict lightness ramp (see --neutral-920's note below) */
   --neutral-950: #121111;  /* chrome surface: sidebar, top nav */
   --neutral-925: #14141a;  /* content surface: tile background - one step lighter than chrome */
+  --neutral-915: #0f0f13;  /* table surface: UnderlyingHalos' footer/reveal containers - new from same frame (1019:133, 1019:143) */
   --neutral-920: #222228;  /* multiselect chip fill - new from MultiSelect (1019:37). Naming here is an ad hoc index, not a strict lightness ramp - #14141a (925) is visually darker than this despite the higher number. */
   --neutral-910: #1f1f21;  /* viewmode-toggle container fill - new from Toolbar (1078:30) */
   --neutral-900: #1a1a1a;  /* borders; also the empty-state icon-wrap fill */

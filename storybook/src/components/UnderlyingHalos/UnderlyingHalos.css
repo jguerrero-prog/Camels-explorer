@@ -3,14 +3,18 @@
   border-top: 1px solid var(--color-border);
 }
 
+/* Real background (Figma node 1019:133, "underlying-halos-footer") - its
+   own distinct surface, not the tile's --color-surface-content bleeding
+   through (corrected 2026-08-05, previously `background: none`). */
 .underlying-halos__header {
   width: 100%;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 12px 4px;
-  background: none;
+  background: var(--color-surface-table);
   border: none;
+  border-radius: 8px;
   cursor: pointer;
   text-align: left;
 }
@@ -33,11 +37,16 @@
   color: var(--color-text-muted);
 }
 
+/* Real background (Figma node 1019:143, "underlying-halos-reveal") - same
+   surface as the header above, corrected 2026-08-05 (previously
+   transparent, showing the tile's own --color-surface-content instead). */
 .underlying-halos__reveal {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  padding: 4px 4px 16px;
+  padding: 16px 20px 20px;
+  background: var(--color-surface-table);
+  border-radius: 8px;
 }
 
 .underlying-halos__controls {
@@ -154,15 +163,17 @@
   text-align: left;
 }
 
+/* Real fix 2026-08-05 (Figma node 1019:157, "table-header"): plain
+   sentence-case text, no bold/uppercase treatment - previously implemented
+   as uppercase/letter-spaced/semi-bold, none of which the real frame
+   shows. */
 .underlying-halos__table th {
   position: sticky;
   top: 0;
   z-index: 2;
   font-family: var(--font-label);
-  font-weight: 600;
+  font-weight: 400;
   font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   color: var(--color-text-muted);
   background: var(--color-surface-control);
 }

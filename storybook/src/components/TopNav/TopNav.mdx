@@ -5,7 +5,7 @@ import * as TopNavStories from './TopNav.stories';
 
 # TopNav
 
-The 64px header row from the "Skeleton" frame (Figma node `1113:1583`): the folder/project name on the left, the primary "Add Plot" action on the right.
+The 64px header row — the folder/project name on the left, the primary "Add Plot" action on the right, and (once a plot exists) `Toolbar` in the same row, between the two. Sourced from two real frames: the zero-plots "Skeleton" (Figma node `1113:1583`, no toolbar) and the Stellar Mass Function drill-down's real `header` (node `1012:1124`, toolbar present).
 
 ## Token
 
@@ -21,9 +21,13 @@ The 64px header row from the "Skeleton" frame (Figma node `1113:1583`): the fold
 <Canvas of={TopNavStories.Playground} />
 <Controls />
 
-- Height 64px, full width, horizontal padding 28px, `justify-content: space-between`.
+- Height 64px, full width, horizontal padding 28px, `justify-content: space-between` across up to 3 children: path, `toolbar` (when passed), Add Plot button.
 - Path display: `folderName` (muted, weight 500) `/` (faint separator) `projectName` (emphasis white, weight 600) — matching the real frame's "Untitled / Project 1".
 - Add Plot button: 40px tall, 12px radius, the real diagonal purple→red gradient plus a `0px 8px 9px rgba(0,0,0,0.4)` drop shadow, 18×18 plus icon + label.
+
+<Canvas of={TopNavStories.WithToolbar} />
+
+**Resolved 2026-08-05, real bug fixed:** this component's own "Still open" note previously flagged that the toolbar-visible state hadn't been provided yet — it has now (Figma node `1012:1124`), and it shows `Toolbar` living in **this same row**, not a separate row beneath it (`App.tsx` originally rendered them as two stacked rows — a real layout bug, not a design choice, fixed by adding the `toolbar` prop here and deleting `App.tsx`'s own `.app-shell__toolbar-row`). `toolbar` is a plain `ReactNode` slot: omit it entirely (not just hide) when no plot exists yet, matching the zero-plots "Skeleton" frame having no toolbar at all.
 
 **Deliberate deviation from Figma (2026-08-04):** the raw frame specifies the label at `font-weight: 700` (Lato Bold); implemented at `600` per direct user request after seeing it rendered — one weight lighter than the literal spec. Noted here rather than silently matching Figma's stated value, since this is a real, intentional adjustment, not an oversight.
 
@@ -31,7 +35,6 @@ The 64px header row from the "Skeleton" frame (Figma node `1113:1583`): the fold
 
 **Still open:**
 - **Whether either segment is editable (rename) isn't shown in this frame.** `folderName`/`projectName` are plain props here, not editable fields.
-- **More views are coming** — the toolbar-visible state of this header, and other TopNav variants, haven't been provided yet. Nothing below should be read as "the only state this component has" until those arrive.
 
 ## Usecase
 
@@ -46,10 +49,12 @@ The 64px header row from the "Skeleton" frame (Figma node `1113:1583`): the fold
 
 ```tsx
 import { TopNav } from '@/components/TopNav/TopNav';
+import { Toolbar } from '@/components/Toolbar/Toolbar';
 
 <TopNav
   folderName="Untitled"
   projectName="Project 1"
   onAddPlot={() => openAddPlotFlow()}
+  toolbar={tiles.length > 0 ? <Toolbar viewMode={viewMode} onViewModeChange={setViewMode} /> : undefined}
 />
 ```
