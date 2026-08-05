@@ -1,0 +1,43 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as SingleRealizationFieldsStories from './SingleRealizationFields.stories';
+
+<Meta of={SingleRealizationFieldsStories} />
+
+# SingleRealizationFields
+
+Suite / Set / Realization, with no Compare mode — the sibling of `RealizationFields` for the seven real statistics `app.py`'s own `SINGLE_REALIZATION_STATISTICS` tuple lists as not supporting overlay/compare mode (each has its own real caption confirming it: *"Compare mode doesn't apply to this view"*).
+
+## Token
+
+Inherits everything from its composed fields — see `SelectField.mdx`, `NumberStepper.mdx`. No tokens of its own.
+
+## Spec
+
+<Canvas of={SingleRealizationFieldsStories.Playground} />
+<Controls />
+
+- Suite / Set: `SelectField`, options from `GET /api/metadata` (via `useCatalogMetadata`).
+- Realization: a plain `NumberStepper` — no `Checkbox`/`MultiSelect` at all, unlike `RealizationFields`.
+- Changing Set resets `realization` to `0` — same reasoning as `RealizationFields`.
+
+## Usecase
+
+- Real usage: the first three fields inside the sidebars for **Galaxy Scaling Relations, 3D Density Field, 3D Particle Cloud, 2D Field Map, X-ray Halo Profiles, Halo Gas Profiles, Color-Mass Diagram, Lyman-alpha Spectrum** — every one of `app.py`'s own `SINGLE_REALIZATION_STATISTICS`.
+- Not a variant of `RealizationFields` with a hidden Compare-mode prop — kept as a fully separate component since seven real statistics need exactly this shape and none of the multi-realization machinery (`compareMode`, `realizations: number[]`, `MultiSelect`) at all.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { SingleRealizationFields } from '@/components/SingleRealizationFields/SingleRealizationFields';
+import type { SingleRealizationFieldsValue } from '@/components/SingleRealizationFields/SingleRealizationFields';
+import { useCatalogMetadata } from '@/lib/useCatalogMetadata';
+
+function Sidebar() {
+  const catalog = useCatalogMetadata();
+  const [value, setValue] = useState<SingleRealizationFieldsValue>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 42,
+  });
+  return <SingleRealizationFields catalog={catalog} value={value} onChange={setValue} />;
+}
+```

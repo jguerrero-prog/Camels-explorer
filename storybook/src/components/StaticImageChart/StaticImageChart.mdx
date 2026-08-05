@@ -1,0 +1,38 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as StaticImageChartStories from './StaticImageChart.stories';
+
+<Meta of={StaticImageChartStories} />
+
+# StaticImageChart
+
+The static-image half of `PlotChart`, without the Static/Interactive toggle. Added 2026-08-05 for statistics `app.py` renders exclusively via `st.pyplot()`, with no Plotly equivalent at all: Galaxy Scaling Relations' 2x2 panel, 2D Field Map's heatmap, X-ray Halo Profiles/Halo Gas Profiles' colored-by-mass multi-line + colorbar, Color-Mass Diagram's scatter, Field PDF's band+fill, Lyman-alpha's dual-panel.
+
+## Token
+
+Reuses `PlotChart.css`'s `.plot-chart`/`.plot-chart__image`/`.plot-chart__error` classes directly (imported, not duplicated) — same white card surface (`--color-surface-chart`), same error-state typography.
+
+## Spec
+
+<Canvas of={StaticImageChartStories.RealImage} />
+<Canvas of={StaticImageChartStories.BrokenImage} />
+<Controls />
+
+- Plain `<img>` filling the card, `object-fit: contain`.
+- Real failure handling via the image's own `onError`/`onLoad` — same honest inline message `PlotChart`'s static mode already uses (server not running, non-200 response), rather than a silent broken-image icon.
+- **No toggle, ever — this is deliberate, not a missing feature.** Building a Plotly equivalent for any of these six shapes (a continuous-colormap multi-line chart, a 2x2 grid, a heatmap, a scatter, a band+fill, a dual-panel) would mean re-implementing six different chart types Plotly has no drop-in match for, toward a toggle `app.py` itself never offers for any of them.
+
+## Usecase
+
+- Real usage: `PlotTile`'s `chart` prop, when `chart.kind === 'static-image'` — see `PlotTile.mdx`. `PlotTile` renders this instead of `PlotChart` for exactly the six statistics named above.
+- Not a fallback or a degraded mode — for these statistics, the real matplotlib PNG *is* the complete, correct rendering, matching `app.py`'s own choice exactly.
+
+## Code
+
+```tsx
+import { StaticImageChart } from '@/components/StaticImageChart/StaticImageChart';
+
+function XrayProfilesChart({ suite, setName, realization }) {
+  const imageUrl = `http://localhost:8010/api/xray-profiles/plot.png?suite=${suite}&set_name=${setName}&realization=${realization}&fetch_public=true`;
+  return <StaticImageChart imageUrl={imageUrl} alt="X-ray luminosity profile vs radius" />;
+}
+```

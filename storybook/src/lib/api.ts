@@ -230,6 +230,74 @@ export function sfrHistoryImageUrl(params: {
   return `${API_BASE}/sfr-history/plot.png?${qs}`;
 }
 
+// Real-data-only, no synthetic fallback - both return the fetched
+// note/halo-count only (the chart itself is the PNG, see
+// xrayProfilesImageUrl/haloProfilesImageUrl), matching StaticImageChart's
+// own real image-load error handling for the chart proper. `null` means
+// exactly what api/deps.py's require() means server-side: no real data
+// for this selection (a 404), not a network failure.
+export type XrayProfilesMeta = { note: string; nHalos: number };
+
+export async function fetchXrayProfilesMeta(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+}): Promise<XrayProfilesMeta | null> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/xray-profiles?${qs}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return { note: data.note, nHalos: data.log_mass.length };
+}
+
+export function xrayProfilesImageUrl(params: { suite: string; setName: string; realization: number }): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  return `${API_BASE}/xray-profiles/plot.png?${qs}`;
+}
+
+export type HaloProfilesMeta = { note: string; nHalos: number };
+
+export async function fetchHaloProfilesMeta(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  snapnum: number;
+  field: string;
+}): Promise<HaloProfilesMeta | null> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    snapnum: String(params.snapnum), field: params.field, fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/halo-profiles?${qs}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return { note: data.note, nHalos: data.log_mass.length };
+}
+
+export function haloProfilesImageUrl(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  snapnum: number;
+  field: string;
+  highlightRank: number;
+}): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    snapnum: String(params.snapnum), field: params.field,
+    highlight_rank: String(params.highlightRank), fetch_public: 'true',
+  });
+  return `${API_BASE}/halo-profiles/plot.png?${qs}`;
+}
+
 export type HaloCatalogRow = Record<string, number>;
 export type HaloCatalog = {
   frame: HaloCatalogRow[];

@@ -1,5 +1,6 @@
 import { PlotChart } from '../PlotChart/PlotChart';
 import type { PlotSeries } from '../PlotChart/PlotChart';
+import { StaticImageChart } from '../StaticImageChart/StaticImageChart';
 import { ParamsReadout } from '../ParamsReadout/ParamsReadout';
 import type { ParamsReadoutGroup } from '../ParamsReadout/ParamsReadout';
 import { UnderlyingHalos } from '../UnderlyingHalos/UnderlyingHalos';
@@ -7,18 +8,30 @@ import type { HaloRow } from '../UnderlyingHalos/UnderlyingHalos';
 import '../Tile/Tile.css';
 import './PlotTile.css';
 
+export type PlotTileChart =
+  | {
+      kind?: 'plotly';
+      series: PlotSeries[];
+      xLabel: string;
+      yLabel: string;
+      logX?: boolean;
+      logY?: boolean;
+      /** Real, server-rendered matplotlib PNG URL - see PlotChart.mdx. Omit
+       * for a chart with no static render built yet (Interactive-only). */
+      imageUrl?: string;
+    }
+  | {
+      /** Statistics app.py renders exclusively via st.pyplot(), with no
+       * Plotly equivalent at all (see StaticImageChart.mdx) - the real PNG
+       * is the only render, not a default with an opt-in alternative. */
+      kind: 'static-image';
+      imageUrl: string;
+      alt: string;
+    };
+
 export type PlotTileProps = {
   title: string;
-  chart: {
-    series: PlotSeries[];
-    xLabel: string;
-    yLabel: string;
-    logX?: boolean;
-    logY?: boolean;
-    /** Real, server-rendered matplotlib PNG URL - see PlotChart.mdx. Omit
-     * for a chart with no static render built yet (Interactive-only). */
-    imageUrl?: string;
-  };
+  chart: PlotTileChart;
   readoutGroups: ParamsReadoutGroup[];
   /** `null` when this statistic has no per-halo catalog concept at all -
    * Power Spectrum, Bispectrum, and SFR History are field/box-level
@@ -48,14 +61,18 @@ export function PlotTile({ title, chart, readoutGroups, halos, onFocus }: PlotTi
     <div className="tile plot-tile" onClick={onFocus}>
       <h3 className="tile__title">{title}</h3>
       <div className="plot-tile__body">
-        <PlotChart
-          series={chart.series}
-          xLabel={chart.xLabel}
-          yLabel={chart.yLabel}
-          logX={chart.logX}
-          logY={chart.logY}
-          imageUrl={chart.imageUrl}
-        />
+        {chart.kind === 'static-image' ? (
+          <StaticImageChart imageUrl={chart.imageUrl} alt={chart.alt} />
+        ) : (
+          <PlotChart
+            series={chart.series}
+            xLabel={chart.xLabel}
+            yLabel={chart.yLabel}
+            logX={chart.logX}
+            logY={chart.logY}
+            imageUrl={chart.imageUrl}
+          />
+        )}
         <ParamsReadout groups={readoutGroups} />
       </div>
       {halos && <UnderlyingHalos rows={halos.rows} rawRows={halos.rawRows} massContextNote={halos.massContextNote} />}
