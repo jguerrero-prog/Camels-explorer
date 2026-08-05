@@ -3,13 +3,23 @@
    than a variant prop on Tile. Everything below is populated-state-only
    layout. */
 
+/* Real bug fixed 2026-08-04: once UnderlyingHalos could grow past ~420px
+   (removing its old 5-row cap), .plot-tile__body's old `min-height: 0`
+   let flexbox collapse it toward zero when the tile's grid-allotted
+   height couldn't fit both - but PlotChart still rendered at its own
+   320px min-height regardless, visually overflowing the collapsed body
+   box and overlapping UnderlyingHalos below it. Overriding `.tile`'s
+   `overflow: hidden` here lets the whole tile scroll internally instead
+   of squeezing a child below its real minimum content size. */
 .plot-tile {
   cursor: pointer;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .plot-tile__body {
   flex: 1;
-  min-height: 0;
+  min-height: 340px;
   display: flex;
   gap: 4px;
 }
