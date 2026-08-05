@@ -3,15 +3,20 @@
  * two families for two distinct roles: Inter for nav chrome (breadcrumbs),
  * Lato for buttons/labels/stat chips. Real, not a guess - kept as two
  * tokens rather than one because the design consistently pairs them by
- * role, not interchangeably.
+ * role, not interchangeably. A third, --font-mono, was added 2026-08-04
+ * once the "Stellar Mass Function drill-down" frame (node 1019:10) showed
+ * JetBrains Mono used specifically for the params-readout column - a
+ * distinct, deliberate role (tabular numeric readout) from either of the
+ * other two.
  *
- * Open gap, flagged rather than silently worked around: neither font is
- * actually loaded yet (no @font-face, no CDN link) - these fall back to
- * system fonts until a real loading strategy (self-hosted woff2 vs. a
- * Google Fonts link) is decided.
+ * Open gap, flagged rather than silently worked around: none of the three
+ * fonts are actually loaded yet (no @font-face, no CDN link) - these fall
+ * back to system fonts until a real loading strategy (self-hosted woff2 vs.
+ * a Google Fonts link) is decided.
  */
 
 :root {
   --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-label: 'Lato', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 }

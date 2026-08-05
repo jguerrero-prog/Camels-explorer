@@ -43,6 +43,16 @@
   --color-accent-gradient-start: var(--brand-purple);
   --color-accent-gradient-end: var(--brand-bright-red);
 
+  /* Real, deliberate inversion (Figma node 1019:10, "Stellar Mass Function
+     drill-down"): the rendered chart itself sits on a plain white card,
+     unlike every other dark-chrome surface in this app - standard practice
+     for a scientific line/log plot (axis lines and data need to read against
+     white, not the app's dark theme). Literal value, not derived from the
+     neutral-950..white ramp - that ramp is scoped to the app's own dark
+     chrome, and mixing it into a plot backdrop would tie two unrelated
+     design decisions together. */
+  --color-surface-chart: #FFFFFF;
+
   /* Corrected 2026-08-04: the empty-state icon's border is its OWN, richer
      4-stop top-to-bottom gradient (7B2D8E -> B0336A -> E8A030 -> E63946),
      not a flat single color and not the same 2-stop gradient as the Add

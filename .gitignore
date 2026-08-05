@@ -10,3 +10,4 @@ dist/
 *.local
 *storybook.log
 storybook-static
+*.tsbuildinfo

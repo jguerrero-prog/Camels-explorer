@@ -1,0 +1,56 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as UnderlyingHalosStories from './UnderlyingHalos.stories';
+
+<Meta of={UnderlyingHalosStories} />
+
+# UnderlyingHalos
+
+The collapsible "View underlying halos" section under a rendered plot, from Figma node `1019:10` (collapsed header) and `1019:114` (expanded reveal: slider, "+ Add a halo finder", table, footer).
+
+## Token
+
+- `--color-border` / `--color-border-subtle` — section divider, table borders.
+- `--color-surface-control` — table header row background.
+- `--font-label` (Lato) — "View underlying halos", table headers, buttons.
+- `--font-mono` (JetBrains Mono) — table body values, same tabular-numeric role as `ParamsReadout`.
+
+## Spec
+
+<Canvas of={UnderlyingHalosStories.Collapsed} />
+<Controls />
+
+- Header: chevron (rotates -90°→0° collapsed→expanded) + "View underlying halos" + a right-aligned real halo count.
+- **Deliberate, undecided-by-Figma default: starts collapsed.** The frame only ever shows the expanded state — nothing in it confirms which way this control defaults. Collapsed was picked so a populated tile doesn't grow to full table height before the user asks for it; revisit if that reads wrong once seen next to a real full canvas of tiles.
+
+<Canvas of={UnderlyingHalosStories.Expanded} />
+
+- Reveal: a `Slider` ("Minimum stellar mass") that filters the table **client-side** against the already-fetched catalog — no new network fetch per drag, since the whole realization's catalog is already in memory (same data `PlotTile`'s "View underlying halos" count and this table both read from).
+- A 7-column table (Subfind ID / Stellar Mass / Gas Mass / DM Mass / BH Mass / SFR / Vmax) capped at 5 visible rows, footer text for the remainder, and a real "Download CSV" that exports every currently-filtered row (not just the 5 shown) as an actual file download.
+
+**Real, deliberate scope decision:** the table shows 7 of the real catalog's 9 columns (`GET /api/halo-catalog`) — Half-mass Radius and Stellar Metallicity are dropped to keep the table narrow enough not to force horizontal scroll at the tile's typical width. Not a data limitation, just a display choice.
+
+**"+ Add a halo finder" is a real, named, currently-inert control** — same pattern as `AddPlotModal`'s Custom tab. `backend.py` already has real alternate-finder catalogs (AHF/Rockstar/CAESAR, wired into the Streamlit prototype's own Catalog Browser tab), but overlaying them into *this* table is new work this task didn't scope — flagged here rather than silently either wiring a partial version or hiding that the capability exists upstream.
+
+## Usecase
+
+- Real usage: nested inside `PlotTile`, fed the same `GET /api/halo-catalog?...&fetch_public=true` response `PlotTile` already fetches for its chart's realization — this component never fetches on its own, it only renders/filters/exports rows it's given.
+- Download CSV is genuinely functional in every context (Storybook or the real app) since it operates entirely on the `rows` prop already in memory — no network call at export time either.
+
+## Code
+
+```tsx
+import { UnderlyingHalos } from '@/components/UnderlyingHalos/UnderlyingHalos';
+
+function HalosSection({ catalogFrame }) {
+  const rows = catalogFrame.map((row) => ({
+    subfindId: row.SubfindID,
+    stellarMass: row['Stellar Mass [Msun/h]'],
+    gasMass: row['Gas Mass [Msun/h]'],
+    dmMass: row['DM Mass [Msun/h]'],
+    bhMass: row['BH Mass [Msun/h]'],
+    sfr: row['SFR [Msun/yr]'],
+    vmax: row['Vmax [km/s]'],
+  }));
+  return <UnderlyingHalos rows={rows} />;
+}
+```

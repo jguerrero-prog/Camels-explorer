@@ -1,0 +1,48 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as ParamsReadoutStories from './ParamsReadout.stories';
+
+<Meta of={ParamsReadoutStories} />
+
+# ParamsReadout
+
+The small monospace label/value column beside a rendered chart, from Figma node `1019:10` — four groups in the real frame (Suite/Set, Realizations (compare), Stellar mass range, Bins), read-only context for whatever's currently plotted.
+
+## Token
+
+- `--font-mono` (JetBrains Mono) — added to `typography.css` specifically for this component; every other field in this app uses `--font-ui`/`--font-label`. This is a deliberate, distinct role: a tabular numeric readout, not editable UI chrome.
+- `--font-label` (Lato) — the uppercase group labels.
+- `--color-border` — the left divider separating this column from the chart.
+- `--color-text-muted` / `--color-text-primary` — label vs. value.
+
+## Spec
+
+<Canvas of={ParamsReadoutStories.Playground} />
+<Controls />
+
+- Fixed 200px column, left border divider, 16px gap between groups.
+- Each group: a small uppercase muted label, then the value in monospace directly below.
+- Purely a display — no interaction, no editing. The real controls for these same values live in `ParamsSidebar` (Suite/Set/Realization/Compare-mode/etc.); this column just reflects the current state back beside the chart it produced.
+
+<Canvas of={ParamsReadoutStories.CompareMode} />
+
+**The Canvas above renders illustrative values, not confirmed defaults.** `SMmin`/`SMmax`/`bins` shown here match `app.py`'s real Stellar Mass Function defaults (1e9 / 5e11 / 10) — see `PlotTile.mdx` for where these are wired from live state, not hardcoded.
+
+## Usecase
+
+- Real usage: `PlotTile`'s populated body, alongside `PlotChart`.
+- `groups` is a plain array specifically so any statistic can supply its own real field set — Stellar Mass Function's four groups aren't assumed to be the same set every other statistic would need.
+
+## Code
+
+```tsx
+import { ParamsReadout } from '@/components/ParamsReadout/ParamsReadout';
+
+<ParamsReadout
+  groups={[
+    { label: 'Suite / Set', value: 'IllustrisTNG · LH' },
+    { label: 'Realizations (compare)', value: '278' },
+    { label: 'Stellar mass range', value: '1e9 – 5e11' },
+    { label: 'Bins', value: '10' },
+  ]}
+/>
+```
