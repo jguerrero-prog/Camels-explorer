@@ -331,6 +331,12 @@
   padding-bottom: 16px;
 }
 
+.underlying-halos__fullscreen-header-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
 .underlying-halos__fullscreen-close {
   width: 32px;
   height: 32px;

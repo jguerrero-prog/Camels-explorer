@@ -400,7 +400,15 @@ export function UnderlyingHalos({ rows, rawRows, defaultExpanded = false }: Unde
         createPortal(
           <div className="underlying-halos__fullscreen">
             <div className="underlying-halos__fullscreen-header">
-              <span className="underlying-halos__label">View underlying halos</span>
+              <div className="underlying-halos__fullscreen-header-left">
+                <span className="underlying-halos__label">View underlying halos</span>
+                <Checkbox
+                  label="Show all available fields (raw)"
+                  checked={showAllFields}
+                  onChange={setShowAllFields}
+                  disabled={!rawRows}
+                />
+              </div>
               <button type="button" className="underlying-halos__fullscreen-close" onClick={() => setFullscreen(false)} aria-label="Exit fullscreen">
                 ×
               </button>
