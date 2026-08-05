@@ -1,16 +1,11 @@
-import { useEffect, useState } from 'react';
 import { ParamsSidebar } from '../ParamsSidebar/ParamsSidebar';
-import { SelectField } from '../SelectField/SelectField';
 import { NumberStepper } from '../NumberStepper/NumberStepper';
 import { Slider } from '../Slider/Slider';
-import { Checkbox } from '../Checkbox/Checkbox';
-import { MultiSelect } from '../MultiSelect/MultiSelect';
 import { Button } from '../Button/Button';
+import { RealizationFields } from '../RealizationFields/RealizationFields';
+import { useCatalogMetadata } from '../../lib/useCatalogMetadata';
 import type { MassRangeStatistic } from './massRangeConfig';
 import { MASS_RANGE_CONFIGS } from './massRangeConfig';
-
-// Dev-only, matches AddPlotModal/CuratedTab.tsx's own API_BASE.
-const API_BASE = 'http://localhost:8010/api';
 
 export type MassRangeParams = {
   suite: string;
@@ -21,9 +16,6 @@ export type MassRangeParams = {
   max: number;
   bins: number;
 };
-
-type CatalogSet = { name: string; label: string; realizations: number; description: string };
-type Catalog = { suites: string[]; sets: CatalogSet[]; statistics: string[] };
 
 export type MassRangeSidebarProps = {
   statistic: MassRangeStatistic;
@@ -39,72 +31,17 @@ export type MassRangeSidebarProps = {
  * `StellarMassFunctionSidebar` (Figma node `1019:10`); generalized
  * 2026-08-05 once Halo Mass Function/Baryon Fraction's real backend.py
  * signatures were confirmed to differ only in mass-param names and
- * per-statistic defaults, not shape - see MassRangeSidebar.mdx. */
+ * per-statistic defaults, not shape - see MassRangeSidebar.mdx.
+ * Suite/Set/Compare mode/Realization now come from `RealizationFields`
+ * (extracted the same day once PowerSpectrumSidebar/BispectrumSidebar/
+ * SFRHistorySidebar were about to duplicate this same block again). */
 export function MassRangeSidebar({ statistic, params, onChange, onRemove }: MassRangeSidebarProps) {
-  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const catalog = useCatalogMetadata();
   const config = MASS_RANGE_CONFIGS[statistic];
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`${API_BASE}/metadata`)
-      .then((res) => res.json())
-      .then((data: Catalog) => !cancelled && setCatalog(data))
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const activeSet = catalog?.sets.find((s) => s.name === params.setName);
 
   return (
     <ParamsSidebar title={statistic}>
-      <SelectField
-        label="Suite"
-        value={params.suite}
-        options={catalog?.suites ?? [params.suite]}
-        onChange={(suite) => onChange({ ...params, suite })}
-      />
-      <SelectField
-        label="Set"
-        value={activeSet?.label ?? params.setName}
-        options={catalog?.sets.map((s) => s.label) ?? [params.setName]}
-        onChange={(label) => {
-          const next = catalog?.sets.find((s) => s.label === label);
-          if (next) onChange({ ...params, setName: next.name, realizations: [0] });
-        }}
-      />
-      <Checkbox
-        label="Compare mode"
-        checked={params.compareMode}
-        onChange={(compareMode) => onChange({ ...params, compareMode })}
-      />
-      {params.compareMode ? (
-        <MultiSelect
-          label="Realizations to compare"
-          values={params.realizations.map(String)}
-          onAdd={(value) => {
-            const n = Number(value);
-            if (Number.isFinite(n) && !params.realizations.includes(n)) {
-              onChange({ ...params, realizations: [...params.realizations, n] });
-            }
-          }}
-          onRemove={(value) => {
-            const remaining = params.realizations.filter((r) => String(r) !== value);
-            if (remaining.length > 0) onChange({ ...params, realizations: remaining });
-          }}
-          placeholder="Add realization…"
-          caption={activeSet ? `${activeSet.realizations.toLocaleString()} realizations available` : undefined}
-          options={activeSet ? Array.from({ length: activeSet.realizations }, (_, i) => String(i)) : undefined}
-        />
-      ) : (
-        <NumberStepper
-          label="Realization"
-          value={params.realizations[0]}
-          onChange={(realization) => onChange({ ...params, realizations: [realization] })}
-          caption={activeSet ? `0–${activeSet.realizations - 1}` : undefined}
-        />
-      )}
+      <RealizationFields catalog={catalog} value={params} onChange={(v) => onChange({ ...params, ...v })} />
       <NumberStepper
         label={config.minLabel}
         value={params.min}

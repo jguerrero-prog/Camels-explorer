@@ -1,0 +1,43 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as RealizationFieldsStories from './RealizationFields.stories';
+
+<Meta of={RealizationFieldsStories} />
+
+# RealizationFields
+
+The Suite / Set / Compare mode / Realization(s) block every per-tile sidebar in this app opens with. Extracted 2026-08-05 from `MassRangeSidebar` when `PowerSpectrumSidebar`, `BispectrumSidebar`, and `SFRHistorySidebar` were all about to duplicate the identical block — real duplication crossing this project's own "three strikes" line, not a pre-emptive abstraction.
+
+## Token
+
+Inherits everything from its composed fields — see `SelectField.mdx`, `Checkbox.mdx`, `MultiSelect.mdx`, `NumberStepper.mdx`. No tokens of its own.
+
+## Spec
+
+<Canvas of={RealizationFieldsStories.Playground} />
+<Controls />
+
+- Suite / Set: `SelectField`, options from `GET /api/metadata` (via `useCatalogMetadata`, the extracted fetch hook every statistic sidebar now shares).
+- Compare mode: `Checkbox`. Off → `NumberStepper` "Realization". On → `MultiSelect` "Realizations to compare".
+- Changing Set resets `realizations` to `[0]` — a different set has a different, unrelated realization count, so keeping a stale index risks silently picking an out-of-range realization for the new set.
+
+## Usecase
+
+- Real usage: the first four fields inside `MassRangeSidebar`, `PowerSpectrumSidebar`, `BispectrumSidebar`, `SFRHistorySidebar` — every one of them renders this, then appends its own statistic-specific fields (mass range, Power Spectrum's grid/MAS/ptype/k-range, Bispectrum's field/triangle-shape, SFR History's z-range/symbolic-fit) below it.
+- Not every statistic uses this — several (Galaxy Scaling Relations, 3D Density Field, 3D Particle Cloud, 2D Field Map, Halo Gas Profiles, Color-Mass Diagram, Lyman-alpha Spectrum) are real, single-realization-only views per `app.py`'s own `SINGLE_REALIZATION_STATISTICS` tuple — their sidebars use a plain `NumberStepper` "Realization" with no Compare mode `Checkbox` at all, not this component.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { RealizationFields } from '@/components/RealizationFields/RealizationFields';
+import type { RealizationFieldsValue } from '@/components/RealizationFields/RealizationFields';
+import { useCatalogMetadata } from '@/lib/useCatalogMetadata';
+
+function Sidebar() {
+  const catalog = useCatalogMetadata();
+  const [value, setValue] = useState<RealizationFieldsValue>({
+    suite: 'IllustrisTNG', setName: 'LH', compareMode: false, realizations: [42],
+  });
+  return <RealizationFields catalog={catalog} value={value} onChange={setValue} />;
+}
+```
