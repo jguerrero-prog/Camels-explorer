@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { TopNav } from './TopNav';
 
 const meta: Meta<typeof TopNav> = {
-  title: 'App Shell/TopNav',
+  title: 'Sections/TopNav',
   component: TopNav,
   parameters: { layout: 'fullscreen' },
   args: {

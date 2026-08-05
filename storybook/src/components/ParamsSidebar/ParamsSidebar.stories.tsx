@@ -7,7 +7,7 @@ import { NumberStepper } from '../NumberStepper/NumberStepper';
 import { Checkbox } from '../Checkbox/Checkbox';
 
 const meta: Meta<typeof ParamsSidebar> = {
-  title: 'App Shell/ParamsSidebar',
+  title: 'Sections/ParamsSidebar',
   component: ParamsSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '100vh' }}><Story /></div>],

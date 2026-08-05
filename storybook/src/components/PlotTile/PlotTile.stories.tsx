@@ -4,7 +4,7 @@ import { PlotTile } from './PlotTile';
 import type { HaloRow } from '../UnderlyingHalos/UnderlyingHalos';
 
 const meta: Meta<typeof PlotTile> = {
-  title: 'App Shell/PlotTile',
+  title: 'Sections/PlotTile',
   component: PlotTile,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '720px', height: '520px' }}><Story /></div>],

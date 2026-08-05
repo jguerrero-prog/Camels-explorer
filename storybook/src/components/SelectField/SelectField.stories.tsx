@@ -4,7 +4,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { SelectField } from './SelectField';
 
 const meta: Meta<typeof SelectField> = {
-  title: 'Controls/SelectField',
+  title: 'Fields/SelectField',
   component: SelectField,
   parameters: { layout: 'centered' },
   decorators: [(Story) => <div style={{ width: '280px', background: 'var(--color-surface-chrome)', padding: '16px' }}><Story /></div>],

@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { MultiSelect } from './MultiSelect';
 
 const meta: Meta<typeof MultiSelect> = {
-  title: 'Controls/MultiSelect',
+  title: 'Fields/MultiSelect',
   component: MultiSelect,
   parameters: { layout: 'centered' },
   decorators: [(Story) => <div style={{ width: '280px', background: 'var(--color-surface-chrome)', padding: '16px' }}><Story /></div>],

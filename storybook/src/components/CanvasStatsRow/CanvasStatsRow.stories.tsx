@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { CanvasStatsRow } from './CanvasStatsRow';
 
 const meta: Meta<typeof CanvasStatsRow> = {
-  title: 'App Shell/CanvasStatsRow',
+  title: 'Sections/CanvasStatsRow',
   component: CanvasStatsRow,
   parameters: { layout: 'padded' },
   args: {

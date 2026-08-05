@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { PlotChart } from './PlotChart';
 
 const meta: Meta<typeof PlotChart> = {
-  title: 'Controls/PlotChart',
+  title: 'Fields/PlotChart',
   component: PlotChart,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '520px', height: '360px' }}><Story /></div>],

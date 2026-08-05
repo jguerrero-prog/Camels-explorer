@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { NumberStepper } from './NumberStepper';
 
 const meta: Meta<typeof NumberStepper> = {
-  title: 'Controls/NumberStepper',
+  title: 'Fields/NumberStepper',
   component: NumberStepper,
   parameters: { layout: 'centered' },
   decorators: [(Story) => <div style={{ width: '240px', background: 'var(--color-surface-chrome)', padding: '16px' }}><Story /></div>],

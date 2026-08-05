@@ -3,7 +3,7 @@ import { Viewer } from './Viewer';
 import { Tile } from '../Tile/Tile';
 
 const meta: Meta<typeof Viewer> = {
-  title: 'App Shell/Viewer',
+  title: 'Sections/Viewer',
   component: Viewer,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '100vh', background: 'var(--color-surface-chrome)' }}><Story /></div>],

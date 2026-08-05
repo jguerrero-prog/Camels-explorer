@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { ParamsReadout } from './ParamsReadout';
 
 const meta: Meta<typeof ParamsReadout> = {
-  title: 'Controls/ParamsReadout',
+  title: 'Fields/ParamsReadout',
   component: ParamsReadout,
   parameters: { layout: 'centered' },
   decorators: [(Story) => <div style={{ background: 'var(--color-surface-content)', padding: '24px' }}><Story /></div>],

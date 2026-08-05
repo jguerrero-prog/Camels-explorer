@@ -3,7 +3,7 @@ import { Button } from './Button';
 import plusIcon from './assets/plus.svg';
 
 const meta: Meta<typeof Button> = {
-  title: 'Controls/Button',
+  title: 'Primitives/Button',
   component: Button,
   parameters: { layout: 'centered' },
   decorators: [(Story) => <div style={{ background: 'var(--color-surface-chrome)', padding: '16px' }}><Story /></div>],
