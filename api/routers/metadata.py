@@ -52,4 +52,27 @@ def metadata():
             for name, count in B.SET_REALIZATIONS.items()
         ],
         "statistics": B.STATISTICS,
+        "n_snapshots": B.N_SNAPSHOTS,
+        # Per-statistic real constants, added 2026-08-05 as each statistic's
+        # own sidebar needed them - same "never drift out of sync" reason
+        # suites/sets/statistics are read from backend.py above rather than
+        # hardcoded a second time in the frontend.
+        "bispectrum": {
+            "fields": list(B.BK_TYPES.keys()),
+            "mu_values": B.BK_MU_VALUES,
+            "equilateral_mu_index": B.BK_EQUILATERAL_MU_INDEX,
+        },
+        "cmd_fields": [{"key": k, "label": v} for k, v in B.CMD_FIELDS.items()],
+        "default_cmd_field": B.DEFAULT_CMD_FIELD,
+        "profiles_fields": list(B.PROFILES_FIELD_INDEX.keys()),
+        "photometry": {
+            "sps_models": B.PHOTOMETRY_SPS_MODELS,
+            "spectra_types": B.PHOTOMETRY_SPECTRA_TYPES,
+            "filter_groups": {
+                name: group["bands"] for name, group in B.PHOTOMETRY_FILTER_GROUPS.items()
+            },
+        },
+        "pdf_grids": B.PUBLIC_PDF_GRIDS,
+        "pdf_redshifts": B.PUBLIC_PDF_REDSHIFTS,
+        "lya_n_sightlines": B.LYA_N_SIGHTLINES,
     }
