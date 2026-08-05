@@ -9,7 +9,9 @@ The shared real Plotly 3D shell for 3D Density Field (`go.Volume`) and 3D Partic
 
 ## Token
 
-Reuses `PlotChart.css`'s `.plot-chart` card styling directly (same white surface, same border-radius/padding). Adds its own `.plotly-3d-chart` rule for a taller minimum height (520px vs. `PlotChart`'s 320px) — real 3D exploration benefits from more room to rotate than a 2D line chart, matching `app.py`'s own real `height=650` figure.
+Reuses `PlotChart.css`'s `.plot-chart` card layout (border-radius/padding) but **not** its white surface — `.plotly-3d-chart` overrides `background` to `transparent` so the tile's own dark `--color-surface-content` shows through, plus a taller minimum height (520px vs. `PlotChart`'s 320px; real 3D exploration benefits from more room to rotate than a 2D line chart, matching `app.py`'s own real `height=650` figure).
+
+**Real bug fixed 2026-08-05: white background, on two separate layers.** Direct user feedback after seeing the live tiles: 3D Density Field/3D Particle Cloud rendered inside a white box, unlike every other dark-chrome surface in this app. Two independent causes, both fixed: (1) `.plot-chart`'s own white `--color-surface-chart` is correct for `PlotChart`/`StaticImageChart` (real matplotlib PNGs assume a white canvas) but wrong here — this is a live 3D scene, not a static image; (2) Plotly's own `scene` has a *second*, independent background layer per axis (`showbackground`/`backgroundcolor`, default a light gray "wall") plus its own `scene.bgcolor` — neither is covered by `paper_bgcolor`. Fixed by setting `showbackground: false` and `backgroundcolor: 'transparent'` on each axis, `scene.bgcolor: 'transparent'`, and switching axis title/tick/grid colors to light values (`#e5e7eb` text, translucent light gridlines) readable against the now-dark surface — hardcoded literals, since Plotly's layout object can't consume this app's CSS custom properties directly (same precedent as `PlotChart`'s own hardcoded `'#1A1A1A'`/`'#E5E5E5'` for its white surface, just inverted for a dark one).
 
 ## Spec
 

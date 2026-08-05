@@ -1,7 +1,18 @@
 /* Real 3D views (Density Field volume, Particle Cloud scatter) genuinely
    benefit from more vertical room than a 2D line chart to rotate/explore -
    matches app.py's own real height=650 figure, taller than PlotChart's
-   320px minimum. */
+   320px minimum.
+
+   Real bug fixed 2026-08-05: `.plot-chart`'s own white
+   `--color-surface-chart` background (correct for the matplotlib-image
+   surfaces PlotChart/StaticImageChart render onto) doesn't belong here -
+   this is a live 3D scene, not a static image assuming a white canvas.
+   Overrides to transparent so the tile's own dark
+   --color-surface-content shows through instead, matching the rest of
+   this app's dark chrome. Same specificity as `.plot-chart`'s rule
+   (both single class selectors) - wins on cascade order since this
+   stylesheet is imported after PlotChart.css. */
 .plotly-3d-chart {
   min-height: 520px;
+  background: transparent;
 }
