@@ -54,6 +54,19 @@
   border-radius: 8px;
 }
 
+/* Real disclosure (see UnderlyingHalos.tsx's `massContextNote`) - shown
+   above the table when this statistic's plotted quantity has no matching
+   column in the per-subhalo catalog below (e.g. Halo Mass Function/Baryon
+   Fraction bin by FoF group mass, not a subhalo property). Muted/italic so
+   it reads as a caveat, not primary content. */
+.underlying-halos__context-note {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-text-muted);
+}
+
 .underlying-halos__controls {
   display: flex;
   align-items: flex-end;

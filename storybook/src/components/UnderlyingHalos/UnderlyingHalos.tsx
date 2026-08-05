@@ -24,6 +24,13 @@ export type UnderlyingHalosProps = {
    * fields" checkbox is disabled rather than hidden in that case, same
    * pattern as app.py's own real Catalog Browser tab. */
   rawRows?: Record<string, number>[] | null;
+  /** Real disclosure shown above the table when the statistic feeding this
+   * tile doesn't plot the same quantity any column here represents (e.g.
+   * Halo Mass Function/Baryon Fraction bin by FoF group mass, which this
+   * per-subhalo catalog has no column for at all) - see PlotTile.tsx's
+   * `haloMassContextNote`. Omitted for Stellar Mass Function, whose own
+   * Stellar Mass column IS what's plotted. */
+  massContextNote?: string;
   defaultExpanded?: boolean;
 };
 
@@ -125,7 +132,7 @@ function Dropdown({ top, left, onClose, children }: { top: number; left: number;
   );
 }
 
-export function UnderlyingHalos({ rows, rawRows, defaultExpanded = false }: UnderlyingHalosProps) {
+export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpanded = false }: UnderlyingHalosProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const maxStellarMass = useMemo(
     () => rows.reduce((max, row) => Math.max(max, row.stellarMass), 0),
@@ -308,6 +315,7 @@ export function UnderlyingHalos({ rows, rawRows, defaultExpanded = false }: Unde
 
       {expanded && (
         <div className="underlying-halos__reveal">
+          {massContextNote && <p className="underlying-halos__context-note">{massContextNote}</p>}
           <Checkbox
             label="Show all available fields (raw)"
             checked={showAllFields}
@@ -413,6 +421,7 @@ export function UnderlyingHalos({ rows, rawRows, defaultExpanded = false }: Unde
                 ×
               </button>
             </div>
+            {massContextNote && <p className="underlying-halos__context-note">{massContextNote}</p>}
             <div className="underlying-halos__fullscreen-body">{renderTable()}</div>
           </div>,
           document.body,

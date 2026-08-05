@@ -54,3 +54,14 @@ export const Expanded: Story = {
 export const WithRawFields: Story = {
   args: { rows: SAMPLE_ROWS, rawRows: SAMPLE_RAW_ROWS, defaultExpanded: true },
 };
+
+/** Real usage: Halo Mass Function/Baryon Fraction pass this - see
+ * UnderlyingHalos.mdx's 2026-08-05 "Real gap disclosed" note. */
+export const WithMassContextNote: Story = {
+  args: {
+    rows: SAMPLE_ROWS,
+    defaultExpanded: true,
+    massContextNote:
+      "Halo Mass Function bins by each halo's total FoF group mass, a different (and coarser) quantity than any column shown below - this table is the same real per-subhalo Subfind catalog Stellar Mass Function uses, not a halo-level one.",
+  },
+};

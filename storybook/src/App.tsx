@@ -10,18 +10,15 @@ import { PlotTile } from './components/PlotTile/PlotTile';
 import { CanvasStatsRow } from './components/CanvasStatsRow/CanvasStatsRow';
 import { AddPlotModal } from './components/AddPlotModal/AddPlotModal';
 import type { CuratedSelection } from './components/AddPlotModal/CuratedTab';
-import { StellarMassFunctionSidebar } from './components/StellarMassFunctionSidebar/StellarMassFunctionSidebar';
-import type { StellarMassFunctionParams } from './components/StellarMassFunctionSidebar/StellarMassFunctionSidebar';
-import { fetchStellarMassFunction, fetchHaloCatalog, toHaloRows, stellarMassFunctionImageUrl } from './lib/api';
+import { MassRangeSidebar } from './components/MassRangeSidebar/MassRangeSidebar';
+import type { MassRangeParams } from './components/MassRangeSidebar/MassRangeSidebar';
+import type { MassRangeStatistic } from './components/MassRangeSidebar/massRangeConfig';
+import { MASS_RANGE_CONFIGS, isMassRangeStatistic } from './components/MassRangeSidebar/massRangeConfig';
+import { fetchMassRangeResult, fetchHaloCatalog, toHaloRows, massRangeImageUrl } from './lib/api';
 import './App.css';
 
-/** Real defaults from app.py's own Stellar Mass Function sidebar (SMmin/
- * SMmax/bins) - not invented. DEFAULT_SNAPNUM mirrors backend.py's
- * N_SNAPSHOTS - 1 (highest snapshot, z=0), which the frontend has no
- * direct access to. */
-const DEFAULT_SMMIN = 1e9;
-const DEFAULT_SMMAX = 5e11;
-const DEFAULT_BINS = 10;
+/** DEFAULT_SNAPNUM mirrors backend.py's N_SNAPSHOTS - 1 (highest snapshot,
+ * z=0), which the frontend has no direct access to. */
 const DEFAULT_SNAPNUM = 33;
 
 /** Real product facts, not filler — see CanvasStatsRow.mdx. */
@@ -34,8 +31,9 @@ const CANVAS_STATS = [
 
 type PlotTileState = {
   id: string;
-  kind: 'stellar-mass-function';
-  params: StellarMassFunctionParams;
+  kind: 'mass-range';
+  statistic: MassRangeStatistic;
+  params: MassRangeParams;
   series: { label: string; x: number[]; y: number[] }[];
   xLabel: string;
   yLabel: string;
@@ -48,19 +46,20 @@ type PlotTileState = {
 };
 
 /** Every other statistic still adds this title-only tile - see
- * PlotTile.mdx's Usecase for why Stellar Mass Function is the only one
- * with a real wired chart so far. */
+ * PlotTile.mdx's Usecase for which statistics have a real wired chart
+ * so far (the three in massRangeConfig.ts). */
 type EmptyTileState = { id: string; kind: 'empty'; title: string };
 
 type CanvasTile = PlotTileState | EmptyTileState;
 
-async function loadStellarMassFunctionTile(id: string, params: StellarMassFunctionParams): Promise<PlotTileState> {
+async function loadMassRangeTile(id: string, statistic: MassRangeStatistic, params: MassRangeParams): Promise<PlotTileState> {
+  const config = MASS_RANGE_CONFIGS[statistic];
   const realizations = params.compareMode ? params.realizations : [params.realizations[0]];
   const results = await Promise.all(
     realizations.map((realization) =>
-      fetchStellarMassFunction({
+      fetchMassRangeResult(config, {
         suite: params.suite, setName: params.setName, realization,
-        snapnum: DEFAULT_SNAPNUM, SMmin: params.SMmin, SMmax: params.SMmax, bins: params.bins,
+        snapnum: DEFAULT_SNAPNUM, min: params.min, max: params.max, bins: params.bins,
       }),
     ),
   );
@@ -70,7 +69,8 @@ async function loadStellarMassFunctionTile(id: string, params: StellarMassFuncti
   const first = results[0];
   return {
     id,
-    kind: 'stellar-mass-function',
+    kind: 'mass-range',
+    statistic,
     params,
     series: results.map((r, i) => ({ label: `${params.setName}_${realizations[i]}`, x: r.x, y: r.y })),
     xLabel: first.x_label,
@@ -114,15 +114,15 @@ export function App() {
     setFocusedTileId(tileId);
   };
 
-  const refetchTile = (id: string, params: StellarMassFunctionParams) => {
+  const refetchTile = (id: string, statistic: MassRangeStatistic, params: MassRangeParams) => {
     setTiles((prev) =>
-      prev.map((t) => (t.id === id && t.kind === 'stellar-mass-function' ? { ...t, params, loading: true } : t)),
+      prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, params, loading: true } : t)),
     );
-    loadStellarMassFunctionTile(id, params)
+    loadMassRangeTile(id, statistic, params)
       .then((updated) => setTiles((prev) => prev.map((t) => (t.id === id ? updated : t))))
       .catch((err) =>
         setTiles((prev) =>
-          prev.map((t) => (t.id === id && t.kind === 'stellar-mass-function' ? { ...t, loading: false, error: String(err) } : t)),
+          prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, loading: false, error: String(err) } : t)),
         ),
       );
   };
@@ -131,31 +131,34 @@ export function App() {
     setIsModalOpen(false);
     const id = pendingTileId ?? `tile-${tiles.length + 1}`;
 
-    if (selection.statistic !== 'Stellar Mass Function') {
-      // Real, honest gap (see PlotTile.mdx's Usecase): only Stellar Mass
-      // Function has a wired chart so far - every other statistic still
-      // adds a title-only tile with no chart, rather than fabricate one.
+    if (!isMassRangeStatistic(selection.statistic)) {
+      // Real, honest gap (see PlotTile.mdx's Usecase): only the three
+      // statistics in massRangeConfig.ts have a wired chart so far - every
+      // other statistic still adds a title-only tile with no chart, rather
+      // than fabricate one.
       const emptyTile: EmptyTileState = { id, kind: 'empty', title: selection.statistic };
       setTiles((prev) => (pendingTileId ? prev.map((t) => (t.id === pendingTileId ? emptyTile : t)) : [...prev, emptyTile]));
       return;
     }
 
-    const params: StellarMassFunctionParams = {
+    const statistic = selection.statistic;
+    const config = MASS_RANGE_CONFIGS[statistic];
+    const params: MassRangeParams = {
       suite: selection.suite,
       setName: selection.set,
       compareMode: false,
       realizations: [selection.realization],
-      SMmin: DEFAULT_SMMIN,
-      SMmax: DEFAULT_SMMAX,
-      bins: DEFAULT_BINS,
+      min: config.defaultMin,
+      max: config.defaultMax,
+      bins: config.defaultBins,
     };
     const placeholder: PlotTileState = {
-      id, kind: 'stellar-mass-function', params,
-      series: [], xLabel: '', yLabel: '', logX: true, logY: true, haloRows: [], haloRawRows: null, loading: true,
+      id, kind: 'mass-range', statistic, params,
+      series: [], xLabel: '', yLabel: '', logX: true, logY: config.logY, haloRows: [], haloRawRows: null, loading: true,
     };
     setTiles((prev) => (pendingTileId ? prev.map((t) => (t.id === pendingTileId ? placeholder : t)) : [...prev, placeholder]));
     focusTile(id);
-    refetchTile(id, params);
+    refetchTile(id, statistic, params);
   };
 
   const removeTile = (id: string) => {
@@ -175,10 +178,11 @@ export function App() {
           {activePanel === 'project' ? 'Project panel — not yet designed.' : 'Files panel — not yet designed.'}
         </div>
       )}
-      {!activePanel && focusedTile?.kind === 'stellar-mass-function' && (
-        <StellarMassFunctionSidebar
+      {!activePanel && focusedTile?.kind === 'mass-range' && (
+        <MassRangeSidebar
+          statistic={focusedTile.statistic}
           params={focusedTile.params}
-          onChange={(params) => refetchTile(focusedTile.id, params)}
+          onChange={(params) => refetchTile(focusedTile.id, focusedTile.statistic, params)}
           onRemove={() => removeTile(focusedTile.id)}
         />
       )}
@@ -206,34 +210,42 @@ export function App() {
               />
             ) : (
               tiles.map((tile) =>
-                tile.kind === 'stellar-mass-function' ? (
+                tile.kind === 'mass-range' ? (
                   <PlotTile
                     key={tile.id}
-                    title="Stellar Mass Function"
+                    title={tile.statistic}
                     chart={{
                       series: tile.series,
                       xLabel: tile.xLabel,
                       yLabel: tile.yLabel,
                       logX: tile.logX,
                       logY: tile.logY,
-                      imageUrl: stellarMassFunctionImageUrl({
+                      imageUrl: massRangeImageUrl(MASS_RANGE_CONFIGS[tile.statistic], {
                         suite: tile.params.suite,
                         setName: tile.params.setName,
                         realizations: tile.params.compareMode ? tile.params.realizations : [tile.params.realizations[0]],
                         snapnum: DEFAULT_SNAPNUM,
-                        SMmin: tile.params.SMmin,
-                        SMmax: tile.params.SMmax,
+                        min: tile.params.min,
+                        max: tile.params.max,
                         bins: tile.params.bins,
                       }),
                     }}
                     readoutGroups={[
                       { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
                       { label: 'Realizations (compare)', value: tile.params.realizations.join(', ') },
-                      { label: 'Stellar mass range', value: `${tile.params.SMmin.toExponential()} – ${tile.params.SMmax.toExponential()}` },
+                      { label: MASS_RANGE_CONFIGS[tile.statistic].rangeLabel, value: `${tile.params.min.toExponential()} – ${tile.params.max.toExponential()}` },
                       { label: 'Bins', value: String(tile.params.bins) },
                     ]}
                     haloRows={tile.haloRows}
                     haloRawRows={tile.haloRawRows}
+                    // Halo Mass Function/Baryon Fraction are binned by
+                    // FoF group mass, which has no column in this
+                    // per-subhalo table - see UnderlyingHalos.mdx.
+                    haloMassContextNote={
+                      tile.statistic !== 'Stellar Mass Function'
+                        ? `${tile.statistic} bins by each halo's total FoF group mass, a different (and coarser) quantity than any column shown below - this table is the same real per-subhalo Subfind catalog Stellar Mass Function uses, not a halo-level one.`
+                        : undefined
+                    }
                     onFocus={() => focusTile(tile.id)}
                   />
                 ) : (

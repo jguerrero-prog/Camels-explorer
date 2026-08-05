@@ -33,11 +33,11 @@ A chip-based multi-value field. Real source: Figma node `1019:37` ("field-Realiz
 
 **The `Playground` Canvas renders "Multi-select label" and generic chip values, not "Realizations to compare"/"278"/"3"/"Add realization…".** This story demonstrates the control's mechanics, not confirmed copy — the real labels/values are documented in Usecase below and in the Code snippet's illustrative real usage instead. `WithOptions` above is the real shape: caption showing a total count, dropdown listing every valid realization not yet added.
 
-**Still open:** no visible "already added" / duplicate-prevention state beyond simply excluding already-added values from the dropdown list — typing a duplicate value directly is still possible and silently deduplicated by the caller (see `StellarMassFunctionSidebar`'s `onAdd`, which checks `!params.realizations.includes(n)` before adding).
+**Still open:** no visible "already added" / duplicate-prevention state beyond simply excluding already-added values from the dropdown list — typing a duplicate value directly is still possible and silently deduplicated by the caller (see `MassRangeSidebar`'s `onAdd`, which checks `!params.realizations.includes(n)` before adding).
 
 ## Usecase
 
-- Real, confirmed usage: `StellarMassFunctionSidebar`'s "Realizations to compare" field — directly powers Compare mode (see `Checkbox.mdx`) once more than one realization is selected. `caption` shows the selected set's real total realization count; `options` is every integer from `0` to `realizations - 1`.
+- Real, confirmed usage: `MassRangeSidebar`'s "Realizations to compare" field — directly powers Compare mode (see `Checkbox.mdx`) once more than one realization is selected. `caption` shows the selected set's real total realization count; `options` is every integer from `0` to `realizations - 1`.
 - Use for any field where a user picks an open-ended set of discrete values, as opposed to `SelectField` (exactly one value from a fixed list).
 - Omit `options` for a field with no fixed valid-value list — the component falls back to free-typing only, no chevron/dropdown rendered at all (see `Playground` above).
 
