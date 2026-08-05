@@ -55,6 +55,26 @@ export const SingleRealization: Story = {
   },
 };
 
+// Real usage: X-ray Halo Profiles/Halo Gas Profiles and 5 other statistics
+// (added 2026-08-05) - app.py renders these exclusively via st.pyplot(),
+// no Plotly equivalent, so chart.kind is 'static-image' (StaticImageChart,
+// no toggle) rather than the default 'plotly' shape above.
+export const StaticImageOnly: Story = {
+  args: {
+    title: 'X-ray Halo Profiles',
+    chart: {
+      kind: 'static-image',
+      imageUrl: 'http://localhost:8010/api/xray-profiles/plot.png?suite=IllustrisTNG&set_name=LH&realization=42&fetch_public=true',
+      alt: 'X-ray luminosity profile vs radius, colored by halo mass',
+    },
+    readoutGroups: [
+      { label: 'Suite / Set', value: 'IllustrisTNG · LH' },
+      { label: 'Realization', value: '42' },
+    ],
+    halos: null,
+  },
+};
+
 // Real usage: Power Spectrum/Bispectrum/SFR History (added 2026-08-05) -
 // field/box-level statistics with no per-halo catalog concept at all.
 // `halos: null` omits "View underlying halos" entirely.

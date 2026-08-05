@@ -2188,6 +2188,38 @@ def get_xray_profiles(suite, set_name, realization, fetch_public: bool = False) 
     return _fetch_xray_profiles(suite, set_name, realization)
 
 
+def render_xray_profiles_png(suite, set_name, realization, fetch_public: bool = False) -> bytes | None:
+    """Mirrors app.py's own "X-ray Halo Profiles" block exactly: one line
+    per halo colored by log10(M200c) (viridis), log-log axes, a colorbar.
+    Returns None (not raising) when get_xray_profiles itself returns None -
+    real-data only, no synthetic fallback, same as the JSON endpoint's own
+    require()-raises-404 behavior (the router is what turns this into an
+    HTTP error, not this function)."""
+    profiles = get_xray_profiles(suite, set_name, realization, fetch_public=fetch_public)
+    if profiles is None:
+        return None
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    norm = plt.Normalize(profiles.log_mass.min(), profiles.log_mass.max())
+    cmap = plt.get_cmap("viridis")
+    for lum, mass in zip(profiles.luminosities, profiles.log_mass):
+        ax.plot(profiles.r_centers, lum, color=cmap(norm(mass)), alpha=0.6, lw=1.2)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("r [kpc/h]")
+    ax.set_ylabel("L (0.5-2.0 keV) [erg/s]")
+    ax.grid(alpha=0.3, which="both")
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    fig.colorbar(sm, ax=ax, label="log10 M200c [Msun/h]")
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, facecolor="white")
+    plt.close(fig)
+    return buf.getvalue()
+
+
 def _parse_indexed_header(header_line):
     """Parse a '#name0(0) name1(1) ...' style header (the AHF/Rockstar
     convention) into a plain list of column names, stripping each token's
@@ -2802,6 +2834,54 @@ def get_halo_profiles(suite, set_name, realization, snapnum, field, fetch_public
               f"{set_name}_{realization}/{suite}_{set_name}_{realization}_{snapnum:03d}.hdf5, "
               f"{int(valid.sum())} halos, illstack_CAMELS SO/CGM profiles)"),
     )
+
+
+def render_halo_profiles_png(suite, set_name, realization, snapnum, field, highlight_rank: int = 1,
+                              fetch_public: bool = False) -> bytes | None:
+    """Mirrors app.py's own "Halo Gas Profiles" block exactly: every halo's
+    profile as a faint line colored by log10(M200c) (viridis), one
+    highlighted with real Poisson-derived error bars (relative error ~
+    1/sqrt(n), n = real particle count per bin - illstack_CAMELS doesn't
+    publish uncertainties directly). Returns None when get_halo_profiles
+    itself returns None (real-data only, no synthetic fallback)."""
+    hprof = get_halo_profiles(suite, set_name, realization, snapnum, field, fetch_public=fetch_public)
+    if hprof is None:
+        return None
+
+    order = np.argsort(hprof.log_mass)[::-1]  # most massive first
+    highlight_rank = max(1, min(highlight_rank, len(order)))
+    hi = int(order[highlight_rank - 1])
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    norm = plt.Normalize(hprof.log_mass.min(), hprof.log_mass.max())
+    cmap = plt.get_cmap("viridis")
+    for i, (row, mass) in enumerate(zip(hprof.values, hprof.log_mass)):
+        if i == hi:
+            continue
+        positive = row > 0
+        ax.plot(hprof.r[positive], row[positive], color=cmap(norm(mass)), alpha=0.4, lw=1.0)
+
+    hi_row, hi_n = hprof.values[hi], hprof.n_part[hi]
+    hi_mask = (hi_row > 0) & (hi_n > 0)
+    hi_yerr = hi_row[hi_mask] / np.sqrt(hi_n[hi_mask])
+    ax.errorbar(hprof.r[hi_mask], hi_row[hi_mask], yerr=hi_yerr, fmt="o-", ms=4,
+                color="crimson", lw=2, capsize=3, zorder=5,
+                label=f"highlighted (log M200c={hprof.log_mass[hi]:.2f})")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("r [kpc]")
+    ax.set_ylabel(f"{hprof.field} [{hprof.units}]")
+    ax.grid(alpha=0.3, which="both")
+    ax.legend(fontsize=8, loc="upper right")
+    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    sm.set_array([])
+    fig.colorbar(sm, ax=ax, label="log10 M200c [Msun]")
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, facecolor="white")
+    plt.close(fig)
+    return buf.getvalue()
 
 
 @lru_cache(maxsize=16)

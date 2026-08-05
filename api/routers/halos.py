@@ -6,6 +6,7 @@ the photometric color-mass diagram.
 from typing import Optional
 
 from fastapi import APIRouter
+from fastapi.responses import Response
 
 import backend as B
 from api.deps import require
@@ -20,6 +21,15 @@ def xray_profiles(suite: str, set_name: str, realization: int, fetch_public: boo
     return to_jsonable(result)
 
 
+@router.get("/xray-profiles/plot.png")
+def xray_profiles_plot(suite: str, set_name: str, realization: int, fetch_public: bool = False):
+    """Static matplotlib render (viridis-by-mass multi-line + colorbar) -
+    real-data only, no Plotly equivalent (matches app.py's own st.pyplot-
+    only rendering for this statistic)."""
+    png = require(B.render_xray_profiles_png(suite, set_name, realization, fetch_public=fetch_public))
+    return Response(content=png, media_type="image/png")
+
+
 @router.get("/halo-profiles")
 def halo_profiles(
     suite: str, set_name: str, realization: int, snapnum: int, field: str,
@@ -29,6 +39,22 @@ def halo_profiles(
         suite, set_name, realization, snapnum, field, fetch_public=fetch_public,
     ))
     return to_jsonable(result)
+
+
+@router.get("/halo-profiles/plot.png")
+def halo_profiles_plot(
+    suite: str, set_name: str, realization: int, snapnum: int, field: str,
+    highlight_rank: int = 1,
+    fetch_public: bool = False,
+):
+    """Static matplotlib render (viridis-by-mass multi-line + highlighted
+    halo with real Poisson error bars + colorbar) - real-data only, no
+    Plotly equivalent."""
+    png = require(B.render_halo_profiles_png(
+        suite, set_name, realization, snapnum, field,
+        highlight_rank=highlight_rank, fetch_public=fetch_public,
+    ))
+    return Response(content=png, media_type="image/png")
 
 
 @router.get("/color-mass-diagram")

@@ -1,0 +1,52 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as HaloGasProfilesSidebarStories from './HaloGasProfilesSidebar.stories';
+
+<Meta of={HaloGasProfilesSidebarStories} />
+
+# HaloGasProfilesSidebar
+
+Halo Gas Profiles' real per-tile sidebar, from `app.py`'s own `elif statistic == "Halo Gas Profiles":` block, added 2026-08-05 alongside `XrayHaloProfilesSidebar`.
+
+## Token
+
+Composed entirely from `SingleRealizationFields`/`SelectField`/`Slider`/`Button` — no tokens of its own.
+
+## Spec
+
+<Canvas of={HaloGasProfilesSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Realization: `SingleRealizationFields` — one of `app.py`'s own `SINGLE_REALIZATION_STATISTICS`, so no Compare mode.
+- Field: `SelectField`, options from `GET /api/metadata`'s `profiles_fields` (`Gas Density`/`Thermal Pressure`/`Metallicity`/`Temperature` — real `PROFILES_FIELD_INDEX` keys).
+- Snapshot: a `Slider`, `0` to `n_snapshots - 1` — this product uses the same 34-snapshot Pk/SFRH schedule (unlike X-ray Halo Profiles, which is fixed to one published snapshot and has no Snapshot control at all).
+- Highlight halo (by mass rank, 1 = most massive): a `Slider`, bounded by the real halo count in the currently-loaded tile (`maxHighlightRank` — a data-dependent bound, not a fixed config value, since it depends on how many halos this suite/set/realization/snapshot combination actually has).
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/halo-profiles` (JSON, for `maxHighlightRank`'s own real halo count) and `/plot.png?...&highlight_rank=...` (the real render, with the chosen halo's error-barred line drawn in front — see `backend.py`'s `render_halo_profiles_png`).
+- `maxHighlightRank` is threaded from the tile's own loaded data, not a prop this sidebar can compute itself — `App.tsx` passes `1` while a tile is still loading (before the real halo count is known) and the real count once fetched.
+- **Real-data only, no synthetic fallback** — `get_halo_profiles()` returns `None` outright for unsupported combinations. Only **IllustrisTNG/SIMBA**, **LH/CV sets** (1P uses an incompatible directory-naming convention, per `backend.py`'s own comment).
+- No halos table under this tile — same reasoning as `XrayHaloProfilesSidebar.mdx`: the chart already shows every halo, colored by mass; a separate per-subhalo Subfind table would be redundant. `Halo Gas Profiles`' own real per-halo `metadata` (~40 additional `Group*` fields, a `pd.DataFrame` from the same file) is a **different, not-yet-built** table — flagged as a real, deferred follow-up rather than routed through `UnderlyingHalos`, whose curated columns/filter are Subfind-specific (see `UnderlyingHalos.mdx`'s own 2026-08-05 note on this same distinction for Halo Mass Function/Baryon Fraction).
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { HaloGasProfilesSidebar } from '@/components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
+import type { HaloGasProfilesParams } from '@/components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
+
+function FocusedTileSidebar({ realHaloCount }) {
+  const [params, setParams] = useState<HaloGasProfilesParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 42,
+    snapnum: 33, field: 'Gas Density', highlightRank: 1,
+  });
+  return (
+    <HaloGasProfilesSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+      maxHighlightRank={realHaloCount}
+    />
+  );
+}
+```

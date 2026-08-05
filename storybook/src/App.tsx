@@ -20,11 +20,17 @@ import { BispectrumSidebar } from './components/BispectrumSidebar/BispectrumSide
 import type { BispectrumParams } from './components/BispectrumSidebar/BispectrumSidebar';
 import { SFRHistorySidebar } from './components/SFRHistorySidebar/SFRHistorySidebar';
 import type { SFRHistoryParams } from './components/SFRHistorySidebar/SFRHistorySidebar';
+import { XrayHaloProfilesSidebar } from './components/XrayHaloProfilesSidebar/XrayHaloProfilesSidebar';
+import type { XrayHaloProfilesParams } from './components/XrayHaloProfilesSidebar/XrayHaloProfilesSidebar';
+import { HaloGasProfilesSidebar } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
+import type { HaloGasProfilesParams } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
 import {
   fetchMassRangeResult, fetchHaloCatalog, toHaloRows, massRangeImageUrl,
   fetchPowerSpectrum, powerSpectrumImageUrl,
   fetchBispectrum, bispectrumImageUrl,
   fetchSFRHistory, sfrHistoryImageUrl,
+  fetchXrayProfilesMeta, xrayProfilesImageUrl,
+  fetchHaloProfilesMeta, haloProfilesImageUrl,
 } from './lib/api';
 import type { Result } from './lib/api';
 import './App.css';
@@ -101,12 +107,44 @@ type SFRHistoryTileState = {
   error?: string;
 };
 
+/** X-ray Halo Profiles/Halo Gas Profiles (added 2026-08-05) - real-data
+ * only, colored-by-mass multi-line charts with no Plotly equivalent
+ * (PlotTile's chart.kind: 'static-image'). `note`/`nHalos` come from the
+ * one real JSON fetch each does (see fetchXrayProfilesMeta/
+ * fetchHaloProfilesMeta) - the chart itself is the PNG. */
+type XrayHaloProfilesTileState = {
+  id: string;
+  kind: 'xray-halo-profiles';
+  params: XrayHaloProfilesParams;
+  note: string;
+  nHalos: number;
+  loading: boolean;
+  error?: string;
+};
+
+type HaloGasProfilesTileState = {
+  id: string;
+  kind: 'halo-gas-profiles';
+  params: HaloGasProfilesParams;
+  note: string;
+  nHalos: number;
+  loading: boolean;
+  error?: string;
+};
+
 /** Every other statistic still adds this title-only tile - see
  * PlotTile.mdx's Usecase for which statistics have a real wired chart
  * so far. */
 type EmptyTileState = { id: string; kind: 'empty'; title: string };
 
-type CanvasTile = PlotTileState | PowerSpectrumTileState | BispectrumTileState | SFRHistoryTileState | EmptyTileState;
+type CanvasTile =
+  | PlotTileState
+  | PowerSpectrumTileState
+  | BispectrumTileState
+  | SFRHistoryTileState
+  | XrayHaloProfilesTileState
+  | HaloGasProfilesTileState
+  | EmptyTileState;
 
 async function loadMassRangeTile(id: string, statistic: MassRangeStatistic, params: MassRangeParams): Promise<PlotTileState> {
   const config = MASS_RANGE_CONFIGS[statistic];
@@ -209,6 +247,28 @@ async function loadSFRHistoryTile(id: string, params: SFRHistoryParams): Promise
   };
 }
 
+async function loadXrayHaloProfilesTile(id: string, params: XrayHaloProfilesParams): Promise<XrayHaloProfilesTileState> {
+  const meta = await fetchXrayProfilesMeta(params);
+  if (meta === null) {
+    throw new Error(
+      'No real X-ray profile data for this suite/set/realization - real-data only, no synthetic ' +
+      'fallback. Try IllustrisTNG or SIMBA.',
+    );
+  }
+  return { id, kind: 'xray-halo-profiles', params, note: meta.note, nHalos: meta.nHalos, loading: false };
+}
+
+async function loadHaloGasProfilesTile(id: string, params: HaloGasProfilesParams): Promise<HaloGasProfilesTileState> {
+  const meta = await fetchHaloProfilesMeta(params);
+  if (meta === null) {
+    throw new Error(
+      'No real halo gas profile data for this suite/set/realization - real-data only, no ' +
+      'synthetic fallback. Try IllustrisTNG or SIMBA, LH or CV set.',
+    );
+  }
+  return { id, kind: 'halo-gas-profiles', params, note: meta.note, nHalos: meta.nHalos, loading: false };
+}
+
 export function App() {
   const [activePanel, setActivePanel] = useState<IconRailPanel>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -296,6 +356,32 @@ export function App() {
       );
   };
 
+  const refetchXrayHaloProfilesTile = (id: string, params: XrayHaloProfilesParams) => {
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'xray-halo-profiles' ? { ...t, params, loading: true } : t)),
+    );
+    loadXrayHaloProfilesTile(id, params)
+      .then((updated) => setTiles((prev) => prev.map((t) => (t.id === id ? updated : t))))
+      .catch((err) =>
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'xray-halo-profiles' ? { ...t, loading: false, error: String(err) } : t)),
+        ),
+      );
+  };
+
+  const refetchHaloGasProfilesTile = (id: string, params: HaloGasProfilesParams) => {
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'halo-gas-profiles' ? { ...t, params, loading: true } : t)),
+    );
+    loadHaloGasProfilesTile(id, params)
+      .then((updated) => setTiles((prev) => prev.map((t) => (t.id === id ? updated : t))))
+      .catch((err) =>
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'halo-gas-profiles' ? { ...t, loading: false, error: String(err) } : t)),
+        ),
+      );
+  };
+
   const handleSubmit = (selection: CuratedSelection) => {
     setIsModalOpen(false);
     const id = pendingTileId ?? `tile-${tiles.length + 1}`;
@@ -369,6 +455,33 @@ export function App() {
       return;
     }
 
+    if (selection.statistic === 'X-ray Halo Profiles') {
+      const params: XrayHaloProfilesParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+      };
+      const placeholder: XrayHaloProfilesTileState = {
+        id, kind: 'xray-halo-profiles', params, note: '', nHalos: 0, loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchXrayHaloProfilesTile(id, params);
+      return;
+    }
+
+    if (selection.statistic === 'Halo Gas Profiles') {
+      const params: HaloGasProfilesParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+        snapnum: DEFAULT_SNAPNUM, field: 'Gas Density', highlightRank: 1,
+      };
+      const placeholder: HaloGasProfilesTileState = {
+        id, kind: 'halo-gas-profiles', params, note: '', nHalos: 0, loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchHaloGasProfilesTile(id, params);
+      return;
+    }
+
     // Real, honest gap (see PlotTile.mdx's Usecase): every other statistic
     // still adds a title-only empty tile, rather than fabricate a chart.
     replaceTile({ id, kind: 'empty', title: selection.statistic });
@@ -418,6 +531,21 @@ export function App() {
           params={focusedTile.params}
           onChange={(params) => refetchSFRHistoryTile(focusedTile.id, params)}
           onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'xray-halo-profiles' && (
+        <XrayHaloProfilesSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchXrayHaloProfilesTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'halo-gas-profiles' && (
+        <HaloGasProfilesSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchHaloGasProfilesTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+          maxHighlightRank={focusedTile.nHalos || 1}
         />
       )}
       <div className="app-shell__main">
@@ -574,6 +702,49 @@ export function App() {
                         { label: 'Realizations (compare)', value: tile.params.realizations.join(', ') },
                         { label: 'Redshift range', value: `${tile.params.zMin.toFixed(1)} – ${tile.params.zMax.toFixed(1)}` },
                         { label: 'Bins', value: String(tile.params.bins) },
+                      ]}
+                      halos={null}
+                      onFocus={() => focusTile(tile.id)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'xray-halo-profiles') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      title="X-ray Halo Profiles"
+                      chart={{
+                        kind: 'static-image',
+                        imageUrl: xrayProfilesImageUrl(tile.params),
+                        alt: 'X-ray luminosity profile vs radius, colored by halo mass',
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Halos', value: String(tile.nHalos) },
+                      ]}
+                      halos={null}
+                      onFocus={() => focusTile(tile.id)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'halo-gas-profiles') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      title="Halo Gas Profiles"
+                      chart={{
+                        kind: 'static-image',
+                        imageUrl: haloProfilesImageUrl(tile.params),
+                        alt: `${tile.params.field} profile vs radius, colored by halo mass`,
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Field', value: tile.params.field },
+                        { label: 'Halos', value: String(tile.nHalos) },
                       ]}
                       halos={null}
                       onFocus={() => focusTile(tile.id)}

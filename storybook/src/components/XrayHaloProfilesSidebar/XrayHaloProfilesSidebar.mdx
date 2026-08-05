@@ -1,0 +1,47 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as XrayHaloProfilesSidebarStories from './XrayHaloProfilesSidebar.stories';
+
+<Meta of={XrayHaloProfilesSidebarStories} />
+
+# XrayHaloProfilesSidebar
+
+X-ray Halo Profiles' real per-tile sidebar — the simplest in this app. `app.py`'s own `elif statistic == "X-ray Halo Profiles":` render block (no matching sidebar-params block at all) confirms this statistic has no dedicated controls beyond Suite/Set/Realization.
+
+## Token
+
+Composed entirely from `SingleRealizationFields`/`Button` — no tokens of its own.
+
+## Spec
+
+<Canvas of={XrayHaloProfilesSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Realization: `SingleRealizationFields` — one of `app.py`'s own `SINGLE_REALIZATION_STATISTICS`, so no Compare mode.
+- No other fields. Not a placeholder — `app.py` genuinely has none for this statistic.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/xray-profiles` (JSON) and `/plot.png` (the real render — see `StaticImageChart.mdx`, `PlotTile`'s `chart.kind: 'static-image'`).
+- **Real-data only, no synthetic fallback** — `get_xray_profiles()` returns `None` outright for suites without this product. Only **IllustrisTNG and SIMBA** (real, per `backend.py`'s own docstring), and only the single published snapshot (`snap_032`, z=0.05) — there is no Snapshot control here because there is nothing real to control.
+- No halos table under this tile in the `UnderlyingHalos` sense — the chart itself already shows every halo in the realization (one line each, colored by mass); a second, separate per-subhalo Subfind table would be redundant with what the chart already displays. See `UnderlyingHalos.mdx`.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { XrayHaloProfilesSidebar } from '@/components/XrayHaloProfilesSidebar/XrayHaloProfilesSidebar';
+import type { XrayHaloProfilesParams } from '@/components/XrayHaloProfilesSidebar/XrayHaloProfilesSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<XrayHaloProfilesParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 42,
+  });
+  return (
+    <XrayHaloProfilesSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

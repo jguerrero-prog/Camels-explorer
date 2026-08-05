@@ -11,14 +11,18 @@ The populated (has-a-plot) tile, from Figma node `1019:10`. `Tile.mdx` explicitl
 
 Inherits `.tile`'s tokens from `Tile.mdx` (`--color-surface-content`, `--color-border`, `--font-ui`) unmodified — see Spec below for why `PlotTile` doesn't add its own.
 
-Composed children carry their own tokens — see `PlotChart.mdx`, `ParamsReadout.mdx`, `UnderlyingHalos.mdx`.
+Composed children carry their own tokens — see `PlotChart.mdx`, `StaticImageChart.mdx`, `ParamsReadout.mdx`, `UnderlyingHalos.mdx`.
 
 ## Spec
 
 <Canvas of={PlotTileStories.SingleRealization} />
 <Controls />
 
-- Title row (reuses `.tile__title`), then a body row (`PlotChart` + `ParamsReadout` side by side), then `UnderlyingHalos` as the last child — matches the frame's vertical stacking exactly.
+- Title row (reuses `.tile__title`), then a body row (chart + `ParamsReadout` side by side), then `UnderlyingHalos` as the last child (when present) — matches the frame's vertical stacking exactly.
+- `chart.kind` (added 2026-08-05, default `'plotly'` when omitted): `'plotly'` renders `PlotChart` (Static/Interactive toggle, when `imageUrl` is given); `'static-image'` renders `StaticImageChart` instead (real PNG only, no toggle) — for statistics with no Plotly equivalent at all. See `StaticImageChart.mdx`.
+
+<Canvas of={PlotTileStories.StaticImageOnly} />
+
 - Clicking anywhere on the tile calls `onFocus` — real wiring, not decorative: `App.tsx` uses this to swap the left 280px slot to this tile's own `ParamsSidebar` (see Usecase). Which tile is focused lives entirely in `App.tsx`'s own `focusedTileId` state — `PlotTile` has no `focused` prop of its own to reflect it.
 
 **Corrected 2026-08-04: removed a `focused` prop and its visual border entirely, not just the styling.** An earlier pass took a `focused` prop and drew a thin `--color-accent-gradient-start` border with it — both removed on direct user feedback that the border was an unrequested addition, not sourced from any frame. `onFocus` alone is enough: `PlotTile` doesn't need to know whether it's currently focused, only to report clicks.
