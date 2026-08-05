@@ -446,3 +446,146 @@ export function toHaloRows(catalog: HaloCatalog) {
     stellarMetallicity: row['Stellar Metallicity'],
   }));
 }
+
+export type ScalingRelationsMeta = { note: string; source: string };
+
+export async function fetchScalingRelationsMeta(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  SMmin: number;
+  SMmax: number;
+  bins: number;
+  snapnum: number;
+}): Promise<ScalingRelationsMeta> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    SMmin: String(params.SMmin), SMmax: String(params.SMmax), bins: String(params.bins),
+    snapnum: String(params.snapnum), fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/scaling-relations?${qs}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return { note: data.note, source: data.source };
+}
+
+export function scalingRelationsImageUrl(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  SMmin: number;
+  SMmax: number;
+  bins: number;
+  snapnum: number;
+}): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    SMmin: String(params.SMmin), SMmax: String(params.SMmax), bins: String(params.bins),
+    snapnum: String(params.snapnum), fetch_public: 'true',
+  });
+  return `${API_BASE}/scaling-relations/plot.png?${qs}`;
+}
+
+export type FieldMap2DMeta = { note: string; source: string };
+
+export async function fetchFieldMap2DMeta(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  field: string;
+}): Promise<FieldMap2DMeta> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    field: params.field, fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/field-map-2d?${qs}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return { note: data.note, source: data.source };
+}
+
+export function fieldMap2DImageUrl(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  field: string;
+}): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    field: params.field, fetch_public: 'true',
+  });
+  return `${API_BASE}/field-map-2d/plot.png?${qs}`;
+}
+
+export type DensityField3D = {
+  density: number[][][];
+  box_size: number;
+  source: string;
+  note: string;
+};
+
+export async function fetchDensityField3D(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  snapnum: number;
+  grid: number;
+  field: string;
+}): Promise<DensityField3D> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    snapnum: String(params.snapnum), grid: String(params.grid), field: params.field,
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/density-field-3d?${qs}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export type VoidCatalog = {
+  positions: number[][];
+  radius: number[];
+  density_contrast: number[];
+  box_size: number;
+  extra: Record<string, number>[] | null;
+  source: string;
+  note: string;
+};
+
+export async function fetchVoidCatalog(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+}): Promise<VoidCatalog> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/void-catalog?${qs}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export type ParticleCloud = {
+  positions: number[][];
+  box_size: number;
+  source: string;
+  note: string;
+};
+
+export async function fetchParticleCloud(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  maxParticles: number;
+  snapnum: number;
+}): Promise<ParticleCloud> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    max_particles: String(params.maxParticles), snapnum: String(params.snapnum),
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/particle-cloud?${qs}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}

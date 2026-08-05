@@ -5,6 +5,7 @@ and the void catalog overlaid on the 3D view.
 from typing import Optional
 
 from fastapi import APIRouter
+from fastapi.responses import Response
 
 import backend as B
 from api.serialization import to_jsonable
@@ -48,6 +49,18 @@ def field_map_2d(
 ):
     result = B.get_field_map_2d(suite, set_name, realization, field=field, fetch_public=fetch_public)
     return to_jsonable(result)
+
+
+@router.get("/field-map-2d/plot.png")
+def field_map_2d_plot(
+    suite: str, set_name: str, realization: int,
+    field: str = "Mtot",
+    fetch_public: bool = False,
+):
+    """Static matplotlib render (log-normed imshow heatmap + colorbar) -
+    always has a value (real or synthetic fallback, like the JSON endpoint)."""
+    png = B.render_field_map_2d_png(suite, set_name, realization, field=field, fetch_public=fetch_public)
+    return Response(content=png, media_type="image/png")
 
 
 @router.get("/void-catalog")

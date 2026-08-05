@@ -1,0 +1,45 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as Plotly3DChartStories from './Plotly3DChart.stories';
+
+<Meta of={Plotly3DChartStories} />
+
+# Plotly3DChart
+
+The shared real Plotly 3D shell for 3D Density Field (`go.Volume`) and 3D Particle Cloud (`go.Scatter3d`) — both statistics use the identical real scene/layout config in `app.py` (`xaxis`/`yaxis`/`zaxis` titles, `aspectmode: "cube"`, zero margin, no `displayModeBar`). Added 2026-08-05 as the last of the 15 statistics get wired.
+
+## Token
+
+Reuses `PlotChart.css`'s `.plot-chart` card styling directly (same white surface, same border-radius/padding). Adds its own `.plotly-3d-chart` rule for a taller minimum height (520px vs. `PlotChart`'s 320px) — real 3D exploration benefits from more room to rotate than a 2D line chart, matching `app.py`'s own real `height=650` figure.
+
+## Spec
+
+<Canvas of={Plotly3DChartStories.ScatterExample} />
+<Controls />
+
+- Takes pre-built trace objects (`data`) — this component owns only the shared scene/layout/resize shell, not trace construction. `DensityFieldChart`/`ParticleCloudChart` build the real `go.Volume`/`go.Scatter3d` shapes and pass them in.
+- **Real bug fixed proactively, same class `PlotChart`'s own Interactive mode hit**: a `ResizeObserver` on this component's own container calls `Plotly.Plots.resize()` on every real size change — `react-plotly.js`'s own `useResizeHandler` only catches *window* resizes, not a flex/grid-driven container resize (switching `Viewer`'s grid/stacked mode, or a sibling changing this tile's own flex sizing).
+- `displayModeBar: false` — matches every other Interactive chart in this app (`Toolbar` owns tile-level actions, not Plotly's default chrome), even though `app.py`'s own `st.plotly_chart` call doesn't set this explicitly. A deliberate, established app-wide convention takes priority over matching Streamlit's literal default here.
+- **Deliberately loosely typed** (`data: any[]`) — `plotly.js-dist-min` doesn't export the full `plotly.js` package's trace types, and `go.Volume`/`go.Scatter3d` are different enough shapes that forcing one named type wouldn't help; `PlotChart`'s own 2D `data` avoids this only because its single trace shape happens to satisfy structural inference.
+
+## Usecase
+
+- Real usage: `DensityFieldChart` (3D Density Field) and `ParticleCloudChart` (3D Particle Cloud) — see their own `.mdx` files. Both are real statistics `app.py` renders exclusively via live interactive Plotly, with **no static-image equivalent at all** — a screenshot would lose the actual point of a rotate/zoom 3D view, unlike every other statistic wired this pass (`StaticImageChart`).
+- `PlotTile`'s `chart.kind: 'plotly-3d'` renders this component instead of `PlotChart`/`StaticImageChart` — see `PlotTile.mdx`.
+
+## Code
+
+```tsx
+import { Plotly3DChart } from '@/components/Plotly3DChart/Plotly3DChart';
+
+function ExampleScatter() {
+  return (
+    <Plotly3DChart
+      data={[{
+        type: 'scatter3d', mode: 'markers',
+        x: [1, 2, 3], y: [1, 2, 3], z: [1, 2, 3],
+        marker: { size: 1.5, color: '#ffa53c', opacity: 0.5 },
+      }]}
+    />
+  );
+}
+```

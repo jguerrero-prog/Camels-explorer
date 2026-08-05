@@ -1,0 +1,36 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as ParticleCloudChartStories from './ParticleCloudChart.stories';
+
+<Meta of={ParticleCloudChartStories} />
+
+# ParticleCloudChart
+
+3D Particle Cloud's real chart, from `app.py`'s own `elif statistic == "3D Particle Cloud":` block — a single `go.Scatter3d` trace, exact marker styling match.
+
+## Token
+
+Composed from `Plotly3DChart` — no tokens of its own. The marker color (`#ffa53c`) is a real, literal value copied directly from `app.py`'s own `marker=dict(size=1.5, color="#ffa53c", opacity=0.5)`, not a re-picked app color — per direct request, this matches Streamlit's actual rendered color exactly.
+
+## Spec
+
+<Canvas of={ParticleCloudChartStories.Default} />
+<Controls />
+
+- One `go.Scatter3d` trace, `mode: "markers"`, size `1.5`, color `#ffa53c`, opacity `0.5` — every value copied directly from `app.py`, not re-derived.
+- No colorbar, no per-point color mapping — every particle renders identically, matching the real app's own plain DM-particle scatter.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas, via `PlotTile`'s `chart.kind: 'plotly-3d'` — fed real data from `GET /api/particle-cloud`.
+- Always has a value (real DM particles via lazy `fsspec` snapshot reads, or a synthetic clustered fallback) — `get_particle_cloud()` never returns `None`.
+- `positions.length` is bounded by the sidebar's own "Particles to show" `OptionSlider` (5,000–200,000, real `max_particles` param) — real usage confirmed to handle the full 200,000-point case cleanly (see this app's own particle-cloud performance history).
+
+## Code
+
+```tsx
+import { ParticleCloudChart } from '@/components/ParticleCloudChart/ParticleCloudChart';
+
+function ParticleCloudTile({ result }) {
+  return <ParticleCloudChart positions={result.positions} />;
+}
+```

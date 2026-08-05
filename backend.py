@@ -37,6 +37,7 @@ import pandas as pd
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 try:
     import fsspec
@@ -1737,6 +1738,54 @@ def get_scaling_relations(suite, set_name, realization, SMmin, SMmax, bins, snap
     )
 
 
+def render_scaling_relations_png(suite, set_name, realization, SMmin, SMmax, bins,
+                                  snapnum=N_SNAPSHOTS - 1, fetch_public: bool = False) -> bytes:
+    """Mirrors app.py's own "Galaxy Scaling Relations" block exactly - the
+    2x2 panel (radius/BH mass/SFR/Vmax vs. stellar mass) plus a 5th, real-
+    data-only mass-metallicity panel - but combined into one figure via
+    GridSpec (app.py renders these as two separate st.pyplot() calls; this
+    app's PlotTile only hosts one image per tile, so the metallicity row is
+    appended below the 2x2 grid instead of shown as a second image)."""
+    result = get_scaling_relations(suite, set_name, realization, SMmin, SMmax, bins,
+                                    snapnum=snapnum, fetch_public=fetch_public)
+    populated = result.counts > 0
+    panels = [
+        (result.radius, "Stellar half-mass radius [kpc/h]"),
+        (result.bh_mass, "BH mass [Msun/h]"),
+        (result.sfr, "SFR [Msun/yr]"),
+        (result.vmax, "Vmax [km/s]"),
+    ]
+
+    has_metallicity = result.metallicity is not None
+    fig = plt.figure(figsize=(9, 7 + (2.8 if has_metallicity else 0)))
+    gs = fig.add_gridspec(3 if has_metallicity else 2, 2)
+
+    for i, (y, ylabel) in enumerate(panels):
+        ax = fig.add_subplot(gs[i // 2, i % 2])
+        y_plot = np.clip(y[populated], 1e-6, None)  # some bins can average to SFR=0
+        ax.plot(result.stellar_mass[populated], y_plot, "o-", lw=1.5, ms=4)
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel("Stellar mass [Msun/h]")
+        ax.set_ylabel(ylabel)
+        ax.grid(alpha=0.3, which="both")
+
+    if has_metallicity:
+        ax2 = fig.add_subplot(gs[2, :])
+        ax2.plot(result.stellar_mass[populated], result.metallicity[populated], "o-",
+                  lw=1.5, ms=4, color="tab:green")
+        ax2.set_xscale("log")
+        ax2.set_xlabel("Stellar mass [Msun/h]")
+        ax2.set_ylabel("Mean stellar metallicity (mass fraction)")
+        ax2.grid(alpha=0.3, which="both")
+
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, facecolor="white")
+    plt.close(fig)
+    return buf.getvalue()
+
+
 # ---------------------------------------------------------------------------
 # SFR history  (mirrors camels_library.star_formation_rate_history)
 # ---------------------------------------------------------------------------
@@ -2134,6 +2183,31 @@ def get_field_map_2d(suite, set_name, realization, field=DEFAULT_CMD_FIELD,
         values=values, box_size=box_size,
         note=f"illustrative overdensity map (synthetic), {CMD_FIELDS[field]}",
     )
+
+
+def render_field_map_2d_png(suite, set_name, realization, field=DEFAULT_CMD_FIELD,
+                             fetch_public: bool = False) -> bytes:
+    """Mirrors app.py's own "2D Field Map" block exactly: a log-normed
+    imshow heatmap with a colorbar. Always has a value (real or synthetic
+    fallback, like get_field_map_2d itself)."""
+    result = get_field_map_2d(suite, set_name, realization, field=field, fetch_public=fetch_public)
+
+    fig, ax = plt.subplots(figsize=(7, 6))
+    im = ax.imshow(
+        result.values.T, origin="lower", cmap="inferno",
+        norm=LogNorm(vmin=max(result.values.min(), 1e-6), vmax=result.values.max()),
+        extent=[0, result.box_size, 0, result.box_size],
+    )
+    ax.set_xlabel("x [Mpc/h]")
+    ax.set_ylabel("y [Mpc/h]")
+    cbar_label = "overdensity ρ/ρ̄" if field in CMD_MASS_TYPE_FIELDS else field
+    fig.colorbar(im, ax=ax, label=cbar_label)
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=150, facecolor="white")
+    plt.close(fig)
+    return buf.getvalue()
 
 
 @lru_cache(maxsize=16)
