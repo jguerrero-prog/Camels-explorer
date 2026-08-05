@@ -46,7 +46,15 @@ export function SelectField({ label, value, options, onChange, caption }: Select
     // Closes on scroll rather than tracking/repositioning continuously -
     // simpler, and avoids the menu visually detaching from its trigger if
     // an ancestor (e.g. the modal's own scrollable fields area) scrolls.
-    const onScroll = () => setOpen(false);
+    // Real bug fixed 2026-08-04: a capture-phase window listener receives
+    // scroll events from the menu's OWN internal list too (its max-height
+    // makes it independently scrollable) - without this guard, scrolling
+    // the open menu closed it immediately, making a long options list
+    // effectively unscrollable.
+    const onScroll = (e: Event) => {
+      if ((e.target as HTMLElement)?.closest?.('.select-field__menu')) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     window.addEventListener('scroll', onScroll, true);

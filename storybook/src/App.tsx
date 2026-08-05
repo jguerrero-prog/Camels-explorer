@@ -42,6 +42,7 @@ type PlotTileState = {
   logX: boolean;
   logY: boolean;
   haloRows: ReturnType<typeof toHaloRows>;
+  haloRawRows: Record<string, number>[] | null;
   loading: boolean;
   error?: string;
 };
@@ -77,6 +78,7 @@ async function loadStellarMassFunctionTile(id: string, params: StellarMassFuncti
     logX: first.log_x,
     logY: first.log_y,
     haloRows: toHaloRows(catalog),
+    haloRawRows: catalog?.raw_frame ?? null,
     loading: false,
   };
 }
@@ -149,7 +151,7 @@ export function App() {
     };
     const placeholder: PlotTileState = {
       id, kind: 'stellar-mass-function', params,
-      series: [], xLabel: '', yLabel: '', logX: true, logY: true, haloRows: [], loading: true,
+      series: [], xLabel: '', yLabel: '', logX: true, logY: true, haloRows: [], haloRawRows: null, loading: true,
     };
     setTiles((prev) => (pendingTileId ? prev.map((t) => (t.id === pendingTileId ? placeholder : t)) : [...prev, placeholder]));
     focusTile(id);
@@ -230,6 +232,7 @@ export function App() {
                       { label: 'Bins', value: String(tile.params.bins) },
                     ]}
                     haloRows={tile.haloRows}
+                    haloRawRows={tile.haloRawRows}
                     onFocus={() => focusTile(tile.id)}
                   />
                 ) : (

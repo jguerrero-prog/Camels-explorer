@@ -5,12 +5,14 @@ import * as UnderlyingHalosStories from './UnderlyingHalos.stories';
 
 # UnderlyingHalos
 
-The collapsible "View underlying halos" section under a rendered plot, from Figma node `1019:10` (collapsed header) and `1019:114` (expanded reveal: slider, "+ Add a halo finder", table, footer).
+The collapsible "View underlying halos" section under a rendered plot, from Figma node `1019:10` (collapsed header) and `1019:114` (expanded reveal: slider, "+ Add a halo finder", table, footer). The table itself was substantially rebuilt 2026-08-04 to match real Streamlit `st.dataframe` behavior directly compared against `app.py`'s own Catalog Browser tab, per direct user feedback after that comparison.
 
 ## Token
 
 - `--color-border` / `--color-border-subtle` — section divider, table borders.
 - `--color-surface-control` — table header row background.
+- `--color-surface-chrome` — dropdown menus' background (column kebab menu, eye menu), matching `SelectField`'s own menu.
+- `--color-surface-content` — pinned-column cell background (must be opaque so scrolled-under columns don't show through), fullscreen overlay background.
 - `--font-label` (Lato) — "View underlying halos", table headers, buttons.
 - `--font-mono` (JetBrains Mono) — table body values, same tabular-numeric role as `ParamsReadout`.
 
@@ -20,29 +22,43 @@ The collapsible "View underlying halos" section under a rendered plot, from Figm
 <Controls />
 
 - Header: chevron (rotates -90°→0° collapsed→expanded) + "View underlying halos" + a right-aligned real halo count.
-- **Deliberate, undecided-by-Figma default: starts collapsed.** The frame only ever shows the expanded state — nothing in it confirms which way this control defaults. Collapsed was picked so a populated tile doesn't grow to full table height before the user asks for it; revisit if that reads wrong once seen next to a real full canvas of tiles.
+- **Deliberate, undecided-by-Figma default: starts collapsed.** The frame only ever shows the expanded state — nothing in it confirms which way this control defaults. Collapsed was picked so a populated tile doesn't grow to full table height before the user asks for it.
 
 <Canvas of={UnderlyingHalosStories.Expanded} />
 
-- Reveal: a `Slider` ("Minimum stellar mass") that filters the table **client-side** against the already-fetched catalog — no new network fetch per drag, since the whole realization's catalog is already in memory (same data `PlotTile`'s "View underlying halos" count and this table both read from).
-- A 7-column table (Subfind ID / Stellar Mass / Gas Mass / DM Mass / BH Mass / SFR / Vmax) capped at 5 visible rows, footer text for the remainder, and a real "Download CSV" that exports every currently-filtered row (not just the 5 shown) as an actual file download.
+- **"Show all available fields (raw)" checkbox** — real parity with `app.py`'s identical control: toggles between the 8 curated columns and every real column the catalog has (`backend.py`'s `Catalog.raw_frame`), disabled when `rawRows` is `null` (matches `app.py`'s `disabled=catalog.raw_frame is None`).
+- Reveal: a `Slider` ("Minimum stellar mass") that filters the table **client-side** against the already-fetched catalog — no new network fetch per drag. **Capped to ~50% width, not the full table** — a full-width slider for a single threshold value read as oversized (direct user feedback).
+- An 8-column curated table (Subfind ID / Stellar Mass `[Msun/h]` / Gas Mass `[Msun/h]` / DM Mass `[Msun/h]` / BH Mass `[Msun/h]` / SFR `[Msun/yr]` / Vmax `[km/s]` / Stellar Metallicity) — every header carries its real bracketed unit, matching `app.py`'s real column names exactly (a direct fix: BH Mass previously showed with no unit).
+- **Real bug fixed 2026-08-04: no more 5-row cap.** Every mass-filtered row now renders, in a container capped at `max-height: 420px` (matches `app.py`'s own real `st.dataframe(..., height=420)` exactly) that scrolls vertically instead of truncating — the header row (`<th>`) is `position: sticky; top: 0` so it stays visible while scrolling. A pinned column combines both stickiness axes (frozen row + frozen column) via layered `z-index`.
+- Footer: **"Showing X of Y halos/subhalos"** (matches `app.py`'s own real caption text and semantics exactly — X is the mass-filtered count, Y is the total *before* filtering, not "rows currently rendered") + a real "Download CSV" exporting every currently-filtered, currently-visible-column row.
 
-**Real, deliberate scope decision:** the table shows 7 of the real catalog's 9 columns (`GET /api/halo-catalog`) — Half-mass Radius and Stellar Metallicity are dropped to keep the table narrow enough not to force horizontal scroll at the tile's typical width. Not a data limitation, just a display choice.
+**Corrected 2026-08-04, real gap closed:** the original 7-column table dropped Stellar Metallicity, hard-capped at 5 rows regardless of filter results, and had no raw-fields escape hatch — all fixed/added after directly comparing against `app.py`'s real Catalog Browser tab per user request. Half-mass Radius still isn't a curated column (available via "Show all fields" instead) — an intentional width tradeoff, not an oversight.
+
+### Column management (hide, pin, show) — new 2026-08-04, matches `st.dataframe`'s real toolbar
+
+- **Per-column kebab menu**: hovering any header reveals a "⋮" button; clicking it opens **Pin column**/**Unpin column** and **Hide column**. Portal-rendered (`document.body`, `position: fixed` from the button's real on-screen rect) — same clipping fix as `SelectField`'s own menu, necessary here too since the table has its own `overflow-x: auto`.
+- **Pinned columns** move to the front of the column order (in pin order) and get `position: sticky` with a fixed per-column width (assigned in `CURATED_COLUMNS`/computed for raw columns) so they stay visible while the rest of the table scrolls horizontally. Cells get an opaque background so scrolled-under content doesn't show through.
+- **Table-level toolbar** (eye + fullscreen icons) sits in its own row **above** the table, right-aligned, visible **only while hovering the table area** — matches `st.dataframe`'s own discoverable-on-hover chrome. **Real bug fixed 2026-08-04:** this toolbar originally floated via `position: absolute` directly over the table's own header row, visibly covering part of it on hover — moved into a reserved row above the table instead (always present in layout, just invisible until hover) so it never overlaps real header content.
+  - **Eye icon** opens a dropdown listing every column (curated or raw, whichever mode is active) with a checkbox — unchecking hides a column the same way its own kebab menu's "Hide column" does; re-checking restores it to its original position.
+  - **Fullscreen icon** expands the table into a full-viewport overlay (same column state, same toolbar) with a close button and Escape-to-close.
+
+<Canvas of={UnderlyingHalosStories.WithRawFields} />
 
 **"+ Add a halo finder" is a real, named, currently-inert control** — same pattern as `AddPlotModal`'s Custom tab. `backend.py` already has real alternate-finder catalogs (AHF/Rockstar/CAESAR, wired into the Streamlit prototype's own Catalog Browser tab), but overlaying them into *this* table is new work this task didn't scope — flagged here rather than silently either wiring a partial version or hiding that the capability exists upstream.
 
 ## Usecase
 
-- Real usage: nested inside `PlotTile`, fed the same `GET /api/halo-catalog?...&fetch_public=true` response `PlotTile` already fetches for its chart's realization — this component never fetches on its own, it only renders/filters/exports rows it's given.
-- Download CSV is genuinely functional in every context (Storybook or the real app) since it operates entirely on the `rows` prop already in memory — no network call at export time either.
+- Real usage: nested inside `PlotTile`, fed the same `GET /api/halo-catalog?...&fetch_public=true` response `PlotTile` already fetches for its chart's realization (`rows` from `frame`, `rawRows` from `raw_frame`) — this component never fetches on its own, it only renders/filters/exports/manages-columns for rows it's given.
+- Download CSV and every column-management action (hide/pin/show/fullscreen) are genuinely functional in every context (Storybook or the real app) since they operate entirely on props already in memory — no network call involved.
+- Hidden/pinned column state is independent per mode (curated vs. raw) — the two column sets have different keys, so toggling "Show all fields" doesn't carry over or reset the other mode's customization.
 
 ## Code
 
 ```tsx
 import { UnderlyingHalos } from '@/components/UnderlyingHalos/UnderlyingHalos';
 
-function HalosSection({ catalogFrame }) {
-  const rows = catalogFrame.map((row) => ({
+function HalosSection({ catalog }) {
+  const rows = catalog.frame.map((row) => ({
     subfindId: row.SubfindID,
     stellarMass: row['Stellar Mass [Msun/h]'],
     gasMass: row['Gas Mass [Msun/h]'],
@@ -50,7 +66,8 @@ function HalosSection({ catalogFrame }) {
     bhMass: row['BH Mass [Msun/h]'],
     sfr: row['SFR [Msun/yr]'],
     vmax: row['Vmax [km/s]'],
+    stellarMetallicity: row['Stellar Metallicity'],
   }));
-  return <UnderlyingHalos rows={rows} />;
+  return <UnderlyingHalos rows={rows} rawRows={catalog.raw_frame} />;
 }
 ```
