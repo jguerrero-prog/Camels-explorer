@@ -7,10 +7,6 @@
   cursor: pointer;
 }
 
-.plot-tile--focused {
-  border-color: var(--color-accent-gradient-start);
-}
-
 .plot-tile__body {
   flex: 1;
   min-height: 0;
