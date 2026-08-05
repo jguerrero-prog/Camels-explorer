@@ -1386,25 +1386,45 @@ def get_stellar_mass_function(suite, set_name, realization, snapnum, SMmin, SMma
     )
 
 
-def _render_mass_range_png(compute, suite, set_name, realizations, snapnum, mmin, mmax, bins,
-                            fetch_public: bool = False) -> bytes:
-    """Shared static matplotlib rendering for the mass-range statistics
-    (Stellar Mass Function, Halo Mass Function, Baryon Fraction) - identical
-    plotting logic across all three, only which get_* function computes the
-    curve differs. Matches app.py's own default (non-"Halo Mass Function")
-    plotting block exactly: figsize=(8, 4.5), lw=2, per-realization label,
-    conditional log scale from the Result's own log_x/log_y, grid(alpha=0.3,
-    which="both"), legend only when comparing more than one realization,
-    tight_layout(). This is the *default* render for these statistics in the
-    Streamlit prototype - the new frontend's interactive Plotly chart is the
-    opt-in alternative, not the reverse."""
-    results = {r: compute(suite, set_name, r, snapnum, mmin, mmax, bins, fetch_public=fetch_public)
-               for r in realizations}
+def _render_result_png(compute, set_name, realizations, overlay=None) -> bytes:
+    """Shared static matplotlib rendering for every 1D `Result`-shaped
+    statistic (Stellar Mass Function, Halo Mass Function, Baryon Fraction,
+    Power Spectrum, Bispectrum, SFR History) - mirrors app.py's own single
+    shared plotting block (the generic `else:` branch every one of these six
+    statistics dispatches through - see `_compute_result`), including its
+    two real per-statistic overlay curves (SFR History's symbolic-regression
+    fit, Power Spectrum's linear-theory Pk). This is the codebase's own
+    evidence for the abstraction, not an invented one: figsize=(8, 4.5),
+    lw=2, per-realization label, conditional log scale from the Result's own
+    log_x/log_y, grid(alpha=0.3, which="both"), legend only when comparing
+    more than one realization or an overlay is drawn, tight_layout(). This
+    is the *default* render for these statistics in the Streamlit prototype
+    - the new frontend's interactive Plotly chart is the opt-in
+    alternative, not the reverse.
+
+    `compute` is a one-realization-at-a-time callable, already bound to
+    every other real parameter via the caller's own closure - this function
+    stays agnostic to how different each statistic's real signature is.
+    `overlay(ax) -> bool`, if given, draws one extra dashed curve directly
+    on the axis and returns whether it actually drew anything (so the
+    legend only appears once there's something real to label) - matches
+    app.py's own `show_legend = True` only firing inside the same
+    conditional that actually plots the overlay curve. Realizations with no
+    real data (e.g. Bispectrum has no synthetic fallback) are dropped the
+    same way app.py's own generic block does; raises if none remain."""
+    results = {r: compute(r) for r in realizations}
+    results = {r: res for r, res in results.items() if res is not None}
+    if not results:
+        raise ValueError("no real data for any selected realization")
     first_result = next(iter(results.values()))
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
     for r, result in results.items():
         ax.plot(result.x, result.y, lw=2, label=f"{set_name}_{r}")
+
+    show_legend = len(results) > 1
+    if overlay is not None and overlay(ax):
+        show_legend = True
 
     if first_result.log_x:
         ax.set_xscale("log")
@@ -1413,7 +1433,7 @@ def _render_mass_range_png(compute, suite, set_name, realizations, snapnum, mmin
     ax.set_xlabel(first_result.x_label)
     ax.set_ylabel(first_result.y_label)
     ax.grid(alpha=0.3, which="both")
-    if len(results) > 1:
+    if show_legend:
         ax.legend(fontsize=8)
     fig.tight_layout()
 
@@ -1424,6 +1444,18 @@ def _render_mass_range_png(compute, suite, set_name, realizations, snapnum, mmin
     fig.savefig(buf, format="png", dpi=150, facecolor="white")
     plt.close(fig)
     return buf.getvalue()
+
+
+def _render_mass_range_png(compute, suite, set_name, realizations, snapnum, mmin, mmax, bins,
+                            fetch_public: bool = False) -> bytes:
+    """Mass-range statistics (Stellar Mass Function, Halo Mass Function,
+    Baryon Fraction) - identical shape modulo which get_* function computes
+    the curve and its mass-param names. Thin wrapper over
+    _render_result_png, which every 1D Result-shaped statistic shares."""
+    return _render_result_png(
+        lambda r: compute(suite, set_name, r, snapnum, mmin, mmax, bins, fetch_public=fetch_public),
+        set_name, realizations,
+    )
 
 
 def render_stellar_mass_function_png(suite, set_name, realizations, snapnum, SMmin, SMmax, bins,
@@ -1442,6 +1474,62 @@ def render_baryon_fraction_png(suite, set_name, realizations, snapnum, RMmin, RM
                                 fetch_public: bool = False) -> bytes:
     return _render_mass_range_png(get_baryon_fraction, suite, set_name, realizations, snapnum,
                                    RMmin, RMmax, bins, fetch_public=fetch_public)
+
+
+def render_power_spectrum_png(suite, set_name, realizations, snapnum, grid, MAS, threads, ptype,
+                               fetch_public: bool = False, k_range: str = "standard",
+                               rsd_axis: int | None = None, multipole: str = "P0",
+                               show_linear_pk: bool = False) -> bytes:
+    """Mirrors app.py's own "Power Spectrum" + show_linear_pk overlay
+    exactly (get_linear_pk_ics, dashed black line, only drawn if real data
+    exists for this suite/set/first realization)."""
+    def overlay(ax) -> bool:
+        if not show_linear_pk:
+            return False
+        lin = get_linear_pk_ics(suite, set_name, realizations[0])
+        if lin is None:
+            return False
+        k_lin, Pk_lin = lin
+        ax.plot(k_lin, Pk_lin, "k--", lw=1.5, label="linear theory, z=0 (from ICs)")
+        return True
+
+    return _render_result_png(
+        lambda r: get_power_spectrum(suite, set_name, r, snapnum, grid, MAS, threads, ptype,
+                                      fetch_public=fetch_public, k_range=k_range,
+                                      rsd_axis=rsd_axis, multipole=multipole),
+        set_name, realizations, overlay=overlay,
+    )
+
+
+def render_bispectrum_png(suite, set_name, realizations, field, mu_index=BK_EQUILATERAL_MU_INDEX,
+                           fetch_public: bool = False) -> bytes:
+    return _render_result_png(
+        lambda r: get_bispectrum(suite, set_name, r, field, mu_index=mu_index, fetch_public=fetch_public),
+        set_name, realizations,
+    )
+
+
+def render_sfr_history_png(suite, set_name, realizations, z_min, z_max, bins,
+                            fetch_public: bool = False, show_symbolic_fit: bool = False,
+                            Om: float | None = None, s8: float | None = None,
+                            A1: float | None = None, A3: float | None = None) -> bytes:
+    """Mirrors app.py's own "SFR History" + show_symbolic_fit overlay
+    exactly (SFRHSymbolicModel.predict_log_sfr, dashed black line, always
+    drawn when the checkbox is on - unlike the linear-Pk overlay, this one
+    has no real-data availability check since it's a closed-form equation,
+    not a fetched file)."""
+    def overlay(ax) -> bool:
+        if not show_symbolic_fit:
+            return False
+        z_curve = np.linspace(z_min, max(z_min + 1e-3, z_max), 200)
+        log_sfr = SFRHSymbolicModel.predict_log_sfr(z_curve, Om, s8, A1, A3)
+        ax.plot(z_curve, 10 ** log_sfr, "k--", lw=2, label="symbolic-regression fit (real)")
+        return True
+
+    return _render_result_png(
+        lambda r: get_sfr_history(suite, set_name, r, z_min, z_max, bins, fetch_public=fetch_public),
+        set_name, realizations, overlay=overlay,
+    )
 
 
 def get_onep_param_value(suite, param_index, variation, snapnum=N_SNAPSHOTS - 1):
