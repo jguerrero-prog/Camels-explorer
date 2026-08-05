@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import io
 import re
 import tempfile
 import urllib.error
@@ -28,6 +29,14 @@ from functools import lru_cache
 import h5py
 import numpy as np
 import pandas as pd
+
+# Agg is a headless, non-interactive backend - required for api/main.py's
+# uvicorn process (no display), and also what Streamlit's own st.pyplot()
+# already expects (it renders figures to a static image buffer regardless of
+# backend, never needs an interactive one). Must be set before pyplot import.
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 try:
     import fsspec
@@ -1375,6 +1384,45 @@ def get_stellar_mass_function(suite, set_name, realization, snapnum, SMmin, SMma
         x_label="Stellar mass [Msun/h]", y_label="dn/dlogM [(Mpc/h)^-3]",
         note=f"z = {_snapshot_to_redshift(snapnum):.2f}",
     )
+
+
+def render_stellar_mass_function_png(suite, set_name, realizations, snapnum, SMmin, SMmax, bins,
+                                      fetch_public: bool = False) -> bytes:
+    """Static matplotlib rendering of get_stellar_mass_function(), matching
+    app.py's own default (non-"Halo Mass Function") plotting block exactly:
+    figsize=(8, 4.5), lw=2, per-realization label, conditional log scale from
+    the Result's own log_x/log_y, grid(alpha=0.3, which="both"), legend only
+    when comparing more than one realization, tight_layout(). This is the
+    *default* render for this statistic in the Streamlit prototype (see
+    app.py's plotting-block comment listing Stellar Mass Function among the
+    statistics that share it) - the new frontend's interactive Plotly chart
+    is the opt-in alternative, not the reverse."""
+    results = {r: get_stellar_mass_function(suite, set_name, r, snapnum, SMmin, SMmax, bins,
+                                             fetch_public=fetch_public) for r in realizations}
+    first_result = next(iter(results.values()))
+
+    fig, ax = plt.subplots(figsize=(8, 4.5))
+    for r, result in results.items():
+        ax.plot(result.x, result.y, lw=2, label=f"{set_name}_{r}")
+
+    if first_result.log_x:
+        ax.set_xscale("log")
+    if first_result.log_y:
+        ax.set_yscale("log")
+    ax.set_xlabel(first_result.x_label)
+    ax.set_ylabel(first_result.y_label)
+    ax.grid(alpha=0.3, which="both")
+    if len(results) > 1:
+        ax.legend(fontsize=8)
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    # Explicit white facecolor - the frontend's white --color-surface-chart
+    # card assumes this; matplotlib's own default figure facecolor can drift
+    # with rcParams, so this is asserted rather than assumed.
+    fig.savefig(buf, format="png", dpi=150, facecolor="white")
+    plt.close(fig)
+    return buf.getvalue()
 
 
 def get_onep_param_value(suite, param_index, variation, snapnum=N_SNAPSHOTS - 1):

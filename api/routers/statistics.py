@@ -7,6 +7,7 @@ real signature 1:1 - no renaming, no reordering, no invented defaults.
 from typing import Optional
 
 from fastapi import APIRouter, Query
+from fastapi.responses import Response
 
 import backend as B
 from api.deps import require
@@ -60,6 +61,24 @@ def stellar_mass_function(
         subfind_path=subfind_path, fetch_public=fetch_public,
     )
     return to_jsonable(result)
+
+
+@router.get("/stellar-mass-function/plot.png")
+def stellar_mass_function_plot(
+    suite: str, set_name: str, snapnum: int,
+    SMmin: float, SMmax: float, bins: int,
+    realizations: list[int] = Query(...),
+    fetch_public: bool = False,
+):
+    """Static matplotlib render - the *default* way this statistic is shown
+    (matches app.py's own plotting block; see render_stellar_mass_function_png's
+    docstring). The frontend's interactive Plotly chart is the opt-in
+    alternative built from the same /stellar-mass-function JSON data."""
+    png = B.render_stellar_mass_function_png(
+        suite, set_name, realizations, snapnum, SMmin, SMmax, bins,
+        fetch_public=fetch_public,
+    )
+    return Response(content=png, media_type="image/png")
 
 
 @router.get("/baryon-fraction")

@@ -43,3 +43,25 @@ export const CompareMode: Story = {
     />
   ),
 };
+
+// Points directly at the real API server (localhost:8010) - a genuine
+// server-rendered matplotlib PNG, not a placeholder image. Falls back to
+// this component's own real error state if the server isn't running (same
+// honest-failure pattern as AddPlotModal/CuratedTab).
+const REAL_IMAGE_URL =
+  'http://localhost:8010/api/stellar-mass-function/plot.png' +
+  '?suite=IllustrisTNG&set_name=LH&snapnum=33&SMmin=1e9&SMmax=5e11&bins=10&realizations=0&fetch_public=true';
+
+/** Real usage: the default render mode. Toggle to "Interactive" to see the
+ * same Plotly chart from illustrative data (a real fetch would drive both
+ * from the same source - see PlotTile.mdx). */
+export const StaticDefault: Story = {
+  render: () => (
+    <PlotChart
+      series={[{ label: 'LH_0', ...decliningCurve(1) }]}
+      xLabel="Stellar mass [Msun/h]"
+      yLabel="dn/dlogM [(Mpc/h)^-3]"
+      imageUrl={REAL_IMAGE_URL}
+    />
+  ),
+};

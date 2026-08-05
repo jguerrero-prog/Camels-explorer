@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import Plotly from 'plotly.js-dist-min';
 import createPlotlyComponent from 'react-plotly.js/factory';
 import './PlotChart.css';
@@ -17,11 +17,19 @@ export type PlotChartProps = {
   yLabel: string;
   logX?: boolean;
   logY?: boolean;
+  /** URL of a real, server-rendered matplotlib PNG for this exact chart
+   * (see PlotChart.mdx). When present, this is the default render and a
+   * Static/Interactive toggle appears; when absent, this component always
+   * renders the Plotly chart and shows no toggle. */
+  imageUrl?: string;
 };
 
 const LINE_COLORS = ['#7B2D8E', '#E8A030', '#3D8BE8', '#E63946'];
 
-export function PlotChart({ series, xLabel, yLabel, logX = true, logY = true }: PlotChartProps) {
+export function PlotChart({ series, xLabel, yLabel, logX = true, logY = true, imageUrl }: PlotChartProps) {
+  const [mode, setMode] = useState<'static' | 'interactive'>(imageUrl ? 'static' : 'interactive');
+  const [imageError, setImageError] = useState(false);
+
   const data = useMemo(
     () =>
       series.map((s, i) => ({
@@ -50,15 +58,54 @@ export function PlotChart({ series, xLabel, yLabel, logX = true, logY = true }: 
     [xLabel, yLabel, logX, logY, series.length],
   );
 
+  const showStatic = imageUrl && mode === 'static';
+
   return (
     <div className="plot-chart">
-      <Plot
-        data={data}
-        layout={layout}
-        config={{ displayModeBar: false, responsive: true }}
-        style={{ width: '100%', height: '100%' }}
-        useResizeHandler
-      />
+      {imageUrl && (
+        <div className="plot-chart__toggle">
+          <button
+            type="button"
+            className={`plot-chart__toggle-btn ${mode === 'static' ? 'plot-chart__toggle-btn--active' : ''}`}
+            onClick={() => setMode('static')}
+          >
+            Static
+          </button>
+          <button
+            type="button"
+            className={`plot-chart__toggle-btn ${mode === 'interactive' ? 'plot-chart__toggle-btn--active' : ''}`}
+            onClick={() => setMode('interactive')}
+          >
+            Interactive
+          </button>
+        </div>
+      )}
+
+      {showStatic ? (
+        imageError ? (
+          <p className="plot-chart__error">
+            Couldn't load the chart image — is the API server running?
+            <br />
+            <code>uvicorn api.main:app --port 8010</code>
+          </p>
+        ) : (
+          <img
+            className="plot-chart__image"
+            src={imageUrl}
+            alt={`${yLabel} vs ${xLabel}`}
+            onLoad={() => setImageError(false)}
+            onError={() => setImageError(true)}
+          />
+        )
+      ) : (
+        <Plot
+          data={data}
+          layout={layout}
+          config={{ displayModeBar: false, responsive: true }}
+          style={{ width: '100%', height: '100%' }}
+          useResizeHandler
+        />
+      )}
     </div>
   );
 }
