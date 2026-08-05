@@ -1386,19 +1386,20 @@ def get_stellar_mass_function(suite, set_name, realization, snapnum, SMmin, SMma
     )
 
 
-def render_stellar_mass_function_png(suite, set_name, realizations, snapnum, SMmin, SMmax, bins,
-                                      fetch_public: bool = False) -> bytes:
-    """Static matplotlib rendering of get_stellar_mass_function(), matching
-    app.py's own default (non-"Halo Mass Function") plotting block exactly:
-    figsize=(8, 4.5), lw=2, per-realization label, conditional log scale from
-    the Result's own log_x/log_y, grid(alpha=0.3, which="both"), legend only
-    when comparing more than one realization, tight_layout(). This is the
-    *default* render for this statistic in the Streamlit prototype (see
-    app.py's plotting-block comment listing Stellar Mass Function among the
-    statistics that share it) - the new frontend's interactive Plotly chart
-    is the opt-in alternative, not the reverse."""
-    results = {r: get_stellar_mass_function(suite, set_name, r, snapnum, SMmin, SMmax, bins,
-                                             fetch_public=fetch_public) for r in realizations}
+def _render_mass_range_png(compute, suite, set_name, realizations, snapnum, mmin, mmax, bins,
+                            fetch_public: bool = False) -> bytes:
+    """Shared static matplotlib rendering for the mass-range statistics
+    (Stellar Mass Function, Halo Mass Function, Baryon Fraction) - identical
+    plotting logic across all three, only which get_* function computes the
+    curve differs. Matches app.py's own default (non-"Halo Mass Function")
+    plotting block exactly: figsize=(8, 4.5), lw=2, per-realization label,
+    conditional log scale from the Result's own log_x/log_y, grid(alpha=0.3,
+    which="both"), legend only when comparing more than one realization,
+    tight_layout(). This is the *default* render for these statistics in the
+    Streamlit prototype - the new frontend's interactive Plotly chart is the
+    opt-in alternative, not the reverse."""
+    results = {r: compute(suite, set_name, r, snapnum, mmin, mmax, bins, fetch_public=fetch_public)
+               for r in realizations}
     first_result = next(iter(results.values()))
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
@@ -1423,6 +1424,24 @@ def render_stellar_mass_function_png(suite, set_name, realizations, snapnum, SMm
     fig.savefig(buf, format="png", dpi=150, facecolor="white")
     plt.close(fig)
     return buf.getvalue()
+
+
+def render_stellar_mass_function_png(suite, set_name, realizations, snapnum, SMmin, SMmax, bins,
+                                      fetch_public: bool = False) -> bytes:
+    return _render_mass_range_png(get_stellar_mass_function, suite, set_name, realizations, snapnum,
+                                   SMmin, SMmax, bins, fetch_public=fetch_public)
+
+
+def render_halo_mass_function_png(suite, set_name, realizations, snapnum, RMmin, RMmax, bins,
+                                   fetch_public: bool = False) -> bytes:
+    return _render_mass_range_png(get_halo_mass_function, suite, set_name, realizations, snapnum,
+                                   RMmin, RMmax, bins, fetch_public=fetch_public)
+
+
+def render_baryon_fraction_png(suite, set_name, realizations, snapnum, RMmin, RMmax, bins,
+                                fetch_public: bool = False) -> bytes:
+    return _render_mass_range_png(get_baryon_fraction, suite, set_name, realizations, snapnum,
+                                   RMmin, RMmax, bins, fetch_public=fetch_public)
 
 
 def get_onep_param_value(suite, param_index, variation, snapnum=N_SNAPSHOTS - 1):
