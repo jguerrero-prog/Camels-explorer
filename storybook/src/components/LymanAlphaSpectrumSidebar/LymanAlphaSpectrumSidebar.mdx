@@ -1,0 +1,49 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as LymanAlphaSpectrumSidebarStories from './LymanAlphaSpectrumSidebar.stories';
+
+<Meta of={LymanAlphaSpectrumSidebarStories} />
+
+# LymanAlphaSpectrumSidebar
+
+Lyman-alpha Spectrum's real per-tile sidebar, from `app.py`'s own `elif statistic == "Lyman-alpha Spectrum":` block — the last of the 15 statistics wired this pass.
+
+## Token
+
+Composed entirely from existing fields — see `SingleRealizationFields.mdx`, `Slider.mdx`, `Button.mdx`. No tokens of its own.
+
+## Spec
+
+<Canvas of={LymanAlphaSpectrumSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Realization: `SingleRealizationFields` — one of `app.py`'s own `SINGLE_REALIZATION_STATISTICS` (its own real caption: *"Compare mode doesn't apply to this view - showing a single sightline"*).
+- Snapshot: a `Slider`, `0` to `n_snapshots - 1` — same 34-snapshot schedule as Pk/SFRH. Real physics payoff of this control: at low Snapshot (high redshift) the forest is almost fully absorbed (the Gunn-Peterson trough), while at `snapnum = 33` (z=0) it's mostly flat transmission with a few narrow real dips.
+- Sightline: a `Slider`, `0` to `lya_n_sightlines - 1` (`4999`) — one of 5000 real random sightlines through the box at the selected Snapshot.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/lyman-alpha-spectrum` (JSON) and `/plot.png` (the real 2-panel render — flux on top, HI column density below).
+- **Real-data only, no synthetic fallback.** Only **IllustrisTNG/SIMBA**.
+- **Real, disclosed x-axis gap**: the spectral pixel axis has no published velocity/wavelength calibration (`fake_spectra`'s own `dv` isn't safely re-derivable from the file's stored header alone), so both panels plot against a raw, uncalibrated pixel index — stated directly in the chart's own axis label, not hidden.
+- No halos table under this tile — a Lyman-alpha sightline is a 1D optical-depth trace through the box, with no per-halo concept at all.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { LymanAlphaSpectrumSidebar } from '@/components/LymanAlphaSpectrumSidebar/LymanAlphaSpectrumSidebar';
+import type { LymanAlphaSpectrumParams } from '@/components/LymanAlphaSpectrumSidebar/LymanAlphaSpectrumSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<LymanAlphaSpectrumParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 42, snapnum: 33, sightline: 0,
+  });
+  return (
+    <LymanAlphaSpectrumSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

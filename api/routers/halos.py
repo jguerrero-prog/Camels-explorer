@@ -74,3 +74,22 @@ def color_mass_diagram(
         sps_model=sps_model, spectra_type=spectra_type, fetch_public=fetch_public,
     ))
     return to_jsonable(result)
+
+
+@router.get("/color-mass-diagram/plot.png")
+def color_mass_diagram_plot(
+    suite: str, set_name: str, realization: int,
+    band1: Optional[str] = None,
+    band2: Optional[str] = None,
+    snapnum: int = 33,
+    sps_model: str = "BC03",
+    spectra_type: str = "attenuated",
+    fetch_public: bool = False,
+):
+    """Static matplotlib render (scatter, color vs. log stellar mass) -
+    real-data only, no Plotly equivalent."""
+    png = require(B.render_color_mass_diagram_png(
+        suite, set_name, realization, band1=band1, band2=band2, snapnum=snapnum,
+        sps_model=sps_model, spectra_type=spectra_type, fetch_public=fetch_public,
+    ))
+    return Response(content=png, media_type="image/png")

@@ -242,6 +242,19 @@ def field_pdf(
     return to_jsonable(result)
 
 
+@router.get("/field-pdf/plot.png")
+def field_pdf_plot(
+    suite: str, field: str,
+    grid: int = 128,
+    redshift: float = 0.0,
+    fetch_public: bool = False,
+):
+    """Static matplotlib render (mean +/- std band across the ensemble) -
+    real-data only, no Plotly equivalent."""
+    png = require(B.render_field_pdf_png(suite, field, grid=grid, redshift=redshift, fetch_public=fetch_public))
+    return Response(content=png, media_type="image/png")
+
+
 @router.get("/lyman-alpha-spectrum")
 def lyman_alpha_spectrum(
     suite: str, set_name: str, realization: int, snapnum: int, sightline: int,
@@ -251,6 +264,19 @@ def lyman_alpha_spectrum(
         suite, set_name, realization, snapnum, sightline, fetch_public=fetch_public,
     ))
     return to_jsonable(result)
+
+
+@router.get("/lyman-alpha-spectrum/plot.png")
+def lyman_alpha_spectrum_plot(
+    suite: str, set_name: str, realization: int, snapnum: int, sightline: int,
+    fetch_public: bool = False,
+):
+    """Static matplotlib render (2-row shared-x: flux + column density) -
+    real-data only, no Plotly equivalent."""
+    png = require(B.render_lya_spectrum_png(
+        suite, set_name, realization, snapnum, sightline, fetch_public=fetch_public,
+    ))
+    return Response(content=png, media_type="image/png")
 
 
 @router.get("/linear-pk-ics")

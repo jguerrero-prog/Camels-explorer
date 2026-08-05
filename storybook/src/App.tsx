@@ -24,6 +24,12 @@ import { XrayHaloProfilesSidebar } from './components/XrayHaloProfilesSidebar/Xr
 import type { XrayHaloProfilesParams } from './components/XrayHaloProfilesSidebar/XrayHaloProfilesSidebar';
 import { HaloGasProfilesSidebar } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
 import type { HaloGasProfilesParams } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
+import { ColorMassDiagramSidebar } from './components/ColorMassDiagramSidebar/ColorMassDiagramSidebar';
+import type { ColorMassDiagramParams } from './components/ColorMassDiagramSidebar/ColorMassDiagramSidebar';
+import { FieldPDFSidebar } from './components/FieldPDFSidebar/FieldPDFSidebar';
+import type { FieldPDFParams } from './components/FieldPDFSidebar/FieldPDFSidebar';
+import { LymanAlphaSpectrumSidebar } from './components/LymanAlphaSpectrumSidebar/LymanAlphaSpectrumSidebar';
+import type { LymanAlphaSpectrumParams } from './components/LymanAlphaSpectrumSidebar/LymanAlphaSpectrumSidebar';
 import {
   fetchMassRangeResult, fetchHaloCatalog, toHaloRows, massRangeImageUrl,
   fetchPowerSpectrum, powerSpectrumImageUrl,
@@ -31,6 +37,9 @@ import {
   fetchSFRHistory, sfrHistoryImageUrl,
   fetchXrayProfilesMeta, xrayProfilesImageUrl,
   fetchHaloProfilesMeta, haloProfilesImageUrl,
+  fetchColorMassDiagramMeta, colorMassDiagramImageUrl,
+  fetchFieldPDFMeta, fieldPDFImageUrl,
+  fetchLymanAlphaSpectrumMeta, lymanAlphaSpectrumImageUrl,
 } from './lib/api';
 import type { Result } from './lib/api';
 import './App.css';
@@ -132,6 +141,38 @@ type HaloGasProfilesTileState = {
   error?: string;
 };
 
+/** Color-Mass Diagram/Field PDF/Lyman-alpha Spectrum (added 2026-08-05) -
+ * the final three statistics, completing all 15. All real-data only,
+ * no Plotly equivalent (PlotTile's chart.kind: 'static-image'), no
+ * per-halo catalog concept. */
+type ColorMassDiagramTileState = {
+  id: string;
+  kind: 'color-mass-diagram';
+  params: ColorMassDiagramParams;
+  note: string;
+  nGalaxies: number;
+  loading: boolean;
+  error?: string;
+};
+
+type FieldPDFTileState = {
+  id: string;
+  kind: 'field-pdf';
+  params: FieldPDFParams;
+  note: string;
+  loading: boolean;
+  error?: string;
+};
+
+type LymanAlphaSpectrumTileState = {
+  id: string;
+  kind: 'lyman-alpha-spectrum';
+  params: LymanAlphaSpectrumParams;
+  note: string;
+  loading: boolean;
+  error?: string;
+};
+
 /** Every other statistic still adds this title-only tile - see
  * PlotTile.mdx's Usecase for which statistics have a real wired chart
  * so far. */
@@ -144,6 +185,9 @@ type CanvasTile =
   | SFRHistoryTileState
   | XrayHaloProfilesTileState
   | HaloGasProfilesTileState
+  | ColorMassDiagramTileState
+  | FieldPDFTileState
+  | LymanAlphaSpectrumTileState
   | EmptyTileState;
 
 async function loadMassRangeTile(id: string, statistic: MassRangeStatistic, params: MassRangeParams): Promise<PlotTileState> {
@@ -269,6 +313,39 @@ async function loadHaloGasProfilesTile(id: string, params: HaloGasProfilesParams
   return { id, kind: 'halo-gas-profiles', params, note: meta.note, nHalos: meta.nHalos, loading: false };
 }
 
+async function loadColorMassDiagramTile(id: string, params: ColorMassDiagramParams): Promise<ColorMassDiagramTileState> {
+  const meta = await fetchColorMassDiagramMeta(params);
+  if (meta === null) {
+    throw new Error(
+      'No real photometry data for this suite/set/realization/band combination - real-data ' +
+      'only, no synthetic fallback. Try IllustrisTNG, SIMBA, Astrid, or Swift-EAGLE.',
+    );
+  }
+  return { id, kind: 'color-mass-diagram', params, note: meta.note, nGalaxies: meta.nGalaxies, loading: false };
+}
+
+async function loadFieldPDFTile(id: string, params: FieldPDFParams): Promise<FieldPDFTileState> {
+  const meta = await fetchFieldPDFMeta(params);
+  if (meta === null) {
+    throw new Error(
+      'No real PDF data for this suite/field/grid/redshift combination - real-data only, no ' +
+      'synthetic fallback. Try IllustrisTNG or SIMBA.',
+    );
+  }
+  return { id, kind: 'field-pdf', params, note: meta.note, loading: false };
+}
+
+async function loadLymanAlphaSpectrumTile(id: string, params: LymanAlphaSpectrumParams): Promise<LymanAlphaSpectrumTileState> {
+  const meta = await fetchLymanAlphaSpectrumMeta(params);
+  if (meta === null) {
+    throw new Error(
+      'No real Lyman-alpha data for this suite/set/realization/snapshot - real-data only, no ' +
+      'synthetic fallback. Try IllustrisTNG or SIMBA.',
+    );
+  }
+  return { id, kind: 'lyman-alpha-spectrum', params, note: meta.note, loading: false };
+}
+
 export function App() {
   const [activePanel, setActivePanel] = useState<IconRailPanel>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -382,6 +459,45 @@ export function App() {
       );
   };
 
+  const refetchColorMassDiagramTile = (id: string, params: ColorMassDiagramParams) => {
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'color-mass-diagram' ? { ...t, params, loading: true } : t)),
+    );
+    loadColorMassDiagramTile(id, params)
+      .then((updated) => setTiles((prev) => prev.map((t) => (t.id === id ? updated : t))))
+      .catch((err) =>
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'color-mass-diagram' ? { ...t, loading: false, error: String(err) } : t)),
+        ),
+      );
+  };
+
+  const refetchFieldPDFTile = (id: string, params: FieldPDFParams) => {
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'field-pdf' ? { ...t, params, loading: true } : t)),
+    );
+    loadFieldPDFTile(id, params)
+      .then((updated) => setTiles((prev) => prev.map((t) => (t.id === id ? updated : t))))
+      .catch((err) =>
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'field-pdf' ? { ...t, loading: false, error: String(err) } : t)),
+        ),
+      );
+  };
+
+  const refetchLymanAlphaSpectrumTile = (id: string, params: LymanAlphaSpectrumParams) => {
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'lyman-alpha-spectrum' ? { ...t, params, loading: true } : t)),
+    );
+    loadLymanAlphaSpectrumTile(id, params)
+      .then((updated) => setTiles((prev) => prev.map((t) => (t.id === id ? updated : t))))
+      .catch((err) =>
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'lyman-alpha-spectrum' ? { ...t, loading: false, error: String(err) } : t)),
+        ),
+      );
+  };
+
   const handleSubmit = (selection: CuratedSelection) => {
     setIsModalOpen(false);
     const id = pendingTileId ?? `tile-${tiles.length + 1}`;
@@ -482,6 +598,48 @@ export function App() {
       return;
     }
 
+    if (selection.statistic === 'Color-Mass Diagram') {
+      const params: ColorMassDiagramParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+        snapnum: DEFAULT_SNAPNUM, spsModel: 'BC03', spectraType: 'attenuated',
+        filterFamily: 'SLOAN', band1: 'SDSS.g', band2: 'SDSS.r',
+      };
+      const placeholder: ColorMassDiagramTileState = {
+        id, kind: 'color-mass-diagram', params, note: '', nGalaxies: 0, loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchColorMassDiagramTile(id, params);
+      return;
+    }
+
+    if (selection.statistic === 'Field PDF') {
+      const params: FieldPDFParams = {
+        suite: selection.suite, field: 'Mtot', grid: 128, redshift: 0.0,
+      };
+      const placeholder: FieldPDFTileState = {
+        id, kind: 'field-pdf', params, note: '', loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchFieldPDFTile(id, params);
+      return;
+    }
+
+    if (selection.statistic === 'Lyman-alpha Spectrum') {
+      const params: LymanAlphaSpectrumParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+        snapnum: DEFAULT_SNAPNUM, sightline: 0,
+      };
+      const placeholder: LymanAlphaSpectrumTileState = {
+        id, kind: 'lyman-alpha-spectrum', params, note: '', loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchLymanAlphaSpectrumTile(id, params);
+      return;
+    }
+
     // Real, honest gap (see PlotTile.mdx's Usecase): every other statistic
     // still adds a title-only empty tile, rather than fabricate a chart.
     replaceTile({ id, kind: 'empty', title: selection.statistic });
@@ -546,6 +704,27 @@ export function App() {
           onChange={(params) => refetchHaloGasProfilesTile(focusedTile.id, params)}
           onRemove={() => removeTile(focusedTile.id)}
           maxHighlightRank={focusedTile.nHalos || 1}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'color-mass-diagram' && (
+        <ColorMassDiagramSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchColorMassDiagramTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'field-pdf' && (
+        <FieldPDFSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchFieldPDFTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'lyman-alpha-spectrum' && (
+        <LymanAlphaSpectrumSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchLymanAlphaSpectrumTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
         />
       )}
       <div className="app-shell__main">
@@ -745,6 +924,72 @@ export function App() {
                         { label: 'Realization', value: String(tile.params.realization) },
                         { label: 'Field', value: tile.params.field },
                         { label: 'Halos', value: String(tile.nHalos) },
+                      ]}
+                      halos={null}
+                      onFocus={() => focusTile(tile.id)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'color-mass-diagram') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      title="Color-Mass Diagram"
+                      chart={{
+                        kind: 'static-image',
+                        imageUrl: colorMassDiagramImageUrl(tile.params),
+                        alt: `${tile.params.band1} - ${tile.params.band2} color vs. log stellar mass`,
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Color', value: `${tile.params.band1} − ${tile.params.band2}` },
+                        { label: 'Galaxies', value: String(tile.nGalaxies) },
+                      ]}
+                      halos={null}
+                      onFocus={() => focusTile(tile.id)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'field-pdf') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      title="Field PDF"
+                      chart={{
+                        kind: 'static-image',
+                        imageUrl: fieldPDFImageUrl(tile.params),
+                        alt: `${tile.params.field} PDF, mean ± std across the LH ensemble`,
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite', value: tile.params.suite },
+                        { label: 'Field', value: tile.params.field },
+                        { label: 'Grid', value: String(tile.params.grid) },
+                        { label: 'Redshift', value: tile.params.redshift.toFixed(2) },
+                      ]}
+                      halos={null}
+                      onFocus={() => focusTile(tile.id)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'lyman-alpha-spectrum') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      title="Lyman-alpha Spectrum"
+                      chart={{
+                        kind: 'static-image',
+                        imageUrl: lymanAlphaSpectrumImageUrl(tile.params),
+                        alt: 'Lyman-alpha transmitted flux and HI column density vs. spectral pixel',
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Snapshot', value: String(tile.params.snapnum) },
+                        { label: 'Sightline', value: String(tile.params.sightline) },
                       ]}
                       halos={null}
                       onFocus={() => focusTile(tile.id)}
