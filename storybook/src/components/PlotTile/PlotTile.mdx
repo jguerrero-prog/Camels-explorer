@@ -57,7 +57,8 @@ function StellarMassFunctionTile({ result, params, catalog, onFocus }) {
         { label: 'Stellar mass range', value: `${params.SMmin.toExponential()} – ${params.SMmax.toExponential()}` },
         { label: 'Bins', value: String(params.bins) },
       ]}
-      haloRows={catalog}
+      haloRows={catalog.frame}
+      haloRawRows={catalog.raw_frame}
       onFocus={onFocus}
     />
   );

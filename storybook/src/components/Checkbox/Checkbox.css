@@ -9,6 +9,11 @@
   text-align: left;
 }
 
+.checkbox--disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .checkbox__box {
   width: 18px;
   height: 18px;

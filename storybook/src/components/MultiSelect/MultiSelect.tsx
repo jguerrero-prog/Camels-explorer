@@ -52,7 +52,16 @@ export function MultiSelect({ label, values, onRemove, onAdd, placeholder = 'Add
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setOpen(false);
     };
-    const onScroll = () => setOpen(false);
+    // Real bug fixed 2026-08-04: a capture-phase window listener receives
+    // scroll events from the menu's OWN internal list too (its max-height
+    // makes it independently scrollable) - without this guard, scrolling
+    // the open menu closed it immediately, making a long options list
+    // (e.g. 1,000 realizations) effectively unscrollable past the first
+    // handful of entries.
+    const onScroll = (e: Event) => {
+      if ((e.target as HTMLElement)?.closest?.('.multi-select__menu')) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     window.addEventListener('scroll', onScroll, true);

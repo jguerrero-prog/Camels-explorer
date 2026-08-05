@@ -71,6 +71,10 @@ export type HaloCatalog = {
   box_size: number;
   redshift: number;
   note: string;
+  // frame's columns + every other real column this file has - backend.py's
+  // Catalog.raw_frame, None when unavailable (matches get_halo_catalog's
+  // own real None case, not a separate failure mode).
+  raw_frame: HaloCatalogRow[] | null;
 } | null;
 
 export async function fetchHaloCatalog(params: {
@@ -103,5 +107,6 @@ export function toHaloRows(catalog: HaloCatalog) {
     bhMass: row['BH Mass [Msun/h]'],
     sfr: row['SFR [Msun/yr]'],
     vmax: row['Vmax [km/s]'],
+    stellarMetallicity: row['Stellar Metallicity'],
   }));
 }

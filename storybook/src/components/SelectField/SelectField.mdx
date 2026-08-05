@@ -27,6 +27,8 @@ The closed-state dropdown-styled field used throughout the params panel — Suit
 
 **Real bug fixed 2026-08-04:** the menu originally used `position: absolute` nested inside its own field wrapper. Inside `AddPlotModal`'s scrollable fields area, the last field's (Statistic) menu rendered past the container's bottom edge and was clipped by its `overflow-y: auto` — invisible until the user scrolled the whole modal. Fixed by rendering the menu in a `document.body` portal (`createPortal`), `position: fixed`, positioned from the trigger's real `getBoundingClientRect()` rather than nested relative-positioning — this can never be clipped by any scrollable ancestor again. Closes on scroll (rather than continuously repositioning) so it can't visually detach from a trigger that moved.
 
+**Real bug fixed 2026-08-04:** the close-on-scroll listener is a capture-phase `window` listener, which also receives scroll events from the menu's *own* internal list (it's independently scrollable past 240px) — so scrolling the open menu closed it immediately, before any scroll could register. Caught via `MultiSelect` (same technique, longer real lists made it obvious), fixed identically here: ignore scroll events whose target is inside `.select-field__menu` itself.
+
 **The Canvas above renders "Select label"/"Selected value," not "Set"/"LH · Latin Hypercube."** This story demonstrates the control's mechanics, not confirmed copy — the real field names are documented in Usecase below instead.
 
 ## Usecase

@@ -21,6 +21,9 @@ export type PlotTileProps = {
   };
   readoutGroups: ParamsReadoutGroup[];
   haloRows: HaloRow[];
+  /** backend.py's Catalog.raw_frame - see UnderlyingHalos.mdx's "Show all
+   * available fields" row. */
+  haloRawRows?: Record<string, number>[] | null;
   /** Fires on any click on the tile - App.tsx uses this to decide which
    * tile's ParamsSidebar shows (its own focusedTileId state, not a prop
    * here). No visual effect on the tile itself - see PlotTile.mdx's
@@ -28,7 +31,7 @@ export type PlotTileProps = {
   onFocus?: () => void;
 };
 
-export function PlotTile({ title, chart, readoutGroups, haloRows, onFocus }: PlotTileProps) {
+export function PlotTile({ title, chart, readoutGroups, haloRows, haloRawRows, onFocus }: PlotTileProps) {
   return (
     <div className="tile plot-tile" onClick={onFocus}>
       <h3 className="tile__title">{title}</h3>
@@ -43,7 +46,7 @@ export function PlotTile({ title, chart, readoutGroups, haloRows, onFocus }: Plo
         />
         <ParamsReadout groups={readoutGroups} />
       </div>
-      <UnderlyingHalos rows={haloRows} />
+      <UnderlyingHalos rows={haloRows} rawRows={haloRawRows} />
     </div>
   );
 }

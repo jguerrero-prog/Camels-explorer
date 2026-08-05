@@ -46,8 +46,13 @@
   gap: 16px;
 }
 
+/* Capped rather than flex:1 (full table width) - direct user feedback that
+   a full-width range slider for a single threshold value reads as
+   oversized; half the table's width is plenty for a slider whose only job
+   is picking one cutoff point. */
 .underlying-halos__controls .slider {
-  flex: 1;
+  flex: 0 1 50%;
+  min-width: 200px;
 }
 
 .underlying-halos__add-finder {
@@ -58,16 +63,75 @@
   background: none;
   color: var(--color-text-muted);
   font-family: var(--font-label);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 12px;
   cursor: not-allowed;
 }
 
+/* Wraps the toolbar row + the table itself - hover anywhere in here (table
+   included) reveals the toolbar, but the toolbar sits in its own row ABOVE
+   the table (not overlapping its header cells - a real fix: it originally
+   floated on top of the table via position:absolute and covered part of
+   the header row on hover). */
+.underlying-halos__table-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* max-height matches app.py's own real st.dataframe(..., height=420) -
+   scrolls vertically instead of hard-truncating rows (a real fix: this
+   used to cap display at 5 rows regardless of how many actually matched
+   the filter, unlike Streamlit's real behavior of showing every filtered
+   row in a scrollable area). */
 .underlying-halos__table-wrap {
   width: 100%;
-  overflow-x: auto;
+  max-height: 420px;
+  overflow: auto;
   border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
+}
+
+/* Eye/fullscreen icons - only visible on hovering the table (container),
+   same discoverable-on-hover pattern as Streamlit's own st.dataframe
+   toolbar this was built to match. Reserves its own row height always (so
+   hovering doesn't shift the table down) but stays invisible until then. */
+.underlying-halos__table-toolbar {
+  align-self: flex-end;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--color-surface-chrome);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.underlying-halos__table-container:hover .underlying-halos__table-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.underlying-halos__toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.underlying-halos__toolbar-btn:hover {
+  background: var(--color-surface-toggle-active);
+  color: var(--color-text-primary);
 }
 
 .underlying-halos__table {
@@ -91,13 +155,68 @@
 }
 
 .underlying-halos__table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   font-family: var(--font-label);
-  font-weight: 700;
+  font-weight: 600;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--color-text-muted);
   background: var(--color-surface-control);
+}
+
+/* Pinned header cells are sticky on both axes (frozen row + frozen
+   column) - needs the higher z-index so it stays above plain sticky-row
+   header cells scrolling underneath it horizontally. */
+.underlying-halos__th--pinned {
+  z-index: 3;
+}
+
+/* Sticky (pinned) cells need their own opaque background + z-index -
+   otherwise content scrolled underneath would show through the "gap"
+   while other columns scroll past. */
+.underlying-halos__td--pinned {
+  position: sticky;
+  z-index: 1;
+  background: var(--color-surface-content);
+}
+
+.underlying-halos__th-inner {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.underlying-halos__table th:first-child .underlying-halos__th-inner {
+  justify-content: space-between;
+}
+
+.underlying-halos__kebab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: none;
+  color: var(--color-text-muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+.underlying-halos__table th:hover .underlying-halos__kebab {
+  opacity: 1;
+}
+
+.underlying-halos__kebab:hover {
+  background: var(--color-surface-toggle-active);
+  color: var(--color-text-primary);
 }
 
 .underlying-halos__table tbody tr:not(:last-child) td {
@@ -130,4 +249,107 @@
 
 .underlying-halos__download:hover {
   background: var(--color-surface-toggle-active);
+}
+
+/* Portal-rendered dropdowns (column kebab menu, eye menu) - same
+   document.body + position:fixed technique as SelectField/MultiSelect's
+   own menus, for the same reason: this table's own overflow-x:auto would
+   otherwise clip a nested-absolute menu. */
+.underlying-halos__dropdown {
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  min-width: 160px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--color-surface-chrome);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  box-shadow: 0px 10px 24px -6px rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+}
+
+.underlying-halos__dropdown-item {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.underlying-halos__dropdown-item:hover {
+  background: var(--color-surface-toggle-active);
+}
+
+.underlying-halos__dropdown-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.underlying-halos__dropdown-checkbox:hover {
+  background: var(--color-surface-toggle-active);
+}
+
+.underlying-halos__fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-content);
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.underlying-halos__fullscreen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 16px;
+}
+
+.underlying-halos__fullscreen-close {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background: none;
+  color: var(--color-text-primary);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.underlying-halos__fullscreen-close:hover {
+  background: var(--color-surface-toggle-active);
+}
+
+.underlying-halos__fullscreen-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.underlying-halos__fullscreen-body .underlying-halos__table-container {
+  height: 100%;
+}
+
+.underlying-halos__fullscreen-body .underlying-halos__table-wrap {
+  flex: 1;
+  min-height: 0;
 }

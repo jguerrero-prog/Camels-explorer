@@ -29,11 +29,12 @@ Real source: Figma nodes `1055:41` (unchecked, "Compare mode") and `1055:75` (ch
 
 **Still open:**
 - No indeterminate state is shown or implied by either real frame.
-- No disabled state is shown.
+
+**Added 2026-08-04, real usage, not sourced from Figma:** a `disabled` prop (dimmed, `cursor: not-allowed`) — `UnderlyingHalos`'s "Show all available fields (raw)" checkbox needs to disable itself when the real catalog has no `raw_frame` (matches `app.py`'s own `disabled=catalog.raw_frame is None` on the identical control).
 
 ## Usecase
 
-- Real, confirmed usages: SFR History's "Compare mode" toggle and "Show symbolic-regression fit overlay" toggle, both inside `ParamsSidebar`.
+- Real, confirmed usages: SFR History's "Compare mode" toggle and "Show symbolic-regression fit overlay" toggle, both inside `ParamsSidebar`; `UnderlyingHalos`'s "Show all available fields (raw)" toggle.
 - Use for any independent on/off setting inside a params panel. `STUDIO_PLAN.md`'s roadmap row 3 (symbolic-regression overlay) and Compare mode (mentioned throughout `STUDIO_PLAN.md`'s "Adding tiles" section) are both real, already-planned features this control serves directly — not a generic checkbox added speculatively.
 
 ## Code

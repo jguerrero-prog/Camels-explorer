@@ -29,6 +29,7 @@ const SAMPLE_ROWS: HaloRow[] = Array.from({ length: 353 }, (_, i) => ({
   bhMass: 1e6 * (1 + (i % 20)),
   sfr: (i % 12) * 0.4,
   vmax: 120 + (i % 25) * 8,
+  stellarMetallicity: 0.01 + (i % 10) * 0.002,
 }));
 
 // Points directly at the real API server (localhost:8010), same real
