@@ -26,7 +26,7 @@ Left to right: **Annotate → Ratio/diff → Ruler → Linked brushing → Copy 
 
 ## Usecase
 
-- Lives inside `TopNav`'s header row (not built as part of `TopNav` itself yet — see `TopNav.mdx`, which predates this frame and doesn't include a toolbar slot). Wiring `Toolbar` into `TopNav` is a real follow-up.
+- **Resolved 2026-08-05:** lives inside `TopNav`'s header row via its real `toolbar` prop (see `TopNav.mdx`) — `App.tsx` originally rendered this as a second row beneath `TopNav`, a real layout bug fixed once the real merged-header frame (Figma node `1012:1124`) confirmed it belongs in the same row.
 - `viewMode` should be lifted to whatever owns `Viewer` (see `Viewer.mdx`) — this component doesn't own view-mode state itself, it just displays/toggles it.
 
 ## Code
