@@ -1,0 +1,52 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as PlotChartStories from './PlotChart.stories';
+
+<Meta of={PlotChartStories} />
+
+# PlotChart
+
+The rendered-plot card from Figma node `1019:10` ("Stellar Mass Function drill-down"). This is a genuinely functional chart, not a static image — `plotly.js-dist-min` + `react-plotly.js/factory` (a smaller Plotly bundle than the full `plotly.js`, wired via Plotly's own documented custom-bundle pattern), the same plotting library the Streamlit prototype (`app.py`) already uses for every 1D statistic, so real data from `backend.py` needs no reshaping to render here.
+
+## Token
+
+- `--color-surface-chart` — a new, deliberate white surface token (see `semantic.css`), distinct from every other dark-chrome surface in this app. Real, not a bug: a log-log scientific line plot needs to read against white, matching the frame exactly.
+- `--font-ui` (Inter) — chart axis/legend text (Plotly's own `layout.font`, not a CSS rule, since Plotly renders its own SVG/canvas text).
+
+## Spec
+
+<Canvas of={PlotChartStories.SingleSeries} />
+<Controls />
+
+- Fills its container (`width: 100%; height: 100%`), 8px padding, 8px radius, transparent Plotly paper/plot background over the white card.
+- Log-log by default (`logX`/`logY`, both default `true`) — matches every real `Result`-shaped statistic in `backend.py` (`log_x`/`log_y` fields).
+- `displayModeBar: false` — Plotly's own zoom/pan/download toolbar is hidden; this app has its own `Toolbar` component for that role (annotate/ratio-diff/ruler/copy-as-code/etc.), so Plotly's default chrome would be a confusing second toolbar.
+- Legend only shows when `series.length > 1` (compare mode).
+
+<Canvas of={PlotChartStories.CompareMode} />
+
+**The Canvas above renders synthetic declining power-law curves, not real fetched values.** A Storybook story must render without a live API — see `PlotTile.mdx` and `App.tsx` for where this component receives a real `GET /api/stellar-mass-function` response instead.
+
+**Real, deliberate scope decision:** line color is chosen from a fixed 4-color palette (`LINE_COLORS`, sourced from this app's own brand primitives) cycling by series index, not per-suite or per-set — the Figma frame's own trace colors aren't semantically tied to anything else in this app (unlike, say, the empty-icon gradient), so no meaning is lost by picking a simple deterministic order.
+
+## Usecase
+
+- Real usage: `PlotTile`'s chart panel, fed live `x`/`y`/`x_label`/`y_label`/`log_x`/`log_y` from `GET /api/stellar-mass-function` (single series) or one fetch per selected realization when Compare mode is on (`ParamsSidebar`'s "Realizations to compare" `MultiSelect`).
+- `series` accepts more than one entry specifically for compare/overlay mode — a single-series chart is just the `series.length === 1` case, not a separate code path.
+
+## Code
+
+```tsx
+import { PlotChart } from '@/components/PlotChart/PlotChart';
+
+function StellarMassFunctionChart({ result }) {
+  return (
+    <PlotChart
+      series={[{ label: 'LH_278', x: result.x, y: result.y }]}
+      xLabel={result.x_label}
+      yLabel={result.y_label}
+      logX={result.log_x}
+      logY={result.log_y}
+    />
+  );
+}
+```

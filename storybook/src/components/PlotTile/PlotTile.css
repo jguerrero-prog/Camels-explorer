@@ -1,0 +1,19 @@
+/* Shares `.tile`'s card shell (background/border/radius/shadow/padding) from
+   Tile.css - see PlotTile.mdx for why this is a separate component rather
+   than a variant prop on Tile. Everything below is populated-state-only
+   layout. */
+
+.plot-tile {
+  cursor: pointer;
+}
+
+.plot-tile--focused {
+  border-color: var(--color-accent-gradient-start);
+}
+
+.plot-tile__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 4px;
+}

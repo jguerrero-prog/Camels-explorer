@@ -1,0 +1,66 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as PlotTileStories from './PlotTile.stories';
+
+<Meta of={PlotTileStories} />
+
+# PlotTile
+
+The populated (has-a-plot) tile, from Figma node `1019:10`. `Tile.mdx` explicitly flagged this as a separate, not-yet-designed variant rather than something to bolt onto `Tile` via a prop — this is that variant, built as its own component sharing `Tile.css`'s `.tile` card shell (background/border/radius/shadow/padding) rather than duplicating it.
+
+## Token
+
+Inherits `.tile`'s tokens from `Tile.mdx` (`--color-surface-content`, `--color-border`, `--font-ui`). Adds:
+
+- `--color-accent-gradient-start` — the focused-tile border color (see Spec).
+
+Composed children carry their own tokens — see `PlotChart.mdx`, `ParamsReadout.mdx`, `UnderlyingHalos.mdx`.
+
+## Spec
+
+<Canvas of={PlotTileStories.SingleRealization} />
+<Controls />
+
+- Title row (reuses `.tile__title`), then a body row (`PlotChart` + `ParamsReadout` side by side), then `UnderlyingHalos` as the last child — matches the frame's vertical stacking exactly.
+- Clicking anywhere on the tile calls `onFocus` — real wiring, not decorative: `App.tsx` uses this to swap the left 280px slot to this tile's own `ParamsSidebar` (see Usecase). `focused` draws a thin accent-colored border so the currently-controlled tile is visually unambiguous once more than one populated tile exists on the canvas — not sourced from Figma (the frame only ever shows one tile), a real necessary addition once tile-focus became real state.
+
+<Canvas of={PlotTileStories.CompareMode} />
+
+**Real, deliberate scope decision — why this isn't just `Tile` with a prop:** `Tile.mdx`'s own "Usecase" section already ruled this out ("that's a different enough anatomy... deserves its own documented variant"). The populated anatomy (chart + readout + collapsible halos table) shares nothing structurally with the empty state's single centered button, so a shared prop would mean two unrelated render branches inside one component — a separate component sharing only the outer card CSS is the honest shape.
+
+<Canvas of={PlotTileStories.Focusable} />
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas, replacing the empty-state `Tile` once the Add Plot modal's Curated tab submits **"Stellar Mass Function"** specifically — the only statistic with real end-to-end chart wiring built so far (`GET /api/stellar-mass-function` for `chart`, `GET /api/halo-catalog` for `haloRows`). Submitting any other statistic still adds the old title-only empty `Tile` — a real, honest gap, not silently papered over with fake chart data for statistics that aren't wired yet.
+- `focused`/`onFocus` are real, wired state in `App.tsx`: the focused tile's real Suite/Set/Realization/Compare-mode/stellar-mass-range/Bins live in a `ParamsSidebar` composition in the left 280px slot (same slot `IconRail`'s Project/Files panels use — mutually exclusive, per `STUDIO_PLAN.md`), and editing those fields refetches this tile's chart + halo catalog.
+- Compare mode (`chart.series.length > 1`) is driven by `ParamsSidebar`'s "Realizations to compare" `MultiSelect` — one `GET /api/stellar-mass-function` fetch per selected realization, same suite/set/params, overlaid.
+
+## Code
+
+```tsx
+import { PlotTile } from '@/components/PlotTile/PlotTile';
+
+function StellarMassFunctionTile({ result, catalog, focused, onFocus }) {
+  return (
+    <PlotTile
+      title="Stellar Mass Function"
+      chart={{
+        series: [{ label: `${result.setName}_${result.realization}`, x: result.x, y: result.y }],
+        xLabel: result.x_label,
+        yLabel: result.y_label,
+        logX: result.log_x,
+        logY: result.log_y,
+      }}
+      readoutGroups={[
+        { label: 'Suite / Set', value: `${result.suite} · ${result.setName}` },
+        { label: 'Realizations (compare)', value: String(result.realization) },
+        { label: 'Stellar mass range', value: `${result.SMmin.toExponential()} – ${result.SMmax.toExponential()}` },
+        { label: 'Bins', value: String(result.bins) },
+      ]}
+      haloRows={catalog}
+      focused={focused}
+      onFocus={onFocus}
+    />
+  );
+}
+```

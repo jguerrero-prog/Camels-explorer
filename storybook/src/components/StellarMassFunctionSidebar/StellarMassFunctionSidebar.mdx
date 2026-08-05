@@ -1,0 +1,60 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as StellarMassFunctionSidebarStories from './StellarMassFunctionSidebar.stories';
+
+<Meta of={StellarMassFunctionSidebarStories} />
+
+# StellarMassFunctionSidebar
+
+The real, wired `ParamsSidebar` composition for Stellar Mass Function, from Figma node `1019:10`'s left params column. `ParamsSidebar.mdx` already established that composing the right fields per statistic is the caller's job — this is the first caller to actually do it for a statistic with a real, live-fetched chart behind it (see `PlotTile.mdx`).
+
+## Token
+
+Inherits everything from `ParamsSidebar.mdx`. Individual fields carry their own tokens — see `SelectField.mdx`, `NumberStepper.mdx`, `Slider.mdx`, `Checkbox.mdx`, `MultiSelect.mdx`, `Button.mdx`.
+
+## Spec
+
+<Canvas of={StellarMassFunctionSidebarStories.Playground} />
+<Controls />
+
+- Suite / Set: `SelectField`, options from the same real `GET /api/metadata` endpoint `AddPlotModal`'s Curated tab uses.
+- Compare mode: `Checkbox`. Off → a single `NumberStepper` "Realization". On → a `MultiSelect` "Realizations to compare" (chips, add by typing a number + Enter) — this is what drives `PlotTile`'s multi-series overlay.
+- Min/Max stellar mass: two `NumberStepper`s, exponential-formatted (`1.0e+9`).
+- Bins: a `Slider`, range 5–60 — matches `app.py`'s own real Stellar Mass Function slider range exactly.
+- Remove plot: `Button` `variant="secondary"` — the real, already-documented usage `Button.mdx` anticipated ("params sidebar's Remove plot").
+
+**Real, deliberate deviation from the Figma frame:** the frame's Min/Max stellar-mass fields render as a plain white box with raw, unstyled ▲▼ glyphs — not this app's actual `NumberStepper` design (dark chrome, styled +/- buttons, editable text). Given this app's own very recent, direct correction that steppers must use the real `NumberStepper` component (see `NumberStepper.mdx`'s 2026-08-04 entry), that raw frame rendering is treated as an unstyled Figma placeholder, not a confirmed alternate stepper design — `NumberStepper` is used here for consistency with every other numeric field in this app.
+
+## Usecase
+
+- Real usage: `App.tsx`'s left 280px slot, shown only when a `PlotTile` is focused (mutually exclusive with `IconRail`'s Project/Files panels, matching `ParamsSidebar.mdx`'s existing rule).
+- Every field here maps 1:1 to a real `backend.py` parameter (`suite`, `set_name`, `realization`, `SMmin`, `SMmax`, `bins` — see `get_stellar_mass_function`'s signature) — nothing here is decorative. Changing any field triggers a real refetch of both `GET /api/stellar-mass-function` (one call per selected realization) and `GET /api/halo-catalog`.
+- Compare mode's `MultiSelect` always keeps at least one realization — removing the last remaining chip is a no-op rather than leaving the chart with zero series.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { StellarMassFunctionSidebar } from '@/components/StellarMassFunctionSidebar/StellarMassFunctionSidebar';
+import type { StellarMassFunctionParams } from '@/components/StellarMassFunctionSidebar/StellarMassFunctionSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<StellarMassFunctionParams>({
+    suite: 'IllustrisTNG',
+    setName: 'LH',
+    compareMode: false,
+    realizations: [278],
+    SMmin: 1e9,
+    SMmax: 5e11,
+    bins: 10,
+  });
+
+  return (
+    <StellarMassFunctionSidebar
+      panelLabel="Panel 1 · Focused"
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

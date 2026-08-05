@@ -29,14 +29,15 @@ The single-tile empty state from the "Skeleton" frame (Figma node `1113:1583`, "
 
 **Corrected 2026-08-04:** the four stat chips shown in the same Figma frame ("1,000 LH Realizations" etc.) are **not** part of this component's own implementation — they were originally hardcoded in here, but are a canvas-level "zero plots exist anywhere" concern, not a per-tile one (see `CanvasStatsRow.mdx`). **Re-confirmed against real Figma evidence (node `1113:1609`, "stats-row") that they DO visually nest as the last child inside this same card** — not as a separate row floating above it, which is what an earlier app build incorrectly did. The `footer` prop exists for exactly this: `Tile` still has no opinion on *whether* to show stats (that decision stays canvas-level, in whatever composes `Tile`), it just renders whatever the caller passes.
 
+**Resolved 2026-08-04: the populated variant is `PlotTile`** (Figma node `1019:10`) — a separate component sharing this file's `.tile` card-shell CSS, not a prop on this one. See `PlotTile.mdx` for why, and for the real chart/readout/halos-table anatomy that made a shared prop shape wrong.
+
 **Still open:**
-- **No "populated" (non-empty) variant exists yet.** This is deliberately just the empty state — what a tile looks like once a real plot is rendered inside it is a separate, not-yet-designed variant.
 - **More views are coming** for the different viewer states and the toolbar — nothing here should be read as the final word on how a populated tile looks or behaves.
 
 ## Usecase
 
 - One `Tile` per cell in the Viewer's auto-tiling grid, in its empty state — this is the "before adding a plot" moment the whole app starts from.
-- Do not reuse `Tile` for the populated (has-a-plot) state by just conditionally hiding the empty-state block — that's a different enough anatomy (a real chart, its own toolbar per `STUDIO_PLAN.md`'s "Toolbar candidates") that it likely deserves its own documented variant when it's built, not a silently-overloaded prop on this one.
+- Do not reuse `Tile` for the populated (has-a-plot) state by just conditionally hiding the empty-state block — see `PlotTile` for that variant, built as its own component.
 - Pass `footer={<CanvasStatsRow .../>}` only for the canvas's lone starter tile, and only while the whole canvas has zero plots — see `CanvasStatsRow.mdx`'s Usecase for the exact rule. Every other tile gets no `footer`.
 
 <Canvas of={TileStories.AsCanvasStarter} />
