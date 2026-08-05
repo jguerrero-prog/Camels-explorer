@@ -23,6 +23,7 @@ A range slider with a gradient fill, real source: Figma node `1055:33` ("slider-
 - Track: 4px tall, full width, 2px radius, `--color-surface-track`.
 - Fill: same height/radius, gradient, width = `(value - min) / (max - min)`.
 - Thumb: 14px, positioned at the fill's edge minus half its own width, so it sits centered on the fill boundary — matches the real frame's `left: 60px` for a 67px-wide fill (67 - 14/2 = 60).
+- `step` (added 2026-08-05, default `1`): every prior real usage (Bins, `OptionSlider`'s index ranges) is a whole-number range, where the default was never wrong. Real bug fixed for SFR History's Ωm/σ8/A_SN1/A_AGN1 sliders — a fractional real range (e.g. `0.1-0.5`) with the browser's default `step="1"` only ever lets the value sit at `min`, since no other integer fits in range.
 
 **The Canvas above renders "Slider label," not "Realization."** This story demonstrates the control's mechanics, not confirmed copy — the real field name is documented in Usecase below instead.
 

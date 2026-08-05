@@ -29,10 +29,10 @@ Composed children carry their own tokens — see `PlotChart.mdx`, `ParamsReadout
 
 ## Usecase
 
-- Real usage: `App.tsx`'s canvas, replacing the empty-state `Tile` once the Add Plot modal's Curated tab submits one of the three statistics with real end-to-end chart wiring built so far — **Stellar Mass Function, Halo Mass Function, Baryon Fraction** (see `MassRangeSidebar.mdx`; each statistic's own JSON endpoint for `chart.series`, its own matplotlib PNG endpoint for `chart.imageUrl`, `GET /api/halo-catalog` for `haloRows`). Submitting any other statistic still adds the old title-only empty `Tile` — a real, honest gap, not silently papered over with fake chart data for statistics that aren't wired yet.
-- `onFocus` is real, wired state in `App.tsx`: clicking sets `focusedTileId`, and the focused tile's real Suite/Set/Realization/Compare-mode/mass-range/Bins then live in a `MassRangeSidebar` composition in the left 280px slot (same slot `IconRail`'s Project/Files panels use — mutually exclusive, per `STUDIO_PLAN.md`); editing those fields refetches this tile's chart + halo catalog.
-- Compare mode (`chart.series.length > 1`) is driven by `MassRangeSidebar`'s "Realizations to compare" `MultiSelect` — one fetch per selected realization, same suite/set/params, overlaid; `chart.imageUrl` gains one `realizations=` query param per selection the same way.
-- `haloMassContextNote` (passed through to `UnderlyingHalos`) is only set for Halo Mass Function/Baryon Fraction — see `UnderlyingHalos.mdx`'s 2026-08-05 note on why their plotted quantity has no matching column in the per-subhalo catalog shown below the chart.
+- Real usage: `App.tsx`'s canvas, replacing the empty-state `Tile` once the Add Plot modal's Curated tab submits one of the statistics with real end-to-end chart wiring built so far — **Stellar Mass Function, Halo Mass Function, Baryon Fraction, Power Spectrum, Bispectrum, SFR History** (the six statistics sharing `backend.py`'s `_render_result_png` path — see `MassRangeSidebar.mdx`/`PowerSpectrumSidebar.mdx`/`BispectrumSidebar.mdx`/`SFRHistorySidebar.mdx`). Submitting any other statistic still adds the old title-only empty `Tile` — a real, honest gap, not silently papered over with fake chart data for statistics that aren't wired yet.
+- `onFocus` is real, wired state in `App.tsx`: clicking sets `focusedTileId`, and the focused tile's own real sidebar composition then lives in the left 280px slot (same slot `IconRail`'s Project/Files panels use — mutually exclusive, per `STUDIO_PLAN.md`); editing those fields refetches this tile's chart.
+- Compare mode (`chart.series.length > 1`), where supported, is driven by the sidebar's "Realizations to compare" `MultiSelect` — one fetch per selected realization, same suite/set/params, overlaid; `chart.imageUrl` gains one `realizations=` query param per selection the same way. Bispectrum supports this for free via the same generic path; Power Spectrum/SFR History do too.
+- **`halos` is `null` for Power Spectrum, Bispectrum, and SFR History** (real 2026-08-05 addition) — these are field/box-level statistics with no per-halo catalog concept at all, unlike the three mass-range statistics whose `halos.rows`/`halos.rawRows` come from the same real `GET /api/halo-catalog` fetch. `halos.massContextNote` (only set for Halo Mass Function/Baryon Fraction) is unrelated to this — see `UnderlyingHalos.mdx`'s 2026-08-05 note on why their plotted quantity has no matching column in the per-subhalo catalog shown below the chart.
 
 ## Code
 
@@ -60,8 +60,20 @@ function MassRangeTile({ statistic, result, params, catalog, onFocus }) {
         { label: config.rangeLabel, value: `${params.min.toExponential()} – ${params.max.toExponential()}` },
         { label: 'Bins', value: String(params.bins) },
       ]}
-      haloRows={catalog.frame}
-      haloRawRows={catalog.raw_frame}
+      halos={{ rows: catalog.frame, rawRows: catalog.raw_frame }}
+      onFocus={onFocus}
+    />
+  );
+}
+
+// Power Spectrum/Bispectrum/SFR History: same PlotTile, halos: null.
+function NoCatalogTile({ statistic, result, params, onFocus }) {
+  return (
+    <PlotTile
+      title={statistic}
+      chart={{ series: [{ label: '...', x: result.x, y: result.y }], xLabel: result.x_label, yLabel: result.y_label }}
+      readoutGroups={[{ label: 'Suite / Set', value: `${params.suite} · ${params.setName}` }]}
+      halos={null}
       onFocus={onFocus}
     />
   );

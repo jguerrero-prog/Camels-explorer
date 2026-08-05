@@ -1,0 +1,51 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as BispectrumSidebarStories from './BispectrumSidebar.stories';
+
+<Meta of={BispectrumSidebarStories} />
+
+# BispectrumSidebar
+
+Bispectrum's real per-tile sidebar, from `app.py`'s own `elif statistic == "Bispectrum":` block. Added 2026-08-05 alongside `PowerSpectrumSidebar`/`SFRHistorySidebar` — the three statistics that share `_render_result_png`'s generic 1D-chart rendering path but each have a genuinely different control surface (see `MassRangeSidebar.mdx`'s note on why this wasn't forced into one shared config).
+
+## Token
+
+Composed entirely from existing fields — see `RealizationFields.mdx`, `SelectField.mdx`, `OptionSlider.mdx`, `Button.mdx`. No tokens of its own.
+
+## Spec
+
+<Canvas of={BispectrumSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Compare mode/Realization(s): `RealizationFields`.
+- Field: `SelectField`, options from `GET /api/metadata`'s `bispectrum.fields` (`Total Matter`/`Gas`/`Dark Matter` — real `BK_TYPES` keys).
+- Triangle shape (mu): `OptionSlider` over `bispectrum.mu_values` (10 real values from `-0.9` to `+0.9`) — matches `app.py`'s own `st.select_slider`. `mu=+0.5` is annotated "(equilateral)", the one value that makes k1=k2=k3 — matches `bispectrum.equilateral_mu_index`.
+- No Bins field — Bispectrum has no `bins` parameter (unlike the mass-range statistics).
+- **No Static/Interactive toggle difference from the mass-range statistics** — Bispectrum shares the exact same `_render_result_png` rendering path, just with no synthetic fallback.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas, wired the same way as `MassRangeSidebar` — `onChange` triggers a real refetch of `GET /api/bispectrum` (JSON, one call per selected realization) and the matching `/plot.png` for the static render.
+- **Real-data only, no synthetic fallback** — `get_bispectrum()` returns `None` outright for any suite/set/realization without a real file (matches `get_halo_catalog`'s own reasoning: a fabricated bispectrum shape isn't a useful illustrative stand-in the way a power-law curve is). Only IllustrisTNG/SIMBA, LH set. A tile with zero real data for every selected realization shows `PlotChart`'s existing error state (the `/plot.png` endpoint raises when every realization comes back `None` — see `_render_result_png`'s docstring).
+- No halos table under this tile — Bispectrum is a field-level statistic (real-space matter/gas/dark-matter bispectrum), not tied to any per-halo catalog. See `UnderlyingHalos.mdx`.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { BispectrumSidebar } from '@/components/BispectrumSidebar/BispectrumSidebar';
+import type { BispectrumParams } from '@/components/BispectrumSidebar/BispectrumSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<BispectrumParams>({
+    suite: 'IllustrisTNG', setName: 'LH', compareMode: false, realizations: [42],
+    field: 'Total Matter', muIndex: 7,
+  });
+  return (
+    <BispectrumSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

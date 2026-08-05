@@ -1,0 +1,53 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as SFRHistorySidebarStories from './SFRHistorySidebar.stories';
+
+<Meta of={SFRHistorySidebarStories} />
+
+# SFRHistorySidebar
+
+SFR History's real per-tile sidebar, from `app.py`'s own `elif statistic == "SFR History":` block. Added 2026-08-05 alongside `PowerSpectrumSidebar`/`BispectrumSidebar`.
+
+## Token
+
+Composed entirely from existing fields — see `RealizationFields.mdx`, `NumberStepper.mdx`, `Slider.mdx`, `Checkbox.mdx`, `Button.mdx`. Reuses `ParamsSidebar`'s own `__divider` rule directly rather than inventing a second one.
+
+## Spec
+
+<Canvas of={SFRHistorySidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Compare mode/Realization(s): `RealizationFields`.
+- z min / z max: two `NumberStepper`s (real defaults `0.0`/`10.0`).
+- Bins: a `Slider`, range 100–2000, default 500 — matches `app.py`'s own real range exactly (much wider than any mass-range statistic's Bins, since this is a fine time-resolved curve, not a coarse histogram).
+- A divider, then the real second model this statistic uniquely has:
+- "Overlay symbolic-regression fit (real, IllustrisTNG-trained)": `Checkbox`, defaults **checked** — matches `app.py`'s own `value=True`. This is the one non-synthetic curve in this whole statistic's sidebar-controlled space, per `app.py`'s own comment.
+- When checked, four more `Slider`s appear: **Ωm**, **σ8**, **A_SN1 (galactic wind energy)**, **A_AGN1 (BH feedback energy)** — ranges and fiducial defaults (`0.3`/`0.8`/`1.0`/`1.0`) come from `GET /api/metadata`'s `sfrh_symbolic_model` block (itself read directly from `backend.py`'s `SFRHSymbolicModel` class), not hardcoded a second time.
+- **Real bug fixed while building this**: these four sliders need fractional steps (Ωm's real range is `0.1–0.5`) — `Slider` had no `step` prop at all before this, defaulting to the browser's native `step="1"`, which would have frozen every one of these four sliders at their own `min` value. Fixed in `Slider.mdx`.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/sfr-history` (JSON) and `/plot.png` (static render). The symbolic-fit overlay is drawn **only in the static PNG** (`_render_result_png`'s `overlay` callable, matching `app.py`'s own matplotlib-only overlay) — the Interactive Plotly mode shows the fetched curve alone, since `SFRHSymbolicModel.predict_log_sfr` is evaluated server-side as part of the PNG render, not returned as its own data series the frontend could re-plot itself.
+- No halos table under this tile — SFR History is a per-realization time series (`sfr.txt`), not tied to any per-halo catalog. See `UnderlyingHalos.mdx`.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { SFRHistorySidebar } from '@/components/SFRHistorySidebar/SFRHistorySidebar';
+import type { SFRHistoryParams } from '@/components/SFRHistorySidebar/SFRHistorySidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<SFRHistoryParams>({
+    suite: 'IllustrisTNG', setName: 'LH', compareMode: false, realizations: [42],
+    zMin: 0.0, zMax: 10.0, bins: 500,
+    showSymbolicFit: true, Om: 0.3, s8: 0.8, A1: 1.0, A3: 1.0,
+  });
+  return (
+    <SFRHistorySidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

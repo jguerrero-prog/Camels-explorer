@@ -1,0 +1,45 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as OptionSliderStories from './OptionSlider.stories';
+
+<Meta of={OptionSliderStories} />
+
+# OptionSlider
+
+A thin `Slider` wrapper over a fixed, ordered array of option values — matches `app.py`'s own `st.select_slider(...)` control. Added 2026-08-05 for Power Spectrum's "Grid size" (128/256/512/1024) and Bispectrum's "Triangle shape" (10 real mu values).
+
+## Token
+
+Inherits `Slider`'s tokens entirely — see `Slider.mdx`. No tokens of its own; this is a behavioral wrapper, not a new visual.
+
+## Spec
+
+<Canvas of={OptionSliderStories.GridSize} />
+<Canvas of={OptionSliderStories.TriangleShape} />
+<Controls />
+
+- Internally a `Slider` over the option array's *index* (`min={0}`, `max={options.length - 1}`), not the option values themselves — this is what makes non-uniform-spaced arrays (like the mu values, which aren't evenly spaced from a slider's perspective... they are here, but the pattern generalizes to ones that aren't) work correctly with a plain `<input type="range">`.
+- **Why a slider, not `SelectField`:** Streamlit deliberately chose `st.select_slider` over `st.selectbox` for both of these — the options are ordered and *where* the current value sits along that order carries real meaning (bigger grid = finer resolution; mu moves continuously from squeezed to stretched triangles). A dropdown would flatten that ordering into an unordered list. Compare `SelectField`, used for genuinely unordered categorical choices (Suite, Set, MAS, Particle type).
+
+## Usecase
+
+- Real usage: `PowerSpectrumSidebar`'s "Grid size" and `BispectrumSidebar`'s "Triangle shape (mu = cos angle between k1, k2)" — see their own `.mdx` files.
+- Generic over any option type (`OptionSlider<T>`) — used with `number[]` for both real usages so far, but works equally with a `string[]` of ordered labels.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { OptionSlider } from '@/components/OptionSlider/OptionSlider';
+
+function GridSizePicker() {
+  const [grid, setGrid] = useState(512);
+  return (
+    <OptionSlider
+      label="Grid size"
+      options={[128, 256, 512, 1024]}
+      value={grid}
+      onChange={setGrid}
+    />
+  );
+}
+```

@@ -51,7 +51,28 @@ export const SingleRealization: Story = {
       { label: 'Stellar mass range', value: '1e9 – 5e11' },
       { label: 'Bins', value: '10' },
     ],
-    haloRows: SAMPLE_ROWS,
+    halos: { rows: SAMPLE_ROWS },
+  },
+};
+
+// Real usage: Power Spectrum/Bispectrum/SFR History (added 2026-08-05) -
+// field/box-level statistics with no per-halo catalog concept at all.
+// `halos: null` omits "View underlying halos" entirely.
+export const NoHalosTable: Story = {
+  args: {
+    title: 'Power Spectrum',
+    chart: {
+      series: [{ label: 'LH_278', ...decliningCurve(1) }],
+      xLabel: 'k [h/Mpc]',
+      yLabel: 'P(k) [(Mpc/h)^3]',
+      imageUrl: `${IMAGE_BASE}&realizations=0`,
+    },
+    readoutGroups: [
+      { label: 'Suite / Set', value: 'IllustrisTNG · LH' },
+      { label: 'Realizations (compare)', value: '278' },
+      { label: 'Grid / MAS', value: '512 · CIC' },
+    ],
+    halos: null,
   },
 };
 
@@ -73,7 +94,7 @@ export const CompareMode: Story = {
       { label: 'Stellar mass range', value: '1e9 – 5e11' },
       { label: 'Bins', value: '10' },
     ],
-    haloRows: SAMPLE_ROWS,
+    halos: { rows: SAMPLE_ROWS },
   },
 };
 

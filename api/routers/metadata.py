@@ -75,4 +75,11 @@ def metadata():
         "pdf_grids": B.PUBLIC_PDF_GRIDS,
         "pdf_redshifts": B.PUBLIC_PDF_REDSHIFTS,
         "lya_n_sightlines": B.LYA_N_SIGHTLINES,
+        "sfrh_symbolic_model": {
+            "fiducial": B.SFRHSymbolicModel.FIDUCIAL,
+            "om_range": B.SFRHSymbolicModel.OM_RANGE,
+            "s8_range": B.SFRHSymbolicModel.S8_RANGE,
+            "a1_range": B.SFRHSymbolicModel.A1_RANGE,
+            "a3_range": B.SFRHSymbolicModel.A3_RANGE,
+        },
     }
