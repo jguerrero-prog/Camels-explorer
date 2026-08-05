@@ -1,0 +1,60 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as PowerSpectrumSidebarStories from './PowerSpectrumSidebar.stories';
+
+<Meta of={PowerSpectrumSidebarStories} />
+
+# PowerSpectrumSidebar
+
+Power Spectrum's real per-tile sidebar, from `app.py`'s own `if statistic == "Power Spectrum":` block — the most complex control surface of any statistic in this app, with two nested conditional reveals (an All-k mode reveals a redshift-space-distortion picker, which itself reveals a Multipole radio only once a real axis is chosen).
+
+## Token
+
+Composed entirely from existing fields — see `RealizationFields.mdx`, `OptionSlider.mdx`, `SelectField.mdx`, `Slider.mdx`, `Radio.mdx`, `Checkbox.mdx`, `Button.mdx`. No tokens of its own.
+
+## Spec
+
+<Canvas of={PowerSpectrumSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Compare mode/Realization(s): `RealizationFields`.
+- Grid size: `OptionSlider` over `[128, 256, 512, 1024]`, default 512.
+- Mass Assignment Scheme: `SelectField` over `NGP`/`CIC`/`TSC`/`PCS`, default `CIC`.
+- Threads: `Slider`, 1–16, default 1.
+- Particle type: `SelectField`, a label-mapped choice (`Gas [0]`/`DM [1]`/`Stars [4]`/`Black holes [5]`/`Total [0,1,4]`) — `PTYPE_OPTIONS` maps each label to the real `ptype` array `get_power_spectrum` expects, matching `app.py`'s own dict exactly.
+- k range: `Radio`, "Standard" vs. "All-k (HIPSTER...)".
+
+<Canvas of={PowerSpectrumSidebarStories.AllKWithMultipole} />
+
+- **Only visible in All-k mode:** Redshift-space distortion `SelectField` ("Real space (none)" / "Axis 0" / "Axis 1" / "Axis 2").
+- **Only visible once a real axis (not "Real space") is chosen:** Multipole `Radio` (`P0`/`P2`/`P4`) — the second, deeper conditional reveal.
+- Overlay linear-theory Pk (z=0, from ICs): `Checkbox`, default unchecked — the real dashed-line overlay `_render_result_png`'s `overlay` callable draws (see `MassRangeSidebar.mdx`'s sibling note on `_render_result_png`).
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/power-spectrum` (JSON, one call per realization) and `/plot.png` (static render, with the linear-Pk overlay when checked). `rsdLabel`/`multipole` only affect the request when `kRange === 'allk'` — the caller derives `rsd_axis`/`multipole` from them (`null`/`"P0"` otherwise, matching `get_power_spectrum`'s own real default arguments).
+- **The linear-Pk overlay silently no-ops if unavailable** — `get_linear_pk_ics` returns `None` for suites/sets without a real ICs Pk file (e.g. Swift-EAGLE, confirmed absent per `backend.py`'s own docstring); the overlay callable checks for this and simply doesn't draw rather than erroring.
+- No halos table under this tile — Power Spectrum is a field-level statistic, not tied to any per-halo catalog. See `UnderlyingHalos.mdx`.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { PowerSpectrumSidebar, PTYPE_OPTIONS } from '@/components/PowerSpectrumSidebar/PowerSpectrumSidebar';
+import type { PowerSpectrumParams } from '@/components/PowerSpectrumSidebar/PowerSpectrumSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<PowerSpectrumParams>({
+    suite: 'IllustrisTNG', setName: 'LH', compareMode: false, realizations: [42],
+    grid: 512, MAS: 'CIC', threads: 1, ptypeLabel: 'DM [1]',
+    kRange: 'standard', rsdLabel: 'Real space (none)', multipole: 'P0', showLinearPk: false,
+  });
+  const ptype = PTYPE_OPTIONS[params.ptypeLabel];
+  return (
+    <PowerSpectrumSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

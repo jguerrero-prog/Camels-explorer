@@ -21,6 +21,13 @@ export type Catalog = {
   pdf_grids: number[];
   pdf_redshifts: number[];
   lya_n_sightlines: number;
+  sfrh_symbolic_model: {
+    fiducial: { Om: number; s8: number; A1: number; A3: number };
+    om_range: [number, number];
+    s8_range: [number, number];
+    a1_range: [number, number];
+    a3_range: [number, number];
+  };
 };
 
 /** Shared `GET /api/metadata` fetch - was duplicated identically inside
