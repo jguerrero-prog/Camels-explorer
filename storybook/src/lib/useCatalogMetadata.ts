@@ -4,7 +4,24 @@ import { useEffect, useState } from 'react';
 const API_BASE = 'http://localhost:8010/api';
 
 export type CatalogSet = { name: string; label: string; realizations: number; description: string };
-export type Catalog = { suites: string[]; sets: CatalogSet[]; statistics: string[] };
+export type Catalog = {
+  suites: string[];
+  sets: CatalogSet[];
+  statistics: string[];
+  n_snapshots: number;
+  bispectrum: { fields: string[]; mu_values: number[]; equilateral_mu_index: number };
+  cmd_fields: { key: string; label: string }[];
+  default_cmd_field: string;
+  profiles_fields: string[];
+  photometry: {
+    sps_models: string[];
+    spectra_types: string[];
+    filter_groups: Record<string, string[]>;
+  };
+  pdf_grids: number[];
+  pdf_redshifts: number[];
+  lya_n_sightlines: number;
+};
 
 /** Shared `GET /api/metadata` fetch - was duplicated identically inside
  * MassRangeSidebar and about to be duplicated 3 more times for
