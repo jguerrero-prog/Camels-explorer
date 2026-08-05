@@ -81,6 +81,22 @@ def stellar_mass_function_plot(
     return Response(content=png, media_type="image/png")
 
 
+@router.get("/halo-mass-function/plot.png")
+def halo_mass_function_plot(
+    suite: str, set_name: str, snapnum: int,
+    RMmin: float, RMmax: float, bins: int,
+    realizations: list[int] = Query(...),
+    fetch_public: bool = False,
+):
+    """Static matplotlib render - see stellar_mass_function_plot's docstring
+    (same shared rendering path, backend.py's _render_mass_range_png)."""
+    png = B.render_halo_mass_function_png(
+        suite, set_name, realizations, snapnum, RMmin, RMmax, bins,
+        fetch_public=fetch_public,
+    )
+    return Response(content=png, media_type="image/png")
+
+
 @router.get("/baryon-fraction")
 def baryon_fraction(
     suite: str, set_name: str, realization: int, snapnum: int,
@@ -93,6 +109,22 @@ def baryon_fraction(
         subfind_path=subfind_path, fetch_public=fetch_public,
     )
     return to_jsonable(result)
+
+
+@router.get("/baryon-fraction/plot.png")
+def baryon_fraction_plot(
+    suite: str, set_name: str, snapnum: int,
+    RMmin: float, RMmax: float, bins: int,
+    realizations: list[int] = Query(...),
+    fetch_public: bool = False,
+):
+    """Static matplotlib render - see stellar_mass_function_plot's docstring
+    (same shared rendering path, backend.py's _render_mass_range_png)."""
+    png = B.render_baryon_fraction_png(
+        suite, set_name, realizations, snapnum, RMmin, RMmax, bins,
+        fetch_public=fetch_public,
+    )
+    return Response(content=png, media_type="image/png")
 
 
 @router.get("/sfr-history")
