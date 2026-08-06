@@ -3,8 +3,7 @@ CAMELS Explorer — backend
 
 This module mirrors the function signatures of the real analysis routines in
 `camels_library/camels_library.py` (compute_Pk, halo_mass_function,
-stellar_mass_function, star_formation_rate_history), but stands in synthetic
-data when no real data source is available.
+stellar_mass_function, star_formation_rate_history).
 
 Real data comes from the public CAMELS data release (Globus/Binder/direct-URL
 access - see docs/source/data_access.rst upstream), fetched over plain HTTP:
@@ -12,6 +11,20 @@ precomputed Pk files, FOF/Subfind catalogs, CMD 3D grids (via HTTP Range
 requests, so a multi-GB stacked file is never downloaded whole), and - when
 Pylians (`MAS_library`/`readgadget`) is installed - real per-particle gridding
 of a raw snapshot, streamed lazily via `fsspec` rather than downloaded whole.
+
+Real-data-only, no synthetic fallback for any statistic (removed 2026-08-05
+from the nine functions that used to have one - Power Spectrum, Halo Mass
+Function, Stellar Mass Function, Baryon Fraction, SFR History, Galaxy
+Scaling Relations, 3D Density Field, 3D Particle Cloud, 2D Field Map - at
+the user's direct request, once it was confirmed the React frontend had
+inherited that fallback silently, with none of app.py's own 🟢/🟡 real-vs-
+synthetic disclosure). Every one of these now returns None when no real
+fetch succeeds, same as the statistics that were already real-data-only
+(X-ray Halo Profiles, Halo Gas Profiles, Color-Mass Diagram, Bispectrum,
+Field PDF, Lyman-alpha Spectrum). This also removes app.py's own "Demo data
+(synthetic)" mode for these nine, since app.py calls these same functions
+directly - a deliberate, accepted side effect, not an oversight, given
+app.py is the prototype this rewrite is superseding.
 """
 
 from __future__ import annotations
@@ -21,6 +34,7 @@ import hashlib
 import io
 import re
 import tempfile
+import threading
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -38,6 +52,22 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+
+# Real fix (2026-08-06, ticket #12): matplotlib's Agg rendering pipeline
+# (freetype font/glyph rendering, the C-extension canvas) isn't documented
+# as thread-safe even across independent Figure objects - confirmed
+# directly: switching render_field_map_2d_png off pyplot's global state
+# (Figure()/FigureCanvasAgg instead of plt.subplots()/plt.close()) did NOT
+# fix concurrent renders on its own, 9 fired together still mostly 500'd
+# while 9 fired one at a time all succeeded. A lock around the actual
+# render step is matplotlib's own documented mitigation for this in
+# threaded servers. Only field-map rendering is exercised concurrently by
+# any built feature so far (the grouped 2D Field Map view fires one PNG
+# request per mosaic cell) - scoped to that one call site rather than
+# locked globally across every render_*_png function in this file.
+_PNG_RENDER_LOCK = threading.Lock()
 
 try:
     import fsspec
@@ -80,6 +110,21 @@ SUITE_VIDEOS = {
 # realizations, 7 parameters). SIMBA/Swift-EAGLE don't have an SB set at all.
 SB_FOLDER_FOR_SUITE = {"IllustrisTNG": "SB28", "Astrid": "SB7"}
 SB_REALIZATIONS_FOR_SUITE = {"IllustrisTNG": 2048, "Astrid": 1024}
+
+
+def resolve_set_name(suite: str, set_name: str) -> str:
+    """Translates the UI-facing "SB" set name into its real, per-suite SB
+    folder name (IllustrisTNG -> "SB28", Astrid -> "SB7") - mirrors app.py's
+    own `set_name = sb_folder or "SB"` right after the Set selectbox. Every
+    real fetcher below builds its URL generically from whatever set_name
+    it's given (see the SB coverage note above), so this is the one place
+    that needs to know about SB's per-suite naming quirk - not each
+    individual fetcher. A no-op for every other set name. Unsupported
+    suites (SIMBA/Swift-EAGLE) keep the literal "SB" so real fetches 404
+    honestly instead of guessing a folder name that doesn't exist."""
+    if set_name != "SB":
+        return set_name
+    return SB_FOLDER_FOR_SUITE.get(suite, "SB")
 
 # Per-product SB coverage (confirmed real, 2026-08-04, direct directory listings
 # against IllustrisTNG/SB28_0 - all existing fetchers below already build their
@@ -1081,7 +1126,7 @@ def _fetch_public_pk_allk(suite, set_name, realization, redshift, ptype, rsd_axi
 def get_power_spectrum(suite, set_name, realization, snapnum, grid, MAS, threads, ptype,
                         snapshot_path: str | None = None, fetch_public: bool = False,
                         k_range: str = "standard", rsd_axis: int | None = None,
-                        multipole: str = "P0") -> Result:
+                        multipole: str = "P0") -> Result | None:
     z = _snapshot_to_redshift(snapnum)
 
     if fetch_public and k_range == "allk":
@@ -1132,21 +1177,9 @@ def get_power_spectrum(suite, set_name, realization, snapnum, grid, MAS, threads
             # then read back the saved "Pk_..._z=....txt" file.
             raise NotImplementedError("wire up real snapshot read here")
         except Exception:
-            pass  # fall through to synthetic
+            pass  # fall through - no real data available
 
-    rng = np.random.default_rng(_seed(suite, set_name, realization, snapnum, grid, MAS, tuple(ptype)))
-    k = np.logspace(-2, np.log10(grid * np.pi / 25.0), 60)  # h/Mpc, box ~25 Mpc/h
-    k0 = 0.02 * (1 + z)
-    ns = 0.96
-    amp = 2e4 / (1 + z) ** 1.2
-    Pk = amp * k ** ns / (1 + (k / k0) ** (ns + 3))
-    Pk *= 1 + 0.03 * np.sin(20 * np.log(k)) * rng.normal(1, 0.05, size=k.shape)  # BAO-ish wiggle
-    Pk *= rng.normal(1, 0.02, size=k.shape)  # sample variance-ish noise
-    return Result(
-        x=k, y=np.abs(Pk),
-        x_label="k [h/Mpc]", y_label="P(k) [(Mpc/h)$^3$]",
-        note=f"z = {z:.2f}, ptype = {ptype}, grid = {grid}, MAS = {MAS}",
-    )
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1154,7 +1187,7 @@ def get_power_spectrum(suite, set_name, realization, snapnum, grid, MAS, threads
 # ---------------------------------------------------------------------------
 
 def get_halo_mass_function(suite, set_name, realization, snapnum, RMmin, RMmax, bins,
-                            subfind_path: str | None = None, fetch_public: bool = False) -> Result:
+                            subfind_path: str | None = None, fetch_public: bool = False) -> Result | None:
     if fetch_public:
         catalog = _fetch_public_subfind(suite, set_name, realization, snapnum)
         if catalog is not None:
@@ -1185,16 +1218,7 @@ def get_halo_mass_function(suite, set_name, realization, snapnum, RMmin, RMmax, 
         except Exception:
             pass
 
-    rng = np.random.default_rng(_seed(suite, set_name, realization, snapnum, "hmf"))
-    M = np.logspace(np.log10(RMmin), np.log10(RMmax), bins)
-    Mstar = 10 ** (13.2 + 0.15 * rng.normal())
-    n = 3e-3 * (M / 1e11) ** -1.9 * np.exp(-(M / Mstar) ** 0.9)
-    n *= rng.normal(1, 0.08, size=M.shape)
-    return Result(
-        x=M, y=np.clip(n, 1e-12, None),
-        x_label="Mass / Omega_m [Msun/h]", y_label="dn/dlogM [(Mpc/h)^-3]",
-        note=f"z = {_snapshot_to_redshift(snapnum):.2f}",
-    )
+    return None
 
 
 def get_cross_finder_hmf(suite, set_name, realization, snapnum, mass_min, mass_max, bins,
@@ -1296,7 +1320,7 @@ def get_cross_finder_hmf(suite, set_name, realization, snapnum, mass_min, mass_m
 # ---------------------------------------------------------------------------
 
 def get_baryon_fraction(suite, set_name, realization, snapnum, RMmin, RMmax, bins,
-                         subfind_path: str | None = None, fetch_public: bool = False) -> Result:
+                         subfind_path: str | None = None, fetch_public: bool = False) -> Result | None:
     if fetch_public:
         catalog = _fetch_public_subfind(suite, set_name, realization, snapnum)
         if catalog is not None:
@@ -1327,20 +1351,7 @@ def get_baryon_fraction(suite, set_name, realization, snapnum, RMmin, RMmax, bin
                       f"catalog #{SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]})"),
             )
 
-    # Synthetic fallback: baryon fraction rises with halo mass toward the
-    # cosmic value (small halos lose gas to feedback more efficiently),
-    # roughly matching the real trend's shape.
-    rng = np.random.default_rng(_seed(suite, set_name, realization, snapnum, "baryonfrac"))
-    M = np.logspace(np.log10(RMmin), np.log10(RMmax), bins)
-    pivot = 10 ** (12.5 + 0.2 * rng.normal())
-    fraction = 1.0 / (1 + (pivot / M) ** 0.7)
-    fraction *= rng.normal(1, 0.05, size=M.shape)
-    return Result(
-        x=M, y=np.clip(fraction, 0, 1.3),
-        x_label="Mass / Omega_m [Msun/h]", y_label="Baryon fraction / cosmic fraction",
-        log_y=False,
-        note=f"z = {_snapshot_to_redshift(snapnum):.2f}",
-    )
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -1348,7 +1359,7 @@ def get_baryon_fraction(suite, set_name, realization, snapnum, RMmin, RMmax, bin
 # ---------------------------------------------------------------------------
 
 def get_stellar_mass_function(suite, set_name, realization, snapnum, SMmin, SMmax, bins,
-                               subfind_path: str | None = None, fetch_public: bool = False) -> Result:
+                               subfind_path: str | None = None, fetch_public: bool = False) -> Result | None:
     if fetch_public:
         catalog = _fetch_public_subfind(suite, set_name, realization, snapnum)
         if catalog is not None:
@@ -1375,19 +1386,10 @@ def get_stellar_mass_function(suite, set_name, realization, snapnum, SMmin, SMma
         except Exception:
             pass
 
-    rng = np.random.default_rng(_seed(suite, set_name, realization, snapnum, "smf"))
-    M = np.logspace(np.log10(SMmin), np.log10(SMmax), bins)
-    Mstar = 10 ** (10.7 + 0.1 * rng.normal())
-    n = 5e-3 * (M / 1e10) ** -1.3 * np.exp(-(M / Mstar) ** 1.2)
-    n *= rng.normal(1, 0.1, size=M.shape)
-    return Result(
-        x=M, y=np.clip(n, 1e-12, None),
-        x_label="Stellar mass [Msun/h]", y_label="dn/dlogM [(Mpc/h)^-3]",
-        note=f"z = {_snapshot_to_redshift(snapnum):.2f}",
-    )
+    return None
 
 
-def _render_result_png(compute, set_name, realizations, overlay=None) -> bytes:
+def _render_result_png(compute, set_name, realizations, overlay=None) -> bytes | None:
     """Shared static matplotlib rendering for every 1D `Result`-shaped
     statistic (Stellar Mass Function, Halo Mass Function, Baryon Fraction,
     Power Spectrum, Bispectrum, SFR History) - mirrors app.py's own single
@@ -1411,12 +1413,13 @@ def _render_result_png(compute, set_name, realizations, overlay=None) -> bytes:
     legend only appears once there's something real to label) - matches
     app.py's own `show_legend = True` only firing inside the same
     conditional that actually plots the overlay curve. Realizations with no
-    real data (e.g. Bispectrum has no synthetic fallback) are dropped the
-    same way app.py's own generic block does; raises if none remain."""
+    real data are dropped the same way app.py's own generic block does;
+    returns None (not an error - api/deps.py's require() 404s it, same
+    honesty as every other real-data-only endpoint) if none remain."""
     results = {r: compute(r) for r in realizations}
     results = {r: res for r, res in results.items() if res is not None}
     if not results:
-        raise ValueError("no real data for any selected realization")
+        return None
     first_result = next(iter(results.values()))
 
     fig, ax = plt.subplots(figsize=(8, 4.5))
@@ -1448,7 +1451,7 @@ def _render_result_png(compute, set_name, realizations, overlay=None) -> bytes:
 
 
 def _render_mass_range_png(compute, suite, set_name, realizations, snapnum, mmin, mmax, bins,
-                            fetch_public: bool = False) -> bytes:
+                            fetch_public: bool = False) -> bytes | None:
     """Mass-range statistics (Stellar Mass Function, Halo Mass Function,
     Baryon Fraction) - identical shape modulo which get_* function computes
     the curve and its mass-param names. Thin wrapper over
@@ -1460,19 +1463,19 @@ def _render_mass_range_png(compute, suite, set_name, realizations, snapnum, mmin
 
 
 def render_stellar_mass_function_png(suite, set_name, realizations, snapnum, SMmin, SMmax, bins,
-                                      fetch_public: bool = False) -> bytes:
+                                      fetch_public: bool = False) -> bytes | None:
     return _render_mass_range_png(get_stellar_mass_function, suite, set_name, realizations, snapnum,
                                    SMmin, SMmax, bins, fetch_public=fetch_public)
 
 
 def render_halo_mass_function_png(suite, set_name, realizations, snapnum, RMmin, RMmax, bins,
-                                   fetch_public: bool = False) -> bytes:
+                                   fetch_public: bool = False) -> bytes | None:
     return _render_mass_range_png(get_halo_mass_function, suite, set_name, realizations, snapnum,
                                    RMmin, RMmax, bins, fetch_public=fetch_public)
 
 
 def render_baryon_fraction_png(suite, set_name, realizations, snapnum, RMmin, RMmax, bins,
-                                fetch_public: bool = False) -> bytes:
+                                fetch_public: bool = False) -> bytes | None:
     return _render_mass_range_png(get_baryon_fraction, suite, set_name, realizations, snapnum,
                                    RMmin, RMmax, bins, fetch_public=fetch_public)
 
@@ -1480,7 +1483,7 @@ def render_baryon_fraction_png(suite, set_name, realizations, snapnum, RMmin, RM
 def render_power_spectrum_png(suite, set_name, realizations, snapnum, grid, MAS, threads, ptype,
                                fetch_public: bool = False, k_range: str = "standard",
                                rsd_axis: int | None = None, multipole: str = "P0",
-                               show_linear_pk: bool = False) -> bytes:
+                               show_linear_pk: bool = False) -> bytes | None:
     """Mirrors app.py's own "Power Spectrum" + show_linear_pk overlay
     exactly (get_linear_pk_ics, dashed black line, only drawn if real data
     exists for this suite/set/first realization)."""
@@ -1503,7 +1506,7 @@ def render_power_spectrum_png(suite, set_name, realizations, snapnum, grid, MAS,
 
 
 def render_bispectrum_png(suite, set_name, realizations, field, mu_index=BK_EQUILATERAL_MU_INDEX,
-                           fetch_public: bool = False) -> bytes:
+                           fetch_public: bool = False) -> bytes | None:
     return _render_result_png(
         lambda r: get_bispectrum(suite, set_name, r, field, mu_index=mu_index, fetch_public=fetch_public),
         set_name, realizations,
@@ -1513,7 +1516,7 @@ def render_bispectrum_png(suite, set_name, realizations, field, mu_index=BK_EQUI
 def render_sfr_history_png(suite, set_name, realizations, z_min, z_max, bins,
                             fetch_public: bool = False, show_symbolic_fit: bool = False,
                             Om: float | None = None, s8: float | None = None,
-                            A1: float | None = None, A3: float | None = None) -> bytes:
+                            A1: float | None = None, A3: float | None = None) -> bytes | None:
     """Mirrors app.py's own "SFR History" + show_symbolic_fit overlay
     exactly (SFRHSymbolicModel.predict_log_sfr, dashed black line, always
     drawn when the checkbox is on - unlike the linear-Pk overlay, this one
@@ -1695,7 +1698,7 @@ def _mean_per_bin(values, weights, bins_SM, counts):
 
 
 def get_scaling_relations(suite, set_name, realization, SMmin, SMmax, bins, snapnum=N_SNAPSHOTS - 1,
-                           fetch_public: bool = False) -> ScalingRelations:
+                           fetch_public: bool = False) -> ScalingRelations | None:
     if fetch_public:
         catalog = _fetch_public_subfind(suite, set_name, realization, snapnum)
         if catalog is not None:
@@ -1722,32 +1725,22 @@ def get_scaling_relations(suite, set_name, realization, SMmin, SMmax, bins, snap
                       f"catalog #{SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]})"),
             )
 
-    rng = np.random.default_rng(_seed(suite, set_name, realization, "scaling"))
-    mean_SM = np.logspace(np.log10(SMmin), np.log10(SMmax), bins)
-    counts = np.full(bins, 50)  # synthetic stand-in - treat every bin as populated
-    noise = lambda scale: rng.normal(1, scale, size=mean_SM.shape)  # noqa: E731
-
-    return ScalingRelations(
-        stellar_mass=mean_SM,
-        radius=6.0 * (mean_SM / 1e10) ** 0.3 * noise(0.1),                    # kpc/h
-        bh_mass=1e6 * (mean_SM / 1e10) ** 1.2 * noise(0.2),                   # Msun/h
-        sfr=np.clip(0.3 * (mean_SM / 1e10) ** 0.8 * noise(0.15), 1e-4, None),  # Msun/yr
-        vmax=120.0 * (mean_SM / 1e10) ** 0.2 * noise(0.08),                   # km/s
-        counts=counts,
-        note="illustrative power-law scalings (synthetic)",
-    )
+    return None
 
 
 def render_scaling_relations_png(suite, set_name, realization, SMmin, SMmax, bins,
-                                  snapnum=N_SNAPSHOTS - 1, fetch_public: bool = False) -> bytes:
+                                  snapnum=N_SNAPSHOTS - 1, fetch_public: bool = False) -> bytes | None:
     """Mirrors app.py's own "Galaxy Scaling Relations" block exactly - the
     2x2 panel (radius/BH mass/SFR/Vmax vs. stellar mass) plus a 5th, real-
     data-only mass-metallicity panel - but combined into one figure via
     GridSpec (app.py renders these as two separate st.pyplot() calls; this
     app's PlotTile only hosts one image per tile, so the metallicity row is
-    appended below the 2x2 grid instead of shown as a second image)."""
+    appended below the 2x2 grid instead of shown as a second image). Returns
+    None (no synthetic fallback) when get_scaling_relations itself does."""
     result = get_scaling_relations(suite, set_name, realization, SMmin, SMmax, bins,
                                     snapnum=snapnum, fetch_public=fetch_public)
+    if result is None:
+        return None
     populated = result.counts > 0
     panels = [
         (result.radius, "Stellar half-mass radius [kpc/h]"),
@@ -1845,7 +1838,7 @@ def _fetch_public_sfrh(suite, set_name, realization):
 
 
 def get_sfr_history(suite, set_name, realization, z_min, z_max, bins,
-                     sfrh_path: str | None = None, fetch_public: bool = False) -> Result:
+                     sfrh_path: str | None = None, fetch_public: bool = False) -> Result | None:
     if fetch_public:
         fetched = _fetch_public_sfrh(suite, set_name, realization)
         if fetched is not None:
@@ -1868,17 +1861,7 @@ def get_sfr_history(suite, set_name, realization, z_min, z_max, bins,
         except Exception:
             pass
 
-    rng = np.random.default_rng(_seed(suite, set_name, realization, "sfrh"))
-    z = np.linspace(z_min, z_max, bins)
-    peak = 2.0 + 0.3 * rng.normal()
-    sfrd = 0.18 * (1 + z) ** 2.7 / (1 + ((1 + z) / (1 + peak)) ** 5.6)
-    sfrd *= rng.normal(1, 0.05, size=z.shape)
-    return Result(
-        x=z, y=np.clip(sfrd, 1e-6, None),
-        x_label="Redshift", y_label="SFRD [Msun/yr/Mpc^3]",
-        log_x=False,
-        note="Madau-Dickinson-like shape (synthetic)",
-    )
+    return None
 
 
 class SFRHSymbolicModel:
@@ -1932,7 +1915,7 @@ CMD_MASS_TYPE_FIELDS = {"Mtot", "Mgas", "Mcdm", "Mstar"}  # meaningful to show a
 
 
 def get_density_field_3d(suite, set_name, realization, snapnum, grid, field=DEFAULT_CMD_FIELD,
-                          snapshot_path: str | None = None, fetch_public: bool = False) -> Field3D:
+                          snapshot_path: str | None = None, fetch_public: bool = False) -> Field3D | None:
     z = _snapshot_to_redshift(snapnum)
 
     if fetch_public:
@@ -1967,38 +1950,9 @@ def get_density_field_3d(suite, set_name, realization, snapnum, grid, field=DEFA
         try:
             raise NotImplementedError("wire up user-supplied local snapshot gridding here")
         except Exception:
-            pass  # fall through to synthetic
+            pass  # fall through - no real data available
 
-    rng = np.random.default_rng(_seed(suite, set_name, realization, snapnum, grid, "field3d"))
-    box_size = 25.0  # Mpc/h, matches the LH/CV/1P box used elsewhere in this prototype
-
-    # White noise -> FFT -> shape by a synthetic P(k) -> back to real space.
-    # This gives a Gaussian random field with cosmic-web-like correlations,
-    # which we then lognormal-transform so densities are positive and
-    # clustered (knots/filaments/voids) instead of symmetric noise.
-    white = rng.normal(size=(grid, grid, grid))
-    field_k = np.fft.rfftn(white)
-
-    kfreq = np.fft.fftfreq(grid) * grid
-    kfreq_z = np.fft.rfftfreq(grid) * grid
-    kx, ky, kz = np.meshgrid(kfreq, kfreq, kfreq_z, indexing="ij")
-    kmag = np.sqrt(kx**2 + ky**2 + kz**2)
-    kmag[0, 0, 0] = 1.0  # avoid divide-by-zero at the DC mode
-
-    k0 = 0.06 * grid / 32 * (1 + z)
-    Pk_shape = (kmag ** 0.96) / (1 + (kmag / k0) ** 3.9)
-
-    field_k *= np.sqrt(Pk_shape)
-    field = np.fft.irfftn(field_k, s=(grid, grid, grid))
-    field = (field - field.mean()) / field.std()
-
-    sigma = 1.1
-    density = np.exp(sigma * field - 0.5 * sigma**2)  # lognormal density field, mean ~ 1
-
-    return Field3D(
-        density=density, box_size=box_size,
-        note=f"z = {z:.2f}, {grid}^3 grid, box = {box_size:.0f} Mpc/h",
-    )
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -2007,16 +1961,16 @@ def get_density_field_3d(suite, set_name, realization, snapnum, grid, field=DEFA
 # ---------------------------------------------------------------------------
 
 def get_particle_cloud(suite, set_name, realization, max_particles=50_000,
-                        snapnum=N_SNAPSHOTS - 1, fetch_public: bool = False) -> ParticleCloud:
-    """Real DM particle positions as a 3D point cloud, or a synthetic
-    clustered stand-in. Reuses the same lazy-fetch helper the density-field
-    gridder uses (cached, so viewing both for the same realization doesn't
-    re-fetch) - real particles, not synthetic, when available. `snapnum`
-    previously wasn't accepted at all - this always fetched snapshot 90
-    (z=0) regardless of the sidebar's Snapshot slider, a real bug (confirmed
-    by the user, fixed 2026-08-02). Meant for pydeck's GPU-instanced
+                        snapnum=N_SNAPSHOTS - 1, fetch_public: bool = False) -> ParticleCloud | None:
+    """Real DM particle positions as a 3D point cloud. Reuses the same
+    lazy-fetch helper the density-field gridder uses (cached, so viewing
+    both for the same realization doesn't re-fetch). `snapnum` previously
+    wasn't accepted at all - this always fetched snapshot 90 (z=0)
+    regardless of the sidebar's Snapshot slider, a real bug (confirmed by
+    the user, fixed 2026-08-02). Meant for pydeck's GPU-instanced
     PointCloudLayer, which handles far more points smoothly than Plotly's
-    scatter3d."""
+    scatter3d. Returns None (no synthetic fallback) when no real fetch
+    succeeds."""
     if fetch_public:
         fetched = _fetch_snapshot_positions(suite, set_name, realization, part_type=1,
                                              max_particles=max_particles, snapnum=snapnum)
@@ -2029,27 +1983,7 @@ def get_particle_cloud(suite, set_name, realization, max_particles=50_000,
                       f"{pos.shape[0]:,} particles shown via stride subsampling)"),
             )
 
-    # Synthetic fallback: a handful of Gaussian "halo" clusters plus a
-    # diffuse background - echoes the same knots/voids character as the
-    # synthetic density field without needing the FFT machinery.
-    rng = np.random.default_rng(_seed(suite, set_name, realization, "particles"))
-    box_size = 25.0
-    n_clusters = 8
-    centers = rng.uniform(0, box_size, size=(n_clusters, 3))
-    weights = rng.dirichlet(np.full(n_clusters, 0.6))  # uneven cluster sizes
-    n_clustered = int(max_particles * 0.7)
-    counts = (weights * n_clustered).astype(int)
-    clustered = np.vstack([
-        rng.normal(centers[i], box_size * 0.04, size=(max(counts[i], 1), 3))
-        for i in range(n_clusters)
-    ])
-    diffuse = rng.uniform(0, box_size, size=(max_particles - clustered.shape[0], 3))
-    positions = np.mod(np.vstack([clustered, diffuse]), box_size).astype(np.float32)
-
-    return ParticleCloud(
-        positions=positions, box_size=box_size,
-        note=f"{max_particles:,} synthetic points, {n_clusters} illustrative clusters",
-    )
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -2099,7 +2033,12 @@ def _fetch_public_vide_catalog(suite, set_name, realization):
     }
 
 
-def get_void_catalog(suite, set_name, realization, fetch_public: bool = False) -> VoidCatalog:
+def get_void_catalog(suite, set_name, realization, fetch_public: bool = False) -> VoidCatalog | None:
+    """Real void catalog overlay for the 3D Density Field view. Returns None
+    (no synthetic fallback) when unavailable - the frontend treats this as
+    "no voids to overlay," not a tile-level error, since the overlay is an
+    optional checkbox on top of the (separately real-data-only) density
+    field."""
     if fetch_public:
         real = _fetch_public_vide_catalog(suite, set_name, realization)
         if real is not None:
@@ -2112,18 +2051,7 @@ def get_void_catalog(suite, set_name, realization, fetch_public: bool = False) -
                       f"{real['radius'].shape[0]} voids, VIDE watershed void finder, LH set only)"),
             )
 
-    # Synthetic fallback: a handful of non-overlapping-ish spheres with a
-    # radius/density-contrast range roughly matching the real catalog.
-    rng = np.random.default_rng(_seed(suite, set_name, realization, "voids"))
-    box_size = 25.0
-    n_voids = int(rng.integers(5, 15))
-    positions = rng.uniform(0, box_size, size=(n_voids, 3))
-    radius = rng.uniform(2.5, 10.0, size=n_voids)
-    density_contrast = rng.uniform(1.0, 2.5, size=n_voids)
-    return VoidCatalog(
-        positions=positions, radius=radius, density_contrast=density_contrast, box_size=box_size,
-        note=f"{n_voids} synthetic voids (illustrative)",
-    )
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -2144,7 +2072,7 @@ def _fetch_public_cmd_map(suite, set_name, realization, field=DEFAULT_CMD_FIELD)
 
 
 def get_field_map_2d(suite, set_name, realization, field=DEFAULT_CMD_FIELD,
-                      fetch_public: bool = False) -> Map2D:
+                      fetch_public: bool = False) -> Map2D | None:
     if fetch_public:
         real_map = _fetch_public_cmd_map(suite, set_name, realization, field)
         if real_map is not None:
@@ -2160,54 +2088,53 @@ def get_field_map_2d(suite, set_name, realization, field=DEFAULT_CMD_FIELD,
                       f"{field}_{set_name}, one realization via HTTP Range request)"),
             )
 
-    # Synthetic fallback: 2D analogue of the 3D density field's white-noise
-    # -> shaped-Pk -> lognormal recipe, so the same suite/realization looks
-    # like a plausible slice of the same structure the 3D view would show.
-    rng = np.random.default_rng(_seed(suite, set_name, realization, "map2d"))
-    grid = 256
-    box_size = 25.0
-    white = rng.normal(size=(grid, grid))
-    field_k = np.fft.rfft2(white)
-    kfreq = np.fft.fftfreq(grid) * grid
-    kfreq_x = np.fft.rfftfreq(grid) * grid
-    kx, ky = np.meshgrid(kfreq, kfreq_x, indexing="ij")
-    kmag = np.sqrt(kx**2 + ky**2)
-    kmag[0, 0] = 1.0
-    Pk_shape = (kmag ** 0.96) / (1 + (kmag / 2.0) ** 3.9)
-    field_k *= np.sqrt(Pk_shape)
-    real_field = np.fft.irfft2(field_k, s=(grid, grid))
-    real_field = (real_field - real_field.mean()) / real_field.std()
-    values = np.exp(1.1 * real_field - 0.5 * 1.1**2)
-
-    return Map2D(
-        values=values, box_size=box_size,
-        note=f"illustrative overdensity map (synthetic), {CMD_FIELDS[field]}",
-    )
+    return None
 
 
 def render_field_map_2d_png(suite, set_name, realization, field=DEFAULT_CMD_FIELD,
-                             fetch_public: bool = False) -> bytes:
+                             fetch_public: bool = False) -> bytes | None:
     """Mirrors app.py's own "2D Field Map" block exactly: a log-normed
-    imshow heatmap with a colorbar. Always has a value (real or synthetic
-    fallback, like get_field_map_2d itself)."""
+    imshow heatmap with a colorbar. Returns None (no synthetic fallback)
+    when get_field_map_2d itself does.
+
+    Real fix (2026-08-06, ticket #12 - grouped 2D Field Map view): the
+    grouped view fires several of these requests concurrently (one per
+    mosaic cell) - confirmed directly this used to fail under that load
+    (9 requests fired one at a time all returned 200; fired together, ~8
+    of 9 came back 500). Two real, separate fixes were needed together,
+    not one: (1) build the Figure via matplotlib's own Figure/
+    FigureCanvasAgg API instead of plt.subplots()/plt.close(), so this call
+    no longer touches pyplot's shared global current-figure state; (2) that
+    alone did NOT fix it - matplotlib's Agg rendering pipeline (freetype
+    glyph rendering, the C-extension canvas) isn't documented thread-safe
+    even across independent Figure objects, so the actual render step below
+    is additionally serialized via `_PNG_RENDER_LOCK`, matplotlib's own
+    documented mitigation for threaded servers. Scoped to just this
+    function - every other render_*_png function in this file has the same
+    latent plt.subplots() pattern, but none of them are called concurrently
+    by any built feature yet, so they're left as-is rather than rewriting
+    all of them speculatively."""
     result = get_field_map_2d(suite, set_name, realization, field=field, fetch_public=fetch_public)
+    if result is None:
+        return None
 
-    fig, ax = plt.subplots(figsize=(7, 6))
-    im = ax.imshow(
-        result.values.T, origin="lower", cmap="inferno",
-        norm=LogNorm(vmin=max(result.values.min(), 1e-6), vmax=result.values.max()),
-        extent=[0, result.box_size, 0, result.box_size],
-    )
-    ax.set_xlabel("x [Mpc/h]")
-    ax.set_ylabel("y [Mpc/h]")
-    cbar_label = "overdensity ρ/ρ̄" if field in CMD_MASS_TYPE_FIELDS else field
-    fig.colorbar(im, ax=ax, label=cbar_label)
-    fig.tight_layout()
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(7, 6), facecolor="white")
+        ax = fig.add_subplot(111)
+        im = ax.imshow(
+            result.values.T, origin="lower", cmap="inferno",
+            norm=LogNorm(vmin=max(result.values.min(), 1e-6), vmax=result.values.max()),
+            extent=[0, result.box_size, 0, result.box_size],
+        )
+        ax.set_xlabel("x [Mpc/h]")
+        ax.set_ylabel("y [Mpc/h]")
+        cbar_label = "overdensity ρ/ρ̄" if field in CMD_MASS_TYPE_FIELDS else field
+        fig.colorbar(im, ax=ax, label=cbar_label)
+        fig.tight_layout()
 
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, facecolor="white")
-    plt.close(fig)
-    return buf.getvalue()
+        buf = io.BytesIO()
+        FigureCanvasAgg(fig).print_png(buf)
+        return buf.getvalue()
 
 
 @lru_cache(maxsize=16)

@@ -1,0 +1,45 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as FieldMapGroupControlStories from './FieldMapGroupControl.stories';
+
+<Meta of={FieldMapGroupControlStories} />
+
+# FieldMapGroupControl
+
+Real (added 2026-08-06, ticket #12 — *"2D Field Map currently shows one realization at a time... researchers like placing 2d field maps in groups like 4 rows 4 columns (not a 4x4 panel grid view)"*). Lives inside `FieldMap2DSidebar`, right below the Field picker.
+
+## Token
+
+- `--color-surface-control` — trigger background
+- `--color-surface-toggle-active` — trigger/reset hover
+- `--color-border-subtle` — trigger/menu border
+- `--color-surface-popover` — popover menu background
+- `--font-label` / `--font-ui` — caption / trigger value text
+
+## Spec
+
+<Canvas of={FieldMapGroupControlStories.SingleMap} />
+<Controls />
+
+- Trigger button shows "Single map" (default) or "R × C grid" once a size is committed, plus a caption line stating either the current (inactive) state or the real realization range a committed grid will fill.
+- Clicking the trigger opens a portal-positioned popover (same `getBoundingClientRect`/`position: fixed` pattern as `ChartModeDropdown` — closes on outside click or Escape) containing `GridSizePicker` and, once a grid is active, a "Back to single map" reset button.
+
+<Canvas of={FieldMapGroupControlStories.GridSelected} />
+
+## Usecase
+
+- **Real, deliberate constraint**: `FieldMap2DSidebar` only renders this control when the tile's `realization` is a plain number — 1P's `realization` is a compound string id (e.g. `"p11_2"`), which has no real "next realization" to sequentially fill a grid with. Rather than show this control disabled with no explanation for a 1P selection, it isn't rendered at all.
+- **Fill order**: sequential, row-major, starting from the tile's own `Realization` field — realization *N, N+1, N+2, …* filling left-to-right/top-to-bottom (a stated assumption, not something explicitly asked — see `UI_REFINEMENTS_EPIC.md` ticket #12). A range that runs past a set's real realization count (e.g. CV's 27) just shows "No data" for the out-of-range cells in `FieldMapMosaic`, the same honest-gap pattern every other real-data statistic in this app already uses.
+- Committing a size calls `onChange({ rows, cols })`; `App.tsx`'s `refetchFieldMap2DTile` turns that into N parallel `fetchFieldMap2DMeta` calls (see `FieldMapMosaic.mdx`) rather than any backend change — the existing single-realization endpoint, called N times.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { FieldMapGroupControl } from '@/components/FieldMapGroupControl/FieldMapGroupControl';
+import type { GridSize } from '@/components/GridSizePicker/GridSizePicker';
+
+function FieldMapGroupControlUsage({ startRealization }: { startRealization: number }) {
+  const [groupSize, setGroupSize] = useState<GridSize | null>(null);
+  return <FieldMapGroupControl value={groupSize} onChange={setGroupSize} startRealization={startRealization} />;
+}
+```

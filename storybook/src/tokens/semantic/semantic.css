@@ -29,10 +29,27 @@
      "underlying-halos-reveal") - the halos table's own container is a
      third distinct dark surface, between chrome and canvas. */
   --color-surface-table: var(--neutral-915);
+  /* Real (Figma node 1076-10's plot-code-modal) - Copy as code's floating
+     popover surface, distinct from --color-surface-content. */
+  --color-surface-popover: var(--neutral-905);
 
   /* Borders */
   --color-border: var(--neutral-900);
   --color-border-subtle: var(--neutral-850);  /* input fields, toolbar divider - one step up from --color-border */
+  /* Selected-tile ring (2026-08-06, direct user feedback - supersedes the
+     original translucent-white/grey ring from Figma nodes 1066-10/
+     1076-10/1063-10's bordered "Panel 1"). A dedicated UI blue rather than
+     a brand-ramp swatch: selection/focus is conventionally blue across
+     platform UI (macOS, VS Code, browser `:focus` rings), and keeping it
+     off the brand purple/red accent scale avoids it competing with real
+     accent usage (the Add Plot button's own gradient). */
+  --color-border-selected: #3B82F6;
+  /* Success state (Figma node 1066-10's toast-copy-provenance check-wrap,
+     #34d399) - the first success/confirmation UI in this app, so no
+     existing brand/neutral primitive covers it; a new one-off rather
+     than approximating with --brand-emerald-green (a different, unrelated
+     hex from the logo palette). */
+  --color-success: #34D399;
 
   /* Controls */
   --color-surface-control: var(--neutral-900);   /* input/select fields (ParamsSidebar) - same primitive as --color-border, different role */
@@ -46,6 +63,17 @@
   --color-text-muted: var(--neutral-400);
   --color-text-faint: var(--neutral-500);
   --color-text-emphasis: var(--neutral-white);
+
+  /* Syntax highlighting (Copy as code popover's own code block, added
+     2026-08-06) - reuses existing brand primitives where one already fits
+     the role (string/keyword) rather than inventing new hex values; only
+     `--color-syntax-number` has no existing brand-ramp equivalent, so it's
+     a fresh, deliberately muted blue (not neon) matching this app's own
+     restrained dark-theme palette. */
+  --color-syntax-keyword: var(--brand-magenta);
+  --color-syntax-string: var(--brand-golden-amber);
+  --color-syntax-number: #5B9BD5;
+  --color-syntax-comment: var(--color-text-muted);
 
   /* Accent - the brand palette doing double duty as the UI's one accent
      event (Add Plot button, empty-state icon border). Real, not proposed:
@@ -77,4 +105,33 @@
   --color-empty-icon-gradient-2: #B0336A;                   /* 50% */
   --color-empty-icon-gradient-3: var(--brand-golden-amber); /* 75% */
   --color-empty-icon-gradient-4: var(--brand-bright-red);   /* 100% */
+
+  /* Add Plot button (2026-08-06, direct user feedback: flip from the
+     purple/red accent gradient to a solid light surface with dark text) -
+     the one button in this app's otherwise all-dark chrome that's
+     deliberately inverted, so it gets its own pair rather than reusing
+     `--color-text-emphasis`/`--color-surface-*` (which are dark-surface/
+     light-text - the opposite pairing). `--color-add-plot-text` reuses
+     `--neutral-900` rather than inventing a new dark value - the same
+     literal PlotChart.tsx already hardcodes for dark-text-on-white
+     (#1A1A1A) for the identical reason (real text needs to read against a
+     light surface, not this app's usual dark one). */
+  --color-add-plot-surface: var(--neutral-white);
+  --color-add-plot-text: var(--neutral-900);
+
+  /* Note tool (added 2026-08-06, no Figma design - see NoteOverlay's own
+     docs). Real fix: the original warm-amber translucent card
+     (rgba(232,160,48,0.16) over the canvas + light text) failed WCAG
+     contrast, since a translucent fill's real contrast depends on
+     whatever sits behind it - unreliable by construction. Replaced with a
+     flat, opaque "index card" a researcher could screenshot straight into
+     a slide: a deep, legible cardinal red fill (`--brand-deep-crimson`,
+     already in the brand ramp) with white text - verified 9.3:1 contrast
+     (WCAG AAA, not just AA) via the standard relative-luminance formula.
+     `--color-note-border` is one step brighter in the same red family
+     (`--brand-crimson-red`) purely for a crisp flat-card edge, not for
+     contrast. */
+  --color-note-surface: var(--brand-deep-crimson);
+  --color-note-border: var(--brand-crimson-red);
+  --color-note-text: var(--color-text-emphasis);
 }

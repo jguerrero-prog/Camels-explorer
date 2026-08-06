@@ -79,7 +79,7 @@ export function MultiSelect({ label, values, onRemove, onAdd, placeholder = 'Add
       <p className="multi-select__label">{label}</p>
       <div className="multi-select__box">
         {values.map((value) => (
-          <button type="button" className="multi-select__chip" key={value} onClick={() => onRemove(value)}>
+          <button type="button" className="multi-select__chip" key={value} onClick={() => onRemove(value)} title={`Remove ${value}`}>
             <span className="multi-select__chip-value">{value}</span>
             <span className="multi-select__chip-remove">×</span>
           </button>

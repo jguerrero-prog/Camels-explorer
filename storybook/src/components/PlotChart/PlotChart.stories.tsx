@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { PlotChart } from './PlotChart';
+import { ChartModeDropdown } from '../ChartModeDropdown/ChartModeDropdown';
 
 const meta: Meta<typeof PlotChart> = {
   title: 'Fields/PlotChart',
@@ -25,6 +27,7 @@ export const SingleSeries: Story = {
       series={[{ label: 'LH_0', ...decliningCurve(1) }]}
       xLabel="Stellar mass [Msun/h]"
       yLabel="dn/dlogM [(Mpc/h)^-3]"
+      displayMode="interactive"
     />
   ),
 };
@@ -40,6 +43,7 @@ export const CompareMode: Story = {
       ]}
       xLabel="Stellar mass [Msun/h]"
       yLabel="dn/dlogM [(Mpc/h)^-3]"
+      displayMode="interactive"
     />
   ),
 };
@@ -52,16 +56,32 @@ const REAL_IMAGE_URL =
   'http://localhost:8010/api/stellar-mass-function/plot.png' +
   '?suite=IllustrisTNG&set_name=LH&snapnum=33&SMmin=1e9&SMmax=5e11&bins=10&realizations=0&fetch_public=true';
 
-/** Real usage: the default render mode. Toggle to "Interactive" to see the
- * same Plotly chart from illustrative data (a real fetch would drive both
- * from the same source - see PlotTile.mdx). */
+/** Real usage (updated 2026-08-06): `PlotChart` no longer owns the Static/
+ * Interactive toggle or its own display-mode state - both moved up to
+ * `PlotTile` (see ChartModeDropdown.mdx for why). This story wires the
+ * same real controlled pattern externally, via the actual
+ * `ChartModeDropdown` `PlotTile` uses, so it demonstrates the real
+ * integration rather than a story-only stand-in toggle. */
+function StaticDefaultDemo() {
+  const [displayMode, setDisplayMode] = useState<'static' | 'interactive'>('static');
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%' }}>
+      <div style={{ alignSelf: 'flex-end' }}>
+        <ChartModeDropdown mode={displayMode} options={['static', 'interactive']} onChange={(m) => setDisplayMode(m as 'static' | 'interactive')} />
+      </div>
+      <div style={{ flex: 1 }}>
+        <PlotChart
+          series={[{ label: 'LH_0', ...decliningCurve(1) }]}
+          xLabel="Stellar mass [Msun/h]"
+          yLabel="dn/dlogM [(Mpc/h)^-3]"
+          imageUrl={REAL_IMAGE_URL}
+          displayMode={displayMode}
+        />
+      </div>
+    </div>
+  );
+}
+
 export const StaticDefault: Story = {
-  render: () => (
-    <PlotChart
-      series={[{ label: 'LH_0', ...decliningCurve(1) }]}
-      xLabel="Stellar mass [Msun/h]"
-      yLabel="dn/dlogM [(Mpc/h)^-3]"
-      imageUrl={REAL_IMAGE_URL}
-    />
-  ),
+  render: () => <StaticDefaultDemo />,
 };

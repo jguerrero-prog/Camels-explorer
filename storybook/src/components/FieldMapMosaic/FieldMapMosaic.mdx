@@ -1,0 +1,55 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as FieldMapMosaicStories from './FieldMapMosaic.stories';
+
+<Meta of={FieldMapMosaicStories} />
+
+# FieldMapMosaic
+
+Real (added 2026-08-06, ticket #12 — *"2D Field Map currently shows one realization at a time... researchers like placing 2d field maps in groups like 4 rows 4 columns (not a 4x4 panel grid view) - let me know if this is possible"*). Renders an R×C mosaic of independent per-realization map images inside **one tile** — deliberately distinct from the outer canvas's own multi-tile grid view (`Viewer`'s `.viewer--grid`), which the request explicitly called out as a different thing.
+
+## Token
+
+- `--color-surface-control` — cell background
+- `--color-surface-content` — empty ("No data") cell background
+- `--color-border-subtle` — cell border
+- `--font-label` — realization tag, "No data" text
+
+## Spec
+
+<Canvas of={FieldMapMosaicStories.FourByFour} />
+<Controls />
+
+- CSS grid, `rows`/`cols` set the track counts directly (supports non-square grids). Each cell is its own bordered box with `object-fit: contain` so a real matplotlib PNG's own aspect ratio is preserved rather than stretched to fill a differently-shaped cell.
+- A small realization-number tag sits in each cell's top-left corner (the mosaic's own always-visible label, distinct from `PlotTile`'s single "Realization" readout, which only makes sense for the single-map view).
+
+<Canvas of={FieldMapMosaicStories.SomeCellsMissing} />
+
+**Real, honest gap handling**: a missing/404 realization (out of the set's real range, or a suite/set/field combination CMD doesn't publish) shows "No data" in just that cell — the same per-item-independent-failure handling Compare mode's own multi-realization fetch already uses for Power Spectrum/Bispectrum/SFR History, not an all-or-nothing tile failure.
+
+<Canvas of={FieldMapMosaicStories.NonSquareGrid} />
+
+## Usecase
+
+- Rendered via `PlotTile`'s `chart.kind: 'plotly-3d'` escape hatch (`content: ReactNode`) — the closest existing fit for "more than one image in the chart area," since `'plotly'` and `'static-image'` both assume exactly one series/image. `availableChartModes` treats `'plotly-3d'` as Interactive-only (no Static/Table), matching 3D Density Field/3D Particle Cloud's own single-mode behavior — correct here too, since there's no single-image "static" equivalent of a mosaic.
+- `App.tsx`'s `loadFieldMap2DTile` builds `cells` via `Promise.all` over every realization in the grid (`FieldMapGroupControl`'s row-major sequential fill, starting from the tile's own `Realization` field) — N real `fetchFieldMap2DMeta` calls to the existing single-realization endpoint, no backend changes. Each cell's `imageUrl` comes from the same existing `fieldMap2DImageUrl` helper, just called once per realization instead of once per tile.
+- Entry point: `FieldMapGroupControl` inside `FieldMap2DSidebar` — see that component's own docs for the trigger/picker UI that produces the `rows`/`cols` this component renders.
+
+## Code
+
+```tsx
+import { FieldMapMosaic } from '@/components/FieldMapMosaic/FieldMapMosaic';
+import { fieldMap2DImageUrl } from '@/lib/api';
+
+function FieldMapMosaicUsage({ suite, setName, field, startRealization, rows, cols }: {
+  suite: string; setName: string; field: string; startRealization: number; rows: number; cols: number;
+}) {
+  const cells = Array.from({ length: rows * cols }, (_, i) => {
+    const realization = startRealization + i;
+    return { realization, imageUrl: fieldMap2DImageUrl({ suite, setName, realization, field }) };
+    // App.tsx additionally calls fetchFieldMap2DMeta per realization first,
+    // to know which cells are real vs. 404 before rendering `null` for
+    // missing ones - omitted here for brevity.
+  });
+  return <FieldMapMosaic cells={cells} rows={rows} cols={cols} field={field} />;
+}
+```

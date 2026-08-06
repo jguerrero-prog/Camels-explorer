@@ -1,0 +1,34 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as LoadingIndicatorStories from './LoadingIndicator.stories';
+
+<Meta of={LoadingIndicatorStories} />
+
+# LoadingIndicator
+
+Added 2026-08-05 directly on request, alongside a broader slider/refetch performance audit: dragging a param slider (e.g. Snapshot) gave no feedback that a real backend re-render was in flight, which read as "the app is stuck" rather than "the app is working." Named reference: Streamlit's own top-right "script is running" cue, which cycles through a small set of activity pictograms rather than a plain spinner.
+
+## Token
+
+Same dark-chrome pill pattern as `Plotly3DChart`'s "Clear pin" button (`--color-surface-chrome` background, `--color-border-subtle` border, `--font-label` for text) — a small floating control on a dark surface, not a new visual language. The activity glyph uses real emoji (🚴🏊🧹🏃) rather than hand-drawn pictogram SVGs — accurately drawing four distinct human-activity icons from scratch risks looking crude next to this app's otherwise carefully-sourced icon set, where a real pictogram (person on a bike/swimming/sweeping/running) is exactly what was asked for and emoji render that faithfully with zero new asset files.
+
+## Spec
+
+<Canvas of={LoadingIndicatorStories.Playground} />
+<Controls />
+
+- Cycles through the 4 activity glyphs every 900ms via a plain `setInterval` — no dependency on any animation library, matching this app's existing CSS-keyframe-only approach (`Plotly3DChart`'s resize handling is the only other place with imperative timing logic, and that's a `ResizeObserver`, not a timer).
+- The glyph itself also gets a small CSS bounce (`@keyframes loading-indicator-bounce`) so it reads as "busy" even between icon swaps, disabled under `prefers-reduced-motion`.
+- **Stop button, real behavior**: there is no true network cancellation (no `AbortController` anywhere in this app - see `App.tsx`'s own `requestSeqRef` comment). Instead, `onStop` bumps every currently-loading tile's request sequence number and clears its `loading` flag - whatever response the abandoned request eventually returns is silently discarded when it lands, since it no longer matches the current sequence number. The user's own stated need ("stop the loading, if nothing is happening or it's taking long") is about the *UI* no longer looking stuck, not about the server-side request actually terminating - this satisfies that without threading `AbortSignal` through all 13 of `App.tsx`'s tile loaders.
+
+## Usecase
+
+- Rendered in `TopNav`'s new `loadingIndicator` slot, left of "Add Plot", whenever `App.tsx`'s `isAnyTileLoading` (`tiles.some(t => 'loading' in t && t.loading)`) is true - see `TopNav.mdx`'s `WithLoadingIndicator` story.
+- Root cause this was built to make visible, not just decorate: every one of `App.tsx`'s 13 `refetchXXXTile` functions fires a real backend round-trip on every parameter change. Before this session's fix, that fired on *every tick* of a slider drag (see `Slider.mdx`'s debounce fix) - this indicator is the honest signal for however long that round-trip (now debounced to one per drag) actually takes.
+
+## Code
+
+```tsx
+import { LoadingIndicator } from '@/components/LoadingIndicator/LoadingIndicator';
+
+<LoadingIndicator onStop={() => stopAllLoading()} />
+```

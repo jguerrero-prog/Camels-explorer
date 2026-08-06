@@ -26,112 +26,232 @@
   color: var(--color-text-muted);
 }
 
-/* Static, non-interactive - this whole tab is a placeholder (see
-   AddPlotModal.mdx's Usecase for why). Same visual shell as SelectField's
-   trigger, without the real open-menu behavior. */
-.custom-tab__static-input {
+/* CustomSidebar-only: separates the live filter values above from the
+ * collapsed-by-default "Filter settings" tree below. */
+.custom-tab__filter-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   width: 100%;
-  box-sizing: border-box;
-  padding: 10px 12px;
-  background: var(--color-surface-control);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
+}
+
+.custom-tab__divider {
+  height: 1px;
+  width: 100%;
+  background: var(--color-border, rgba(255, 255, 255, 0.12));
+}
+
+/* Real fix (2026-08-06, direct user feedback): this used to be a
+   chevron+label disclosure toggle expanding the tree inline (removed -
+   see CustomFilterSettingsModal.mdx) - now a plain button opening a real
+   modal, so it spans the full row (`justify-content: space-between`)
+   with the real active-filter count on the right rather than a chevron. */
+.custom-tab__filter-settings-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-family: var(--font-ui);
-  font-size: 14px;
+  width: 100%;
+  background: none;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
   color: var(--color-text-primary);
-  cursor: not-allowed;
 }
 
-.custom-tab__chevron {
+.custom-tab__filter-settings-header:hover {
+  background: var(--color-surface-toggle-active);
+}
+
+.custom-tab__filter-settings-count {
+  font-family: var(--font-label);
+  font-size: 11px;
+  font-weight: 700;
   color: var(--color-text-muted);
-  font-size: 12px;
 }
 
-.custom-tab__static-stepper {
+.custom-tab__param-row-label {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.custom-tab__loading,
+.custom-tab__error {
+  font-family: var(--font-label);
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+/* Filter values (CustomFilterValues, sidebar-only) - one row per field the
+   user has added via the Filters tree, each rendering a RangeFilterControl
+   bound to that field's own live stats.min/max (real correction
+   2026-08-05: this used to be a Min/Max Slider pair per field - two
+   separate full-width sliders - replaced by FlatHUB's own real
+   filter-component shape, see RangeFilterControl.mdx). */
+.custom-tab__param-row {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 8px;
+  padding: 8px 0;
 }
 
-.custom-tab__static-stepper-btn {
-  width: 14px;
-  height: 9px;
-  border-radius: 4px;
-  background: var(--color-surface-chrome);
-  border: 1px solid var(--color-border-subtle);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 8px;
-  line-height: 1;
-  color: var(--color-text-muted);
-}
-
+/* Filters tree (CustomFilterTree) - real, browsable, "+ Add"/"Remove" per
+   leaf field, group headers expand/collapse only. Adapted from the
+   original static placeholder's own tree CSS (git history), which used
+   these exact class names for a fake, non-interactive tree - now real.
+   Real fix (2026-08-05, direct user feedback for "stronger visual
+   harmony"): indentation now comes from `.custom-tab__tree-children`'s own
+   margin/border (a continuous per-level guide line, the familiar file-tree
+   look) rather than each row computing its own one-off `paddingLeft` from
+   depth - group-header rows get a tinted background/bold label to read as
+   section headers at a glance, leaf rows get a hover state and (while not
+   yet added) a real per-field description underneath. */
 .custom-tab__tree {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+}
+
+.custom-tab__tree-node {
+  display: flex;
+  flex-direction: column;
+}
+
+.custom-tab__tree-children {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 3px 0 0 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--color-border-subtle);
 }
 
 .custom-tab__tree-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
+  border-radius: 6px;
+  transition: background 0.1s ease;
+}
+
+.custom-tab__tree-row--group {
   padding: 8px;
-  padding-right: 8px;
+  background: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
+}
+
+.custom-tab__tree-row--leaf {
+  padding: 6px 8px;
+}
+
+.custom-tab__tree-row--leaf:hover {
+  background: var(--color-surface-toggle-active);
 }
 
 .custom-tab__tree-left {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  flex: 1;
 }
 
+.custom-tab__tree-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+/* Real chevron icon (SelectField's own asset, reused - see
+   CustomFilterTree's docs) - replaces a Unicode "▸" that rendered small
+   enough to look like a dot. The asset points up at 0deg (SelectField's
+   own convention); rotated to point right when collapsed, down when
+   open - the same closed/open sense the old text glyph used. */
 .custom-tab__tree-chevron {
   display: inline-block;
-  font-size: 10px;
-  color: var(--color-text-muted);
-  transform: rotate(0deg);
+  width: 8px;
+  height: auto;
+  flex-shrink: 0;
+  transform: rotate(90deg);
+  transition: transform 0.1s ease;
 }
 
 .custom-tab__tree-chevron--open {
-  transform: rotate(90deg);
+  transform: rotate(180deg);
 }
 
+/* Real fix (2026-08-05): a long leaf label (e.g. Group_BHMdot's own real
+   title, "\dot{M}_{\rm BH} [(10^{10}M_\odot/h)/(0.978Gyr/h)]" - LaTeX
+   macros the app doesn't fully strip, see customFieldFormat.ts's own
+   "real gap" docs) used to wrap onto a second line and push into the
+   `+ Add`/`✓ Remove` button's space, which never accounted for a
+   multi-line label. Same one-line clamp as `.custom-tab__tree-descr`
+   below it, `title` on the element itself keeps the full name reachable
+   on hover. */
 .custom-tab__tree-label {
   font-family: var(--font-ui);
   font-size: 13px;
   color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* Same real overflow fix as `.custom-tab__tree-label` above, applied to
+   group headers too (2026-08-06: caught via a direct DOM scrollWidth
+   check - a deeply-nested, unbroken group name like
+   "GasMetalFractionsSfrWeighted" pushed its own row's "N fields" badge
+   past the sidebar's right edge, the real cause behind the reported
+   horizontal "scroll right" effect). */
 .custom-tab__tree-label--group {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-family: var(--font-label);
   font-weight: 700;
   font-size: 13px;
   color: var(--color-text-primary);
+}
+
+.custom-tab__tree-leaf-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+/* Real per-field description (FlatHUB's own live `descr`) - shown only
+   while a field is not yet added (see CustomFilterTree's own docs); a
+   single-line clamp keeps a long description from blowing up row height
+   across ~50-90 fields, with the full text still available on hover. */
+.custom-tab__tree-descr {
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .custom-tab__tree-count {
   font-family: var(--font-label);
   font-size: 11px;
   color: var(--color-text-muted);
-}
-
-.custom-tab__badge-required {
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: color-mix(in srgb, var(--color-empty-icon-gradient-3) 16%, transparent);
-  color: var(--color-empty-icon-gradient-3);
-  font-family: var(--font-label);
-  font-weight: 700;
-  font-size: 10px;
+  flex-shrink: 0;
 }
 
 .custom-tab__btn-add {
+  flex-shrink: 0;
   padding: 4px 10px;
   border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
@@ -140,5 +260,18 @@
   font-family: var(--font-label);
   font-weight: 700;
   font-size: 11px;
-  cursor: not-allowed;
+  cursor: pointer;
+}
+
+.custom-tab__btn-add--active {
+  border-color: var(--color-accent-gradient-end);
+  background: color-mix(in srgb, var(--color-accent-gradient-end) 12%, transparent);
+  color: var(--color-accent-gradient-end);
+}
+
+.custom-tab__count-preview {
+  padding: 10px 12px;
+  background: var(--color-surface-control);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
 }

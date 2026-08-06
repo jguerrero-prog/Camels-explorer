@@ -11,7 +11,7 @@ import '../ParamsSidebar/ParamsSidebar.css';
 export type DensityField3DParams = {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   field: string;
   grid: number;
@@ -39,11 +39,12 @@ export function DensityField3DSidebar({ params, onChange, onRemove }: DensityFie
   const currentField = fields.find((f) => f.key === params.field);
 
   return (
-    <ParamsSidebar title="3D Density Field">
+    <ParamsSidebar title="3D Density Field" footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
       <SingleRealizationFields
         catalog={catalog}
         value={params}
         onChange={(v) => onChange({ ...params, ...v })}
+        allowedSuites={catalog?.statistic_suites['3D Density Field']}
       />
       <Slider
         label="Snapshot"
@@ -88,8 +89,6 @@ export function DensityField3DSidebar({ params, onChange, onRemove }: DensityFie
         checked={params.showVoids}
         onChange={(showVoids) => onChange({ ...params, showVoids })}
       />
-
-      <Button variant="secondary" onClick={onRemove}>Remove plot</Button>
     </ParamsSidebar>
   );
 }

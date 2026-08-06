@@ -1,0 +1,43 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as AnnotationOverlayStories from './AnnotationOverlay.stories';
+
+<Meta of={AnnotationOverlayStories} />
+
+# AnnotationOverlay
+
+The toolbar's Annotate tool (Figma node `1055-10`'s "annotation-pin/annotation-callout") - click anywhere on a tile's chart area to drop a pin tied to that exact point, with an editable text callout.
+
+## Token
+
+- `--color-accent-gradient-start` / `--color-accent-gradient-end` — the pin's own gradient fill
+
+## Spec
+
+<Canvas of={AnnotationOverlayStories.Playground} />
+<Controls />
+
+A small gradient-filled pin (14×14, white ring) at the clicked point; clicking it opens/closes a callout with an author-row (a relative timestamp, since this app has no real multi-user identity - no name/avatar) and the annotation's text. A `draft` (not yet a real `Annotation` until saved) renders the identical pin shape with an already-open, empty editable callout - the same visual object throughout its life, not a separate "placing" state.
+
+`CalloutOpen` shows a real annotation's callout already expanded, without needing an actual click in the docs canvas.
+
+## Usecase
+
+- Rendered by `App.tsx`'s `renderAnnotationOverlay(tile)`, passed to `PlotTile`'s `annotationOverlay` prop - positioned inside `.plot-tile__chart-area` (`position: relative`), which is what makes this component's own `xFrac`/`yFrac` percentage placement work.
+- `PlotTile`'s `onChartClick` fires with the click position as a fraction of the chart area's own box (0-1 per axis, not pixels) - App.tsx stores that fraction per annotation so it stays correctly placed regardless of how large a given tile renders (grid vs. stacked, resizing the window).
+- Only wired when Annotate mode is on (`App.tsx`'s `annotateMode`, part of the single `activeTool` state shared with Arrow/Note/Ruler/Linked brushing, since only one click-driven tool can own the next chart click).
+
+## Code
+
+```tsx
+import { AnnotationOverlay } from '@/components/AnnotationOverlay/AnnotationOverlay';
+
+<AnnotationOverlay
+  annotations={annotationsByTile[tile.id] ?? []}
+  activeId={activeAnnotation?.tileId === tile.id ? activeAnnotation.id : null}
+  onSelect={(id) => setActiveAnnotation(id ? { tileId: tile.id, id } : null)}
+  onDelete={(id) => removeAnnotation(tile.id, id)}
+  draft={annotateDraft?.tileId === tile.id ? annotateDraft : null}
+  onSaveDraft={(text) => saveAnnotationDraft(tile.id, text)}
+  onCancelDraft={() => setAnnotateDraft(null)}
+/>
+```

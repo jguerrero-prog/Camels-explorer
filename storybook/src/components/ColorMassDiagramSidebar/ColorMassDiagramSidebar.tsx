@@ -9,7 +9,7 @@ import { useCatalogMetadata } from '../../lib/useCatalogMetadata';
 export type ColorMassDiagramParams = {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   spsModel: string;
   spectraType: string;
@@ -45,7 +45,7 @@ export function ColorMassDiagramSidebar({ params, onChange, onRemove }: ColorMas
   const familyBands = filterGroups[params.filterFamily] ?? Object.values(filterGroups)[0] ?? [];
 
   return (
-    <ParamsSidebar title="Color-Mass Diagram">
+    <ParamsSidebar title="Color-Mass Diagram" footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
       <SingleRealizationFields
         catalog={catalog}
         value={params}
@@ -91,7 +91,6 @@ export function ColorMassDiagramSidebar({ params, onChange, onRemove }: ColorMas
         options={familyBands}
         onChange={(band2) => onChange({ ...params, band2 })}
       />
-      <Button variant="secondary" onClick={onRemove}>Remove plot</Button>
     </ParamsSidebar>
   );
 }

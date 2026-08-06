@@ -9,7 +9,8 @@ const meta: Meta<typeof AddPlotModal> = {
   args: {
     isOpen: true,
     onClose: () => {},
-    onSubmit: () => {},
+    onSubmitCurated: () => {},
+    onSubmitCustom: () => {},
   },
 };
 export default meta;
@@ -22,8 +23,9 @@ type Story = StoryObj<typeof AddPlotModal>;
  * running, this story shows the real error state instead of hanging. */
 export const CuratedTabDefault: Story = {};
 
-/** The Custom tab - a real, deliberate placeholder (see CustomTab.mdx /
- * AddPlotModal.mdx Usecase). No fetch, no interactivity. */
-export const CustomTabPlaceholder: Story = {
+/** The Custom tab - real, wired 2026-08-05: every field/option is fetched
+ * live from `GET /api/custom/fields` (see CustomTab). Requires the API
+ * server running the same as the Curated tab above. */
+export const CustomTabReal: Story = {
   args: { initialTab: 'custom' },
 };

@@ -5,7 +5,7 @@ import * as TopNavStories from './TopNav.stories';
 
 # TopNav
 
-The 64px header row — the folder/project name on the left, the primary "Add Plot" action on the right, and (once a plot exists) `Toolbar` in the same row, between the two. Sourced from two real frames: the zero-plots "Skeleton" (Figma node `1113:1583`, no toolbar) and the Stellar Mass Function drill-down's real `header` (node `1012:1124`, toolbar present).
+The 48px header row — the folder/project name on the left, the primary "Add Plot" action on the right, and (once a plot exists) `Toolbar` in the same row, between the two. Sourced from two real frames: the zero-plots "Skeleton" (Figma node `1113:1583`, no toolbar) and the Stellar Mass Function drill-down's real `header` (node `1012:1124`, toolbar present).
 
 ## Token
 
@@ -14,18 +14,24 @@ The 64px header row — the folder/project name on the left, the primary "Add Pl
 - `--font-ui` (Inter) — folder/project text
 - `--font-label` (Lato), weight 600 — "Add Plot" button label (see the deviation note below: the raw Figma frame specifies 700)
 - `--color-text-muted` / `--color-text-faint` / `--color-text-emphasis` — the three text weights (folder / separator / project)
-- `--color-accent-gradient-start` → `--color-accent-gradient-end` (`--brand-purple` → `--brand-bright-red`) — the button's background gradient
+- `--color-add-plot-surface` / `--color-add-plot-text` — the Add Plot button's own light-surface/dark-text pair (see below)
 
 ## Spec
 
 <Canvas of={TopNavStories.Playground} />
 <Controls />
 
-- Height 64px, full width, horizontal padding 28px, `justify-content: space-between` across up to 3 children: path, `toolbar` (when passed), Add Plot button.
+- Height 48px (real fix, 2026-08-06 — down from 64px on direct user feedback), full width, horizontal padding 28px, `justify-content: space-between` across up to 3 top-level children: path, `toolbar` (when passed), a `.top-nav__actions` group (`loadingIndicator` + Add Plot button).
 - Path display: `folderName` (muted, weight 500) `/` (faint separator) `projectName` (emphasis white, weight 600) — matching the real frame's "Untitled / Project 1".
-- Add Plot button: 40px tall, 12px radius, the real diagonal purple→red gradient plus a `0px 8px 9px rgba(0,0,0,0.4)` drop shadow, 18×18 plus icon + label.
+- Add Plot button: 32px tall, 9px radius, 14×14 plus icon + label (all scaled down from the original 40px/12px/18×18 to fit the shorter 48px bar without choking).
+
+**Real fix (2026-08-06, direct user feedback):** the button's fill flipped from the diagonal purple→red accent gradient to a solid light surface (`--color-add-plot-surface`, white) with dark text/icon (`--color-add-plot-text`, reusing `--neutral-900` — the same literal `PlotChart.tsx` already hardcodes for dark-text-on-white) — the one deliberately inverted control in this app's otherwise all-dark chrome.
 
 <Canvas of={TopNavStories.WithToolbar} />
+
+<Canvas of={TopNavStories.WithLoadingIndicator} />
+
+**Added 2026-08-05, on direct request** ("perhaps on the right of the top nav, left of the Add plot button"): `loadingIndicator` is a plain `ReactNode` slot, rendered inside a new `.top-nav__actions` flex group together with the Add Plot button — this guarantees it always sits immediately to that button's left regardless of whether `toolbar` is present, rather than depending on how the row's own `justify-content: space-between` happens to distribute 3 vs. 4 top-level children. See `LoadingIndicator.mdx`.
 
 **Resolved 2026-08-05, real bug fixed:** this component's own "Still open" note previously flagged that the toolbar-visible state hadn't been provided yet — it has now (Figma node `1012:1124`), and it shows `Toolbar` living in **this same row**, not a separate row beneath it (`App.tsx` originally rendered them as two stacked rows — a real layout bug, not a design choice, fixed by adding the `toolbar` prop here and deleting `App.tsx`'s own `.app-shell__toolbar-row`). `toolbar` is a plain `ReactNode` slot: omit it entirely (not just hide) when no plot exists yet, matching the zero-plots "Skeleton" frame having no toolbar at all.
 
@@ -50,11 +56,13 @@ The 64px header row — the folder/project name on the left, the primary "Add Pl
 ```tsx
 import { TopNav } from '@/components/TopNav/TopNav';
 import { Toolbar } from '@/components/Toolbar/Toolbar';
+import { LoadingIndicator } from '@/components/LoadingIndicator/LoadingIndicator';
 
 <TopNav
   folderName="Untitled"
   projectName="Project 1"
   onAddPlot={() => openAddPlotFlow()}
   toolbar={tiles.length > 0 ? <Toolbar viewMode={viewMode} onViewModeChange={setViewMode} /> : undefined}
+  loadingIndicator={isAnyTileLoading ? <LoadingIndicator onStop={stopAllLoading} /> : undefined}
 />
 ```

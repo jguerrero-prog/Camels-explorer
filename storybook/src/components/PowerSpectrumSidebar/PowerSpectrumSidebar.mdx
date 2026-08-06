@@ -17,6 +17,7 @@ Composed entirely from existing fields — see `RealizationFields.mdx`, `OptionS
 <Controls />
 
 - Suite/Set/Compare mode/Realization(s): `RealizationFields`.
+- **Real bug fixed 2026-08-05: Snapshot slider was missing entirely.** `App.tsx` hardcoded `snapnum: DEFAULT_SNAPNUM` (33, z≈0), even though `app.py`'s own `get_power_spectrum` call takes `snapnum` as a real parameter (found during a full param-wiring audit against `app.py`, prompted by direct user report). Added a `Slider` "Snapshot" (`0` to `n_snapshots - 1`) right after `RealizationFields`.
 - Grid size: `OptionSlider` over `[128, 256, 512, 1024]`, default 512.
 - Mass Assignment Scheme: `SelectField` over `NGP`/`CIC`/`TSC`/`PCS`, default `CIC`.
 - Threads: `Slider`, 1–16, default 1.
@@ -44,7 +45,7 @@ import type { PowerSpectrumParams } from '@/components/PowerSpectrumSidebar/Powe
 
 function FocusedTileSidebar() {
   const [params, setParams] = useState<PowerSpectrumParams>({
-    suite: 'IllustrisTNG', setName: 'LH', compareMode: false, realizations: [42],
+    suite: 'IllustrisTNG', setName: 'LH', compareMode: false, realizations: [42], snapnum: 33,
     grid: 512, MAS: 'CIC', threads: 1, ptypeLabel: 'DM [1]',
     kRange: 'standard', rsdLabel: 'Real space (none)', multipole: 'P0', showLinearPk: false,
   });

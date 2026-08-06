@@ -1,0 +1,62 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as RangeFilterControlStories from './RangeFilterControl.stories';
+
+<Meta of={RangeFilterControlStories} />
+
+# RangeFilterControl
+
+FlatHUB's own real filter-component shape (flathub.flatironinstitute.org, the live API `CustomSidebar` proxies), specified directly by the user: "Flathub has those filter components as a container housing a range slider and a min and max input field." Built 2026-08-05 to replace `CustomFilterValues`' original two-stacked-`Slider` rendering (one full-width slider labeled "Min", one labeled "Max", each independently draggable across the entire field range) — a real, deliberate correction, not the FlatHUB shape.
+
+## Token
+
+Same visual language as `Slider` (reused deliberately, not reinvented):
+- `--color-surface-track` — the unfilled track
+- `--color-accent-gradient-start` → `--color-accent-gradient-end` — the fill between the two thumbs
+- `--color-surface-control` / `--color-border-subtle` — the two number inputs
+- `--font-label` (Lato) — the field label
+- `--font-ui` (Inter) — the number inputs, semibold
+
+## Spec
+
+<Canvas of={RangeFilterControlStories.Playground} />
+<Controls />
+
+- One container: label, then a min/max number-input row, then one dual-handle track — not two separate full sliders.
+- Number inputs: real `type="number"` inputs (typeable, not display-only), committing on blur/Enter, clamped to the field's real `[min, max]` on commit (an out-of-bounds typed value snaps to the nearest real bound, never silently accepted). `Escape` reverts the in-progress text to the current value, matching `NumberStepper`'s own commit pattern.
+- Dual-handle track: two overlapping native `<input type="range">` elements (the standard accessible dual-range pattern — real keyboard/touch support, not a from-scratch pointer tracker), each spanning the field's *entire* real domain (never clamped to the other thumb's current value — clamping the DOM attribute would desync the invisible native thumb's position from the custom-drawn `<img>` thumb sharing its percent math). Non-crossing (min thumb can't pass max, and vice versa) is enforced in the change handlers instead.
+- Fill: positioned `left: minPercent%`, `width: (maxPercent - minPercent)%` — the selected sub-range, not `0` to `value` like the old single `Slider` fill.
+- Pointer routing: both range inputs are `pointer-events: none`; only their thumb pseudo-elements (`::-webkit-slider-thumb` / `::-moz-range-thumb`) are `pointer-events: auto`, so a transparent full-width input never blankets the whole track and swallows the other thumb's drag. Whichever thumb sits in the domain's upper half gets the higher z-index, so the two stay independently grabbable near the middle where they can sit adjacent/overlapping.
+- `formatValue` (default: threshold-based — exponential outside `[1e-3, 1e5]`, `toFixed(3)` otherwise): CAMELS fields span from `params_*` (roughly 0-1) to `Group_M_Crit200` (~1e10-1e15); a flat `toFixed(3)` overflows a narrow sidebar input for the latter. See the `LargeMagnitudeField` story.
+
+**Same debounce-then-commit discipline as `Slider` (see its own comment for the original bug report), but one shared timer for the whole `{min, max}` pair, not one per thumb** — dragging min then quickly dragging max could otherwise let a stale min-only timer fire and clobber an in-flight max edit. `onChange` fires 300ms after the last drag tick, or immediately on pointer release; number-input commits (blur/Enter) bypass the timer entirely since typing a value is one deliberate action, not a stream of ticks.
+
+**Still open (same class of caveat as `Slider.mdx`):**
+- The dual-overlapping-input technique is a standard accessible pattern, not something sourced from a Figma frame — flagged so it isn't mistaken for confirmed design spec.
+- No drag-to-scrub visual feedback (thumb scale-up while dragging) is implemented, matching `Slider`'s own current state.
+- **Behavior delta from `Slider`, deliberate:** clicking the bare track (not a thumb) does nothing here — the native range inputs are `pointer-events: none` everywhere except their own 14px thumb, so there's no full-width clickable body to jump a thumb to the click position. `Slider`'s single input supports that (its whole body is the hit target). This is an inherent tradeoff of the two-overlapping-inputs pattern, not a bug: a full-width clickable body on both inputs would swallow the other thumb's drag.
+
+## Usecase
+
+- Real, confirmed usage: `CustomFilterValues`, one `RangeFilterControl` per field the user has added via the Custom tab's Filters tree (`CustomFilterTree`), rendered in the per-tile `CustomSidebar`. Never rendered inside the Add Plot modal itself.
+- The "no live range available" fallback (a field with no live `stats`, or `stats.min === stats.max`) stays a plain caption in `CustomFilterValues`, not inside this component — `RangeFilterControl` always receives a real, non-degenerate `[min, max]` and never needs to fabricate one.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { RangeFilterControl } from '@/components/RangeFilterControl/RangeFilterControl';
+import type { RangeFilterValue } from '@/components/RangeFilterControl/RangeFilterControl';
+
+function FilterField() {
+  const [value, setValue] = useState<RangeFilterValue>({ min: 0.2, max: 0.8 });
+  return (
+    <RangeFilterControl
+      label="Ωm"
+      min={0.1}
+      max={0.5}
+      value={value}
+      onChange={setValue}
+    />
+  );
+}
+```

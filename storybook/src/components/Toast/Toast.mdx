@@ -1,0 +1,41 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as ToastStories from './Toast.stories';
+
+<Meta of={ToastStories} />
+
+# Toast
+
+A transient, auto-dismissed confirmation toast (Figma node `1066-10`'s "toast-copy-provenance"). Currently only the toolbar's Copy provenance tool uses this, but it's a standalone component rather than inlined into `Toolbar`/`App.tsx`, since any future tool showing its own confirmation would want the exact same shell.
+
+## Token
+
+- `--color-surface-content` — the toast's own card surface
+- `--color-success` — real green checkmark accent (`assets/check.svg`)
+- `--font-mono` — the optional `detail` line, since it's real technical text (a provenance string, a file path), not prose
+
+## Spec
+
+<Canvas of={ToastStories.Playground} />
+<Controls />
+
+A checkmark badge + a title, with an optional monospace `detail` line below it for the real text a tool just copied/produced - `word-break: break-word` since that text is genuinely variable-length (a full provenance sentence, a file path), not a fixed-width label.
+
+`TitleOnly` shows the toast with no `detail` at all (a short confirmation with nothing further to show). `ErrorState` shows the same shell used for a real, actionable failure ("No tile is focused") rather than a second, differently-styled error toast - one shell, any short status.
+
+## Usecase
+
+- Rendered by `App.tsx` inside `.app-shell__toast-anchor` (top-center of the canvas, absolutely positioned - see `App.css`), only while `toast` state is non-null.
+- `App.tsx`'s `showToast(title, detail?)` sets it and schedules its own dismissal via `toastTimeoutRef` (4s) - this component itself has no internal timer; the caller fully owns the toast's lifetime.
+- Copy provenance's real call: `showToast('Copied provenance to clipboard', provenance)` where `provenance` is `describeTileProvenance(tile)`'s real text - the same string that was just written to the clipboard, not a separate summary of it.
+
+## Code
+
+```tsx
+import { Toast } from '@/components/Toast/Toast';
+
+{toast && (
+  <div className="app-shell__toast-anchor">
+    <Toast title={toast.title} detail={toast.detail} />
+  </div>
+)}
+```

@@ -1,0 +1,111 @@
+/* Real (Figma node 1076-10's plot-code-modal) - positioned by the caller
+   (App.tsx anchors it to the focused tile); this file only owns the
+   popover's own shell/contents. */
+.copy-as-code-popover {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 380px;
+  padding: 12px;
+  background: var(--color-surface-popover);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 12px;
+  box-shadow: 0px 6px 8px rgba(0, 0, 0, 0.2), 0px 18px 20px rgba(0, 0, 0, 0.4);
+}
+
+.copy-as-code-popover__pointer {
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  background: var(--color-surface-popover);
+  border-top: 1px solid var(--color-border-subtle);
+  border-left: 1px solid var(--color-border-subtle);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.copy-as-code-popover__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.copy-as-code-popover__title {
+  margin: 0;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.copy-as-code-popover__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.copy-as-code-popover__copy-btn,
+.copy-as-code-popover__close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: var(--color-surface-content);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+
+.copy-as-code-popover__close-btn {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.copy-as-code-popover__code-block {
+  margin: 0;
+  padding: 12px;
+  background: var(--color-surface-content);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--color-text-emphasis);
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+/* Real, narrowly-scoped syntax highlighting (see lib/highlightPython.ts) -
+   only the token kinds the generated code actually contains (comment/
+   string/number/keyword); everything else stays the code block's own
+   default --color-text-emphasis rather than getting a distinct color for
+   every identifier, which would read as noisy at this font size. */
+.copy-as-code-popover__tok--comment {
+  color: var(--color-syntax-comment);
+  font-style: italic;
+}
+
+.copy-as-code-popover__tok--string {
+  color: var(--color-syntax-string);
+}
+
+.copy-as-code-popover__tok--number {
+  color: var(--color-syntax-number);
+}
+
+.copy-as-code-popover__tok--keyword {
+  color: var(--color-syntax-keyword);
+  font-weight: 600;
+}
+
+.copy-as-code-popover__copied {
+  margin: 0;
+  align-self: flex-end;
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--color-success);
+}

@@ -27,6 +27,8 @@ Grid mode auto-tiles by how many tiles are present, per `STUDIO_PLAN.md`'s "Inte
 
 **Thirds** — three tiles: 2 in the first row, the 3rd spans full width below it. Confirmed directly 2026-08-04 (not sourced from a Figma frame — described directly). Implemented via `grid-column: span 2` on the 3rd child, scoped with `:last-child` so it only fires at exactly 3 tiles — a 3rd tile among 5+ stays in its normal 2-column slot rather than spanning.
 
+**Real fix (2026-08-06, direct user feedback):** the spanning 3rd tile used to still share the same `minmax(480px, 1fr)` row track as the two cells above it, so a tall tile scrolled internally instead of displaying in full the way a real stacked-view tile does. Two pieces, both needed: a `:has()`-scoped `grid-template-rows` override (row 1 keeps the normal `minmax` sizing, row 2 — the spanning tile — becomes `auto`), *plus* overriding that tile's own `overflow` to `visible` on both axes. `auto` alone measured no different, because a scroll container's contribution to a grid track's auto-sizing is its own small minimum, not its true content height — and setting only `overflow-y: visible` (not `overflow-x` too) gets silently computed back to `auto` per the CSS Overflow spec, since `.plot-tile` sets `overflow-x: hidden` and the two axes must agree on visible-vs-not.
+
 <Canvas of={ViewerStories.TwoByTwo} />
 
 **2x2** — four tiles, two rows of two. The real, directly-sourced case (Figma node `1078:78`).

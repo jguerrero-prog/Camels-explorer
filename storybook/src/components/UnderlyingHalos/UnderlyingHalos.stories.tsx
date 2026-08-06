@@ -48,6 +48,14 @@ export const Expanded: Story = {
   args: { rows: SAMPLE_ROWS, defaultExpanded: true },
 };
 
+/** Real fix (2026-08-06, direct user feedback): open this story's
+ * fullscreen icon to see `parentTitle` rendered as a muted prefix in
+ * front of "View underlying halos" - previously that header carried no
+ * indication of which tile it belonged to. */
+export const FullscreenWithParentTitle: Story = {
+  args: { rows: SAMPLE_ROWS, defaultExpanded: true, parentTitle: 'Power Spectrum' },
+};
+
 /** Real usage: "Show all available fields (raw)" - only enabled when
  * rawRows is provided, matching app.py's own disabled=catalog.raw_frame
  * is None. */

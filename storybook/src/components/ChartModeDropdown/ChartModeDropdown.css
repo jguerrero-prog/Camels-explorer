@@ -1,0 +1,72 @@
+.chart-mode-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.chart-mode-dropdown__trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 7px;
+  background: var(--color-surface-control);
+  color: var(--color-text-primary);
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chart-mode-dropdown__chevron {
+  width: 8px;
+  height: 5px;
+  transition: transform 120ms ease;
+}
+
+/* Same portal/menu shell as SelectField's own dropdown (SelectField.css) -
+   fixed-position, escapes the tile's own overflow/z-index context. Smaller
+   than SelectField's menu since this only ever holds 2-3 short options. */
+.chart-mode-dropdown__menu {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--color-surface-chrome);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  box-shadow: 0px 10px 24px -6px rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+}
+
+.chart-mode-dropdown__option {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chart-mode-dropdown__option:hover {
+  background: var(--color-surface-toggle-active);
+}
+
+.chart-mode-dropdown__option--selected {
+  color: var(--color-text-emphasis);
+  font-weight: 600;
+}
+
+.chart-mode-dropdown__check {
+  color: var(--color-accent-gradient-start);
+}

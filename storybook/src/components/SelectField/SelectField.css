@@ -26,13 +26,27 @@
   cursor: pointer;
 }
 
+/* Real fix (2026-08-06, caught in a live screenshot: Custom sidebar's own
+   Z field picker, "Subhalo_HalfmassRadType_stars", visually overlapping
+   its chevron): a long FlatHUB field name has nowhere to go once it
+   exceeds this control's fixed width - `flex: 1 1 auto`/`min-width: 0`
+   let it actually shrink to the available space (a flex child otherwise
+   sizes to its own content, which is what let the text run past the
+   chevron in the first place) and `text-overflow: ellipsis` gives a real
+   truncation cue instead of a silent overlap. */
 .select-field__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-family: var(--font-ui);
   font-size: 14px;
   color: var(--color-text-primary);
 }
 
 .select-field__chevron {
+  flex-shrink: 0;
   width: 10px;
   height: 6px;
   transform: rotate(180deg);
@@ -43,19 +57,112 @@
    interaction (see SelectField.mdx Spec). Renders in a document.body
    portal (see SelectField.tsx) so it can never be clipped by a scrollable
    ancestor - position/top/left/width are set inline per-instance from the
-   trigger's real on-screen position; only the visual styling lives here. */
+   trigger's real on-screen position; only the visual styling lives here.
+   This outer element holds the chrome (bg/border/shadow/padding); the
+   actual scrolling happens in the nested `.select-field__options` list so
+   an optional search input (see below) and the bottom scroll-fade can sit
+   outside the scrolling area without being clipped by `overflow-y`. */
 .select-field__menu {
+  position: relative;
   z-index: 1000;
-  margin: 0;
   padding: 4px;
-  list-style: none;
   background: var(--color-surface-chrome);
   border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   box-shadow: 0px 10px 24px -6px rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+}
+
+/* Real fix for "the list just looks short and complete" - before this,
+   long lists (e.g. CustomFieldsForm's ~177-option X/Y/Color pickers) gave
+   zero indication more content existed below the fold: default OS
+   scrollbars are near-invisible on macOS/most browsers until actively
+   dragged. A visible, always-on thin scrollbar thumb plus the bottom fade
+   below give a real affordance without touching option counts anywhere
+   this list is short enough to not scroll at all (fade only renders when
+   SelectField.tsx detects actual overflow; scrollbar styling is inert on a
+   non-scrolling list).
+   Deliberately NOT using the standard `scrollbar-width`/`scrollbar-color`
+   properties here - verified directly (Playwright + pixel sampling) that
+   on current Chromium, setting those alongside `::-webkit-scrollbar`
+   makes Chromium fall back to its native macOS-style "overlay, only
+   visible while hovering/scrolling" thumb, i.e. exactly the invisible-by-
+   default behavior this fix exists to replace. Bare `::-webkit-scrollbar`
+   alone forces Chromium/Safari's classic, space-reserving, always-visible
+   thumb - confirmed via computed style (offsetWidth - clientWidth > 0,
+   i.e. real reserved gutter, not an overlay). */
+.select-field__options {
+  margin: 0;
+  padding: 0;
+  list-style: none;
   max-height: 240px;
   overflow-y: auto;
   box-sizing: border-box;
+}
+
+.select-field__options::-webkit-scrollbar {
+  width: 8px;
+}
+
+.select-field__options::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.select-field__options::-webkit-scrollbar-thumb {
+  background: var(--color-border-subtle);
+  border-radius: 4px;
+}
+
+.select-field__options::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+/* Bottom "more below" cue - only rendered by SelectField.tsx while the
+   list is scrolled short of its actual end, so it's absent for any short,
+   fully-visible list (every existing SelectField caller except the
+   `searchable` ones with large option counts). */
+.select-field__menu-fade {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: 4px;
+  height: 28px;
+  background: linear-gradient(to bottom, rgba(18, 17, 17, 0), var(--color-surface-chrome));
+  border-radius: 0 0 8px 8px;
+  pointer-events: none;
+}
+
+/* Opt-in search box (SelectField's `searchable` prop) - pinned above the
+   scrolling `.select-field__options` list, same visual language as this
+   app's other real text inputs (NumberStepper/MultiSelect/
+   RangeFilterControl): var(--color-surface-control) fill, subtle border,
+   var(--font-ui) at 14px to match option text size. */
+.select-field__search-wrap {
+  padding: 0 0 4px 0;
+}
+
+.select-field__search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  background: var(--color-surface-control);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.select-field__search::placeholder {
+  color: var(--color-text-muted);
+}
+
+.select-field__empty {
+  padding: 8px 10px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-text-muted);
 }
 
 .select-field__option {
@@ -68,11 +175,24 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 8px;
   font-family: var(--font-ui);
   font-size: 14px;
   color: var(--color-text-primary);
   text-align: left;
   cursor: pointer;
+}
+
+/* Same real long-field-name truncation as `.select-field__value` above -
+   a field name here sits next to a "Coming soon"/✓ suffix, which needs
+   `flex-shrink: 0` (see `.select-field__option-suffix`/`__check` below)
+   once the label itself is allowed to truncate instead of overlap it. */
+.select-field__option-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .select-field__option:hover {
@@ -84,7 +204,30 @@
   font-weight: 600;
 }
 
+/* Present-but-unselectable options (SelectField's `disabledOptions` prop)
+   - e.g. Chart type's "coming soon" entries, still visible so a real
+   FlatHUB chart type is never silently dropped from the list. */
+.select-field__option--disabled {
+  color: var(--color-text-muted);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.select-field__option--disabled:hover {
+  background: none;
+}
+
+.select-field__option-suffix {
+  flex-shrink: 0;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 .select-field__check {
+  flex-shrink: 0;
   color: var(--color-accent-gradient-start);
 }
 

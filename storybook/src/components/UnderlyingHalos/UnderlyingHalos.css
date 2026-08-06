@@ -35,6 +35,16 @@
   color: var(--color-text-primary);
 }
 
+/* Real fix (2026-08-06, direct user feedback): the fullscreen table view
+   had no indication of which tile it belonged to - a muted, non-bold
+   prefix in front of the bold "View underlying halos" label distinguishes
+   "which tile" from "what this panel is", rather than reading as one
+   equally-weighted title. */
+.underlying-halos__fullscreen-parent-title {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
 .underlying-halos__count {
   margin-left: auto;
   font-family: var(--font-ui);

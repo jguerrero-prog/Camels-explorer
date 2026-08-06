@@ -7,7 +7,7 @@ import { useCatalogMetadata } from '../../lib/useCatalogMetadata';
 export type LymanAlphaSpectrumParams = {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   sightline: number;
 };
@@ -32,11 +32,12 @@ export function LymanAlphaSpectrumSidebar({ params, onChange, onRemove }: LymanA
   const nSightlines = catalog?.lya_n_sightlines ?? FALLBACK_N_SIGHTLINES;
 
   return (
-    <ParamsSidebar title="Lyman-alpha Spectrum">
+    <ParamsSidebar title="Lyman-alpha Spectrum" footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
       <SingleRealizationFields
         catalog={catalog}
         value={params}
         onChange={(v) => onChange({ ...params, ...v })}
+        allowedSuites={catalog?.statistic_suites['Lyman-alpha Spectrum']}
       />
       <Slider
         label="Snapshot"
@@ -52,7 +53,6 @@ export function LymanAlphaSpectrumSidebar({ params, onChange, onRemove }: LymanA
         value={params.sightline}
         onChange={(sightline) => onChange({ ...params, sightline })}
       />
-      <Button variant="secondary" onClick={onRemove}>Remove plot</Button>
     </ParamsSidebar>
   );
 }

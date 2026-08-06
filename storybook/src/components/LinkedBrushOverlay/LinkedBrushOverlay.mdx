@@ -1,0 +1,43 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as LinkedBrushOverlayStories from './LinkedBrushOverlay.stories';
+
+<Meta of={LinkedBrushOverlayStories} />
+
+# LinkedBrushOverlay
+
+The toolbar's Linked cross-tile brushing tool (Figma node `1063-10`'s "brush-selection/linked-highlight/linked-badge"). Drag a horizontal band on any tile; every other visible tile highlights the identical fraction of its own chart width.
+
+## Token
+
+- `--color-accent-gradient-start` / `--color-accent-gradient-end` — the band fill and badge dot
+
+## Spec
+
+<Canvas of={LinkedBrushOverlayStories.Playground} />
+<Controls />
+
+A translucent vertical band plus a small badge showing either the real source label (the tile whose drag produced the selection) or "LINKED" (every mirrored tile). **Real, decided rule** (confirmed directly against Figma's own frame's rectangle coordinates, not assumed): the band is a plain fraction of each tile's own chart width - deliberately NOT translated into each tile's own data units, since two arbitrary statistics (e.g. Redshift vs. Stellar mass) have no real unit correspondence to translate through. Only the source tile gets a real, precise label (`~Redshift 2.99–5.50 selected`, prefixed "~" since a static PNG's exact plot-area inset isn't known client-side); every other tile just says "LINKED" rather than fabricating a value with no real basis.
+
+`SourceTile` / `MirroredTile` show that exact asymmetry side by side; `NoSelectionYet` shows the tool active with nothing dragged yet (no band, no badge - not a placeholder state).
+
+## Usecase
+
+- Rendered by `App.tsx`'s `renderAnnotationOverlay(tile)` alongside `AnnotationOverlay`/`ArrowOverlay`/`NoteOverlay`.
+- `captureActive` is `App.tsx`'s own `brushCaptureActive` (part of the shared `activeTool` state) - true for every tile while Linked brushing mode is on, so any tile can start a NEW drag even while showing someone else's highlight.
+- `App.tsx` keeps ONE global `brushSelection` (`{ sourceTileId, xFracStart, xFracEnd }`), not one per tile - every tile reads the same selection and just compares its own id against `sourceTileId` to decide `isSource`.
+
+## Code
+
+```tsx
+import { LinkedBrushOverlay } from '@/components/LinkedBrushOverlay/LinkedBrushOverlay';
+
+<LinkedBrushOverlay
+  captureActive={brushCaptureActive}
+  xFracStart={brushSelection?.xFracStart ?? null}
+  xFracEnd={brushSelection?.xFracEnd ?? null}
+  isSource={brushSelection?.sourceTileId === tile.id}
+  sourceLabel={brushSelection?.sourceTileId === tile.id ? brushSourceLabel(tile, brushSelection.xFracStart, brushSelection.xFracEnd) : undefined}
+  onBrush={(start, end) => handleBrush(tile.id, start, end)}
+  onClear={handleClearBrush}
+/>
+```

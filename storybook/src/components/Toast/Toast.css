@@ -1,0 +1,53 @@
+/* Real (Figma node 1066-10's toast-copy-provenance) - fixed position is
+   the caller's decision (App.tsx anchors it to the top-center of the
+   canvas), not baked in here so a future caller can place it elsewhere. */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px 12px 14px;
+  background: var(--color-surface-content);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  box-shadow: 0px 8px 24px -6px rgba(0, 0, 0, 0.4);
+  max-width: 380px;
+}
+
+.toast__check-wrap {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--color-success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast__check-wrap img {
+  width: 11px;
+  height: 11px;
+}
+
+.toast__text-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.toast__title {
+  margin: 0;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.toast__detail {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-text-muted);
+  word-break: break-word;
+}

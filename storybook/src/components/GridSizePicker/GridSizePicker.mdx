@@ -1,0 +1,43 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as GridSizePickerStories from './GridSizePicker.stories';
+
+<Meta of={GridSizePickerStories} />
+
+# GridSizePicker
+
+Real (added 2026-08-06, direct user feedback: *"for grid size, they should have the ability to set the grid size to whichever (2x2, 3x3, 4x3, 5x4) you would need to create a grid picker, similar to table size selectors you see in google docs or ms word"*). A hover grid, not a plain row/column count field — hovering cell `(r, c)` highlights every cell from the top-left corner through `(r, c)` and shows the resulting size below; clicking commits that exact rectangle.
+
+## Token
+
+- `--color-surface-control` — inactive cell background
+- `--color-border-subtle` — cell border
+- `--color-accent-gradient-end` — active (hovered/highlighted) cell fill
+- `--font-label` (Lato) — size label
+
+## Spec
+
+<Canvas of={GridSizePickerStories.Default} />
+<Controls />
+
+- `maxRows`/`maxCols` (both default 6) set the grid's real extent — matches Google Docs'/MS Word's own "Insert Table" picker default, since this component's one real caller (grouped 2D Field Map view) has no use case past ~6×6 cells in a single tile.
+- Supports non-square sizes (2×2, 3×3, 4×3, 5×4, …) — every cell is independently clickable, not just the diagonal.
+- This component owns only the grid + label widget itself. It has no trigger button, no popover shell, and no "current value" display — it's a stateless-from-the-outside picker that reports a commit via `onSelect` and otherwise only tracks its own hover state internally.
+
+<Canvas of={GridSizePickerStories.SmallerExtent} />
+
+## Usecase
+
+- **`FieldMapGroupControl`** (`FieldMapGroupControl.mdx`) is the one real caller — it renders this inside a portal-positioned popover anchored to a trigger button in `FieldMap2DSidebar`, and adds the "current selection"/"back to single map" affordances this component itself doesn't have.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { GridSizePicker } from '@/components/GridSizePicker/GridSizePicker';
+import type { GridSize } from '@/components/GridSizePicker/GridSizePicker';
+
+function GridSizePickerUsage() {
+  const [size, setSize] = useState<GridSize | null>(null);
+  return <GridSizePicker onSelect={setSize} />;
+}
+```

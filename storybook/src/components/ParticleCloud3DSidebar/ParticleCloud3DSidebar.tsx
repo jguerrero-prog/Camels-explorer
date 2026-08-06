@@ -8,7 +8,7 @@ import { useCatalogMetadata } from '../../lib/useCatalogMetadata';
 export type ParticleCloud3DParams = {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   maxParticles: number;
 };
@@ -29,11 +29,12 @@ export function ParticleCloud3DSidebar({ params, onChange, onRemove }: ParticleC
   const nSnapshots = catalog?.n_snapshots ?? FALLBACK_N_SNAPSHOTS;
 
   return (
-    <ParamsSidebar title="3D Particle Cloud">
+    <ParamsSidebar title="3D Particle Cloud" footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
       <SingleRealizationFields
         catalog={catalog}
         value={params}
         onChange={(v) => onChange({ ...params, ...v })}
+        allowedSuites={catalog?.statistic_suites['3D Particle Cloud']}
       />
       <Slider
         label="Snapshot"
@@ -49,7 +50,6 @@ export function ParticleCloud3DSidebar({ params, onChange, onRemove }: ParticleC
         onChange={(maxParticles) => onChange({ ...params, maxParticles })}
         formatValue={(v) => v.toLocaleString()}
       />
-      <Button variant="secondary" onClick={onRemove}>Remove plot</Button>
     </ParamsSidebar>
   );
 }

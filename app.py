@@ -407,6 +407,47 @@ def _compute_result(statistic: str, realization: int) -> B.Result:
                               sfrh_path=local_path or None, fetch_public=fetch_public)
 
 
+def _render_3d_with_pin(fig, pin_key, chart_key):
+    """PROTOTYPE (2026-08-05) - not a permanent feature. Testing whether
+    click-to-pin (a persistent marker + label that survives while the user
+    keeps rotating/zooming elsewhere) feels right inside the real desktop
+    pywebview window (WKWebView on macOS, not a full browser) before
+    committing this pattern in the React rewrite's Plotly3DChart - the
+    React version was only ever tested in a full browser (headless
+    Chromium via Playwright), which isn't the same runtime the real
+    desktop app uses. A quick, git-diffable feel-test only; revert this
+    function and its two call sites once done."""
+    pinned = st.session_state.get(pin_key)
+    if pinned:
+        fig.add_trace(go.Scatter3d(
+            x=[pinned["x"]], y=[pinned["y"]], z=[pinned["z"]],
+            mode="markers", marker=dict(size=6, color="#e63946", symbol="diamond"),
+            name="pinned", showlegend=False, hoverinfo="skip",
+        ))
+        fig.update_layout(scene=dict(annotations=[dict(
+            x=pinned["x"], y=pinned["y"], z=pinned["z"],
+            text=f"x={pinned['x']:.2f}, y={pinned['y']:.2f}, z={pinned['z']:.2f}",
+            showarrow=True, arrowhead=2, arrowcolor="#e63946",
+            font=dict(color="white", size=12), bgcolor="rgba(20,20,26,0.9)",
+            bordercolor="#e63946", borderpad=4,
+        )]))
+
+    selection = st.plotly_chart(fig, use_container_width=True, on_select="rerun",
+                                 selection_mode=("points",), key=chart_key)
+    points = selection.selection.get("points") if selection and selection.selection else None
+    if points:
+        p = points[0]
+        if "x" in p and "y" in p and "z" in p:
+            st.session_state[pin_key] = {"x": p["x"], "y": p["y"], "z": p["z"]}
+            st.rerun()
+        else:
+            st.caption(f"⚠️ prototype: click registered but no x/y/z in point data: {p}")
+
+    if pinned and st.button("Clear pin", key=f"{pin_key}_clear"):
+        st.session_state.pop(pin_key, None)
+        st.rerun()
+
+
 tab_explore, tab_catalog, tab_sam, tab_video = st.tabs(
     ["Explore", "Catalog Browser", "CAMELS-SAM", "Representative Visualization"])
 
@@ -520,8 +561,8 @@ with tab_explore:
             margin=dict(l=0, r=0, t=0, b=0),
             height=650,
         )
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption("Drag to rotate, scroll to zoom. Higher-density knots/filaments show as brighter iso-surfaces."
+        _render_3d_with_pin(fig, "density_field_pin", "density_field_chart")
+        st.caption("Drag to rotate, scroll to zoom, click a point to pin it (prototype). Higher-density knots/filaments show as brighter iso-surfaces."
                     + (" Cyan spheres are void centers, sized by radius." if show_voids else ""))
 
         if show_voids and voids.extra is not None:
@@ -561,8 +602,8 @@ with tab_explore:
             margin=dict(l=0, r=0, t=0, b=0),
             height=650,
         )
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption("Drag to rotate, scroll to zoom, hover a point for its coordinates. "
+        _render_3d_with_pin(fig, "particle_cloud_pin", "particle_cloud_chart")
+        st.caption("Drag to rotate, scroll to zoom, hover a point for its coordinates, click to pin it (prototype). "
                     "Each point is one real (or synthetic) DM particle.")
 
     elif statistic == "2D Field Map":

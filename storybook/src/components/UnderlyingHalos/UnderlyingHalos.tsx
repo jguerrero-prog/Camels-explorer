@@ -32,6 +32,14 @@ export type UnderlyingHalosProps = {
    * Stellar Mass column IS what's plotted. */
   massContextNote?: string;
   defaultExpanded?: boolean;
+  /** Real fix (2026-08-06, direct user feedback): the fullscreen table
+   * view had no indication of which tile/statistic it belonged to - just
+   * a generic "View underlying halos" label. `PlotTile`'s own `title`
+   * prop, threaded down one level, shown alongside that label only in the
+   * fullscreen header (the collapsed inline disclosure already sits
+   * directly under its own tile's title, so it doesn't need this - only
+   * the fullscreen portal, which detaches from that visual context, does). */
+  parentTitle?: string;
 };
 
 function formatMass(value: number) {
@@ -132,7 +140,7 @@ function Dropdown({ top, left, onClose, children }: { top: number; left: number;
   );
 }
 
-export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpanded = false }: UnderlyingHalosProps) {
+export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpanded = false, parentTitle }: UnderlyingHalosProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const maxStellarMass = useMemo(
     () => rows.reduce((max, row) => Math.max(max, row.stellarMass), 0),
@@ -230,6 +238,7 @@ export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpande
             type="button"
             className="underlying-halos__toolbar-btn"
             aria-label="Show/hide columns"
+            title="Show/hide columns"
             onClick={(e) => {
               const rect = e.currentTarget.getBoundingClientRect();
               setEyeMenu({ top: rect.bottom + 4, left: rect.right - 220 });
@@ -241,6 +250,7 @@ export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpande
             type="button"
             className="underlying-halos__toolbar-btn"
             aria-label="View fullscreen"
+            title="View fullscreen"
             onClick={() => setFullscreen((f) => !f)}
           >
             <ExpandIcon />
@@ -262,6 +272,7 @@ export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpande
                         type="button"
                         className="underlying-halos__kebab"
                         aria-label={`${col.label} column options`}
+                        title={`${col.label} column options`}
                         onClick={(e) => {
                           const rect = e.currentTarget.getBoundingClientRect();
                           setColumnMenu({ key: col.key, top: rect.bottom + 4, left: rect.left });
@@ -409,7 +420,10 @@ export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpande
           <div className="underlying-halos__fullscreen">
             <div className="underlying-halos__fullscreen-header">
               <div className="underlying-halos__fullscreen-header-left">
-                <span className="underlying-halos__label">View underlying halos</span>
+                <span className="underlying-halos__label">
+                  {parentTitle && <span className="underlying-halos__fullscreen-parent-title">{parentTitle} — </span>}
+                  View underlying halos
+                </span>
                 <Checkbox
                   label="Show all available fields (raw)"
                   checked={showAllFields}
@@ -417,7 +431,7 @@ export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpande
                   disabled={!rawRows}
                 />
               </div>
-              <button type="button" className="underlying-halos__fullscreen-close" onClick={() => setFullscreen(false)} aria-label="Exit fullscreen">
+              <button type="button" className="underlying-halos__fullscreen-close" onClick={() => setFullscreen(false)} aria-label="Exit fullscreen" title="Exit fullscreen">
                 ×
               </button>
             </div>

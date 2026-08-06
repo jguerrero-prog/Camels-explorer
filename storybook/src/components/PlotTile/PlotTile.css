@@ -15,6 +15,37 @@
   cursor: pointer;
   overflow-x: hidden;
   overflow-y: auto;
+  /* Real fix (2026-08-06, direct user feedback): a plot panel is flat,
+     square-cornered - overrides `.tile`'s shared 12px radius, scoped to
+     plot panels only (the empty "Add a plot" card keeps its own rounded
+     corners, unaffected). */
+  border-radius: 0;
+}
+
+/* Real (Figma nodes 1066-10/1076-10/1063-10) - the toolbar tools that
+   operate on "the currently focused tile" (Copy provenance/as code,
+   Annotate, Ruler, Ratio/diff) need a visible way to tell which tile
+   that is before using them. `.tile`'s own 1px border is overridden
+   rather than added-to, matching the real frames' single visible ring.
+   Real fix (2026-08-06, direct user feedback): a dedicated UI blue
+   (`--color-border-selected`) instead of the original translucent white/
+   grey ring, at 1px (down from 1.5px) - the same weight as every tile's
+   own unselected border, so selection reads as a color change, not an
+   added-thickness one. */
+.plot-tile--focused {
+  border: 1px solid var(--color-border-selected);
+}
+
+/* Real fix (2026-08-06, direct user feedback): the Static/Interactive/
+   Table mode control (ChartModeDropdown) moved here from floating on top
+   of the chart itself - this row sits on the tile's own opaque
+   background, so it can never visually collide with plotted content the
+   way the old on-chart toggle could. */
+.plot-tile__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .plot-tile__body {
@@ -22,4 +53,40 @@
   min-height: 340px;
   display: flex;
   gap: 4px;
+}
+
+/* Real (Figma node 1055-10) - wraps just the chart (not ParamsReadout) so
+   Annotate's pins/callouts and click-to-place targeting are scoped to the
+   plotted area only. */
+.plot-tile__chart-area {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.plot-tile__chart-area--annotatable {
+  cursor: crosshair;
+}
+
+/* Real (Figma nodes 1066-10/1076-10's own "params-readout-row" - a
+   horizontal row directly BELOW the chart, confirmed from those frames'
+   own real pixel coordinates, not assumed). Scoped narrowly: grid layout
+   only (never stacked - Viewer's own two modes stay visually distinct),
+   and only once 2+ tiles are on screen (`:not(:only-child)`) - a single
+   grid tile already spans the full 2-column width (Viewer.css's own
+   `:only-child` rule), so it keeps the original side-by-side layout
+   rather than needlessly narrowing the chart. */
+.viewer--grid > *:not(:only-child) .plot-tile__body {
+  flex-direction: column;
+  gap: 12px;
+}
+
+.viewer--grid > *:not(:only-child) .params-readout {
+  flex-direction: row;
+  flex-wrap: wrap;
+  width: auto;
+  border-left: none;
+  border-top: 1px solid var(--color-border);
+  padding: 12px 0 0 0;
+  gap: 24px;
 }

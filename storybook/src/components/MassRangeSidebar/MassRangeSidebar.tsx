@@ -11,11 +11,16 @@ export type MassRangeParams = {
   suite: string;
   setName: string;
   compareMode: boolean;
-  realizations: number[];
+  realizations: (number | string)[];
+  snapnum: number;
   min: number;
   max: number;
   bins: number;
 };
+
+// Real fallback (backend.py's N_SNAPSHOTS) - used only until GET
+// /api/metadata loads.
+const FALLBACK_N_SNAPSHOTS = 34;
 
 export type MassRangeSidebarProps = {
   statistic: MassRangeStatistic;
@@ -37,11 +42,19 @@ export type MassRangeSidebarProps = {
  * SFRHistorySidebar were about to duplicate this same block again). */
 export function MassRangeSidebar({ statistic, params, onChange, onRemove }: MassRangeSidebarProps) {
   const catalog = useCatalogMetadata();
+  const nSnapshots = catalog?.n_snapshots ?? FALLBACK_N_SNAPSHOTS;
   const config = MASS_RANGE_CONFIGS[statistic];
 
   return (
-    <ParamsSidebar title={statistic}>
+    <ParamsSidebar title={statistic} footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
       <RealizationFields catalog={catalog} value={params} onChange={(v) => onChange({ ...params, ...v })} />
+      <Slider
+        label="Snapshot"
+        min={0}
+        max={nSnapshots - 1}
+        value={params.snapnum}
+        onChange={(snapnum) => onChange({ ...params, snapnum })}
+      />
       <NumberStepper
         label={config.minLabel}
         value={params.min}
@@ -63,7 +76,6 @@ export function MassRangeSidebar({ statistic, params, onChange, onRemove }: Mass
         value={params.bins}
         onChange={(bins) => onChange({ ...params, bins })}
       />
-      <Button variant="secondary" onClick={onRemove}>Remove plot</Button>
     </ParamsSidebar>
   );
 }

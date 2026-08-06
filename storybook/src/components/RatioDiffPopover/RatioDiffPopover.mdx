@@ -1,0 +1,46 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as RatioDiffPopoverStories from './RatioDiffPopover.stories';
+
+<Meta of={RatioDiffPopoverStories} />
+
+# RatioDiffPopover
+
+The toolbar's "Ratio / diff overlay" tool (Figma node `989-10`'s "ratio-diff-popover") - "Compare against" a second tile, then overlay the focused tile's series with their ratio or difference.
+
+## Token
+
+- `--color-surface-popover` — the popover's own dark surface
+- `--color-accent-gradient-end` — the selected candidate's checkbox/active mode-toggle tint
+
+## Spec
+
+<Canvas of={RatioDiffPopoverStories.Playground} />
+<Controls />
+
+"New plot" row → a divider → the candidate list (checkbox + title + caption per tile) → a divider → a Ratio/Difference mode toggle → a "Compare" button, disabled until a candidate is checked.
+
+**Real, decided compatibility rule** (Figma's own frame dims its own "Field PDF" row against a focused "SFR History" tile, not an arbitrary choice): only a tile of the exact same statistic as the focused one has an x-axis that means the same thing, so only same-`kind` tiles are real, selectable candidates. A different-statistic tile still appears in the list (so a user can see why it isn't offered) with `compatible: false` - shown disabled with the caption replaced by "Different statistic - axes aren't comparable", never silently hidden.
+
+`NoOtherTiles` shows the real empty state - "No other tiles yet - add one to compare against." - rather than a disabled/empty-looking list.
+
+## Usecase
+
+- Rendered by `App.tsx` inside `Toolbar`'s `ratioDiffPopover` prop, anchored below the Ratio/diff toolbar button, only while open.
+- `candidates` comes from `App.tsx`'s `ratioDiffCandidates`, computed from every other real (non-empty) tile on the canvas, filtered/flagged against the focused tile's own `kind`.
+- `onCompare` triggers `App.tsx`'s `handleCompare`, which fetches/interpolates the target tile's series onto the focused tile's own x-grid and adds a derived ratio/difference series - see `PlotChart`'s `forceInteractiveSignal` for why that derived series always switches the chart to Interactive mode.
+
+## Code
+
+```tsx
+import { RatioDiffPopover } from '@/components/RatioDiffPopover/RatioDiffPopover';
+
+<RatioDiffPopover
+  candidates={ratioDiffCandidates}
+  selectedTileId={ratioDiffSelectedId}
+  onSelect={setRatioDiffSelectedId}
+  onNewPlot={() => openAddPlotModal()}
+  onCompare={handleCompare}
+  mode={ratioDiffMode}
+  onModeChange={setRatioDiffMode}
+/>
+```
