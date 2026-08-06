@@ -8,7 +8,7 @@ import { useCatalogMetadata } from '../../lib/useCatalogMetadata';
 export type GalaxyScalingRelationsParams = {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   SMmin: number;
   SMmax: number;
@@ -34,7 +34,7 @@ export function GalaxyScalingRelationsSidebar({ params, onChange, onRemove }: Ga
   const nSnapshots = catalog?.n_snapshots ?? FALLBACK_N_SNAPSHOTS;
 
   return (
-    <ParamsSidebar title="Galaxy Scaling Relations">
+    <ParamsSidebar title="Galaxy Scaling Relations" footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
       <SingleRealizationFields
         catalog={catalog}
         value={params}
@@ -68,7 +68,6 @@ export function GalaxyScalingRelationsSidebar({ params, onChange, onRemove }: Ga
         value={params.bins}
         onChange={(bins) => onChange({ ...params, bins })}
       />
-      <Button variant="secondary" onClick={onRemove}>Remove plot</Button>
     </ParamsSidebar>
   );
 }

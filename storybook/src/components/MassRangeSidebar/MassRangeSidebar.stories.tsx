@@ -25,6 +25,7 @@ function Interactive({ statistic }: { statistic: MassRangeStatistic }) {
     setName: 'LH',
     compareMode: false,
     realizations: [278],
+    snapnum: 33,
     min: config.defaultMin,
     max: config.defaultMax,
     bins: config.defaultBins,

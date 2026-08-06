@@ -8,7 +8,7 @@ import { useCatalogMetadata } from '../../lib/useCatalogMetadata';
 export type HaloGasProfilesParams = {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   field: string;
   /** 1-based rank by mass (1 = most massive) of the one halo drawn with
@@ -44,11 +44,13 @@ export function HaloGasProfilesSidebar({ params, onChange, onRemove, maxHighligh
   const nSnapshots = catalog?.n_snapshots ?? FALLBACK_N_SNAPSHOTS;
 
   return (
-    <ParamsSidebar title="Halo Gas Profiles">
+    <ParamsSidebar title="Halo Gas Profiles" footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
       <SingleRealizationFields
         catalog={catalog}
         value={params}
         onChange={(v) => onChange({ ...params, ...v })}
+        allowedSuites={catalog?.statistic_suites['Halo Gas Profiles']}
+        allowedSets={catalog?.statistic_sets['Halo Gas Profiles']}
       />
       <SelectField
         label="Field"
@@ -70,7 +72,6 @@ export function HaloGasProfilesSidebar({ params, onChange, onRemove, maxHighligh
         value={Math.min(params.highlightRank, Math.max(1, maxHighlightRank))}
         onChange={(highlightRank) => onChange({ ...params, highlightRank })}
       />
-      <Button variant="secondary" onClick={onRemove}>Remove plot</Button>
     </ParamsSidebar>
   );
 }

@@ -22,9 +22,13 @@ export function XrayHaloProfilesSidebar({ params, onChange, onRemove }: XrayHalo
   const catalog = useCatalogMetadata();
 
   return (
-    <ParamsSidebar title="X-ray Halo Profiles">
-      <SingleRealizationFields catalog={catalog} value={params} onChange={onChange} />
-      <Button variant="secondary" onClick={onRemove}>Remove plot</Button>
+    <ParamsSidebar title="X-ray Halo Profiles" footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
+      <SingleRealizationFields
+        catalog={catalog}
+        value={params}
+        onChange={onChange}
+        allowedSuites={catalog?.statistic_suites['X-ray Halo Profiles']}
+      />
     </ParamsSidebar>
   );
 }

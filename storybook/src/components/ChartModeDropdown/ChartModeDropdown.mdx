@@ -1,0 +1,49 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as ChartModeDropdownStories from './ChartModeDropdown.stories';
+
+<Meta of={ChartModeDropdownStories} />
+
+# ChartModeDropdown
+
+Real fix (2026-08-06, direct user feedback: "the static/interactive toggle is becoming illegible at times... I think it's because it sits inside the plot" + "perhaps the static/interactive toggle should be a small dropdown where users could decide between static, interactive, or table"). Replaces `PlotChart`'s old two-button segmented pill (`.plot-chart__toggle`, which floated `position: absolute` on top of the chart itself, occasionally colliding with plotted content underneath it) with a small dropdown rendered in `PlotTile`'s header row instead — always on the tile's own opaque background, never over the chart.
+
+## Token
+
+- `--color-surface-control` / `--color-border-subtle` — the closed trigger's own box
+- `--color-surface-chrome` — the open menu's surface
+- `--color-surface-toggle-active` — option hover state
+- `--color-accent-gradient-start` — the selected option's checkmark
+
+## Spec
+
+<Canvas of={ChartModeDropdownStories.AllThreeModes} />
+<Controls />
+
+A small trigger button (current mode + chevron) opens a portal-rendered menu listing every option in `options`, with a checkmark on the current selection — same portal/fixed-position pattern as `SelectField`'s own dropdown, scaled down for 2-3 short options instead of a long field list.
+
+**Real, deliberate constraint: `options` never contains a disabled entry.** Every option passed in is always genuinely real for this tile - "Table" only appears when `halos` exists, "Static" only when a server-rendered PNG exists. `PlotTile`'s own `availableChartModes` computes this list; this component has no opinion about *why* an option is or isn't present, only about rendering whichever list it's given.
+
+<Canvas of={ChartModeDropdownStories.NoTableOption} />
+<Canvas of={ChartModeDropdownStories.InteractiveAndTable} />
+
+**Single-option case, handled by the caller, not here:** if a tile only ever has exactly one real mode (e.g. 3D Density Field: Interactive only, no Static, no halos), `PlotTile` doesn't render this component at all - matching the original toggle's own "no toggle when nothing to switch to" behavior. This component itself doesn't special-case a 1-item `options` array; it would render a dropdown with one option and nothing to compare it against, which is real but pointless chrome `PlotTile` avoids by not mounting it in the first place.
+
+## Usecase
+
+- Rendered by `PlotTile` in its own header row, next to the tile's title - see `PlotTile.mdx`'s "Real fix (2026-08-06)" note for the full plot/table view-split this enabled.
+- `PlotChart` itself no longer owns any display-mode state or toggle UI - it's now a fully controlled renderer taking `displayMode` as a required prop (see `PlotChart.mdx`).
+
+## Code
+
+```tsx
+import { ChartModeDropdown } from '@/components/ChartModeDropdown/ChartModeDropdown';
+import type { ChartDisplayMode } from '@/components/ChartModeDropdown/ChartModeDropdown';
+
+function Example() {
+  const [mode, setMode] = useState<ChartDisplayMode>('static');
+  const options: ChartDisplayMode[] = ['static', 'interactive', 'table'];
+  return options.length > 1 ? (
+    <ChartModeDropdown mode={mode} options={options} onChange={setMode} />
+  ) : null;
+}
+```

@@ -11,6 +11,23 @@ export type SelectFieldProps = {
   /** Real field pattern (Figma node 975:869, "field-Set"): a short helper
    * line under the input, e.g. realization count for a chosen set. */
   caption?: string;
+  /** Opt-in only - every existing caller omits this and is 100% unchanged.
+   * When true, renders a "Search..." text input pinned to the top of the
+   * open menu (matches FlatHUB's own real search-above-list pattern) that
+   * case-insensitive substring-filters `options` as the user types. Meant
+   * for callers with large option counts where a flat scroll is unusable
+   * (e.g. CustomFieldsForm's X/Y/Color field pickers, ~177 options) - NOT
+   * for the small pickers elsewhere (Suite/Set/statistic pickers), where a
+   * search box would just be visual noise for a 3-5 item list. */
+  searchable?: boolean;
+  /** Options present in the list but not selectable - rendered dimmed with
+   * a "Coming soon" suffix, never fires `onChange`. Opt-in (existing
+   * callers omit this and are unaffected) - built for small, fixed-option
+   * pickers like CustomFieldsForm's Chart type, where some real FlatHUB
+   * chart types are visibly present but not yet implemented (see
+   * CHART_TYPES' own "no silent scope cut" docs) rather than a large
+   * filterable list. */
+  disabledOptions?: string[];
 };
 
 /** The real open-menu design this component was missing (see Spec) - not
@@ -23,16 +40,30 @@ export type SelectFieldProps = {
  * bug caught inside AddPlotModal: nested absolute positioning gets clipped
  * by the modal's own scrollable fields area, so the last field's menu was
  * invisible until the user scrolled the whole modal. */
-export function SelectField({ label, value, options, onChange, caption }: SelectFieldProps) {
+export function SelectField({ label, value, options, onChange, caption, searchable, disabledOptions }: SelectFieldProps) {
   const [open, setOpen] = useState(false);
   const [menuRect, setMenuRect] = useState({ top: 0, left: 0, width: 0 });
+  const [query, setQuery] = useState('');
+  const [canScrollMore, setCanScrollMore] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+
+  const visibleOptions =
+    searchable && query.trim() ? options.filter((o) => o.toLowerCase().includes(query.trim().toLowerCase())) : options;
 
   useEffect(() => {
     if (!open) return;
     const rect = triggerRef.current!.getBoundingClientRect();
     setMenuRect({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    setQuery('');
+    if (searchable) {
+      // Portal content commits synchronously with this effect (same
+      // render), so the input already exists in the DOM by the time this
+      // runs - no extra rAF/timeout needed.
+      searchInputRef.current?.focus();
+    }
 
     const onPointerDown = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -65,6 +96,24 @@ export function SelectField({ label, value, options, onChange, caption }: Select
     };
   }, [open]);
 
+  // Drives the bottom "more content below" fade - only shown while the
+  // list is actually scrolled short of its end, so it never appears on a
+  // short (non-scrolling) options list and disappears once the user
+  // scrolls to the bottom. Re-checked whenever the visible option count
+  // changes (typing a search query can flip a list from scrollable to
+  // fully-visible or back).
+  useEffect(() => {
+    if (!open) return;
+    const el = listRef.current;
+    if (!el) return;
+    const updateScrollState = () => {
+      setCanScrollMore(el.scrollHeight - el.scrollTop - el.clientHeight > 1);
+    };
+    updateScrollState();
+    el.addEventListener('scroll', updateScrollState);
+    return () => el.removeEventListener('scroll', updateScrollState);
+  }, [open, visibleOptions.length]);
+
   return (
     <div className="select-field" ref={rootRef}>
       <p className="select-field__label">{label}</p>
@@ -86,29 +135,58 @@ export function SelectField({ label, value, options, onChange, caption }: Select
       </button>
       {open &&
         createPortal(
-          <ul
+          <div
             className="select-field__menu"
-            role="listbox"
             style={{ position: 'fixed', top: menuRect.top, left: menuRect.left, width: menuRect.width }}
           >
-            {options.map((option) => (
-              <li key={option}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={option === value}
-                  className={`select-field__option ${option === value ? 'select-field__option--selected' : ''}`}
-                  onClick={() => {
-                    onChange(option);
-                    setOpen(false);
-                  }}
-                >
-                  <span>{option}</span>
-                  {option === value && <span className="select-field__check">✓</span>}
-                </button>
-              </li>
-            ))}
-          </ul>,
+            {searchable && (
+              <div className="select-field__search-wrap">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  className="select-field__search"
+                  placeholder="Search…"
+                  aria-label={`Search ${label} options`}
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                />
+              </div>
+            )}
+            <ul className="select-field__options" role="listbox" ref={listRef}>
+              {visibleOptions.length === 0 ? (
+                <li className="select-field__empty">No matching fields</li>
+              ) : (
+                visibleOptions.map((option) => {
+                  const disabled = disabledOptions?.includes(option) ?? false;
+                  return (
+                    <li key={option}>
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={option === value}
+                        aria-disabled={disabled}
+                        disabled={disabled}
+                        className={`select-field__option ${option === value ? 'select-field__option--selected' : ''} ${disabled ? 'select-field__option--disabled' : ''}`}
+                        onClick={() => {
+                          if (disabled) return;
+                          onChange(option);
+                          setOpen(false);
+                        }}
+                      >
+                        <span className="select-field__option-label">{option}</span>
+                        {disabled ? (
+                          <span className="select-field__option-suffix">Coming soon</span>
+                        ) : (
+                          option === value && <span className="select-field__check">✓</span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+            {canScrollMore && <div className="select-field__menu-fade" aria-hidden="true" />}
+          </div>,
           document.body,
         )}
       {caption && <p className="select-field__caption">{caption}</p>}

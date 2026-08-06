@@ -25,6 +25,10 @@ const K_RANGE_LABELS = {
 } as const;
 export const RSD_LABELS = ['Real space (none)', 'Axis 0', 'Axis 1', 'Axis 2'];
 
+// Real fallback (backend.py's N_SNAPSHOTS) - used only until GET
+// /api/metadata loads.
+const FALLBACK_N_SNAPSHOTS = 34;
+
 /** Derives get_power_spectrum's real `rsd_axis` param (`null` or `0|1|2`)
  * from the sidebar's own label - shared with App.tsx so the request-
  * building logic lives in exactly one place. */
@@ -37,7 +41,8 @@ export type PowerSpectrumParams = {
   suite: string;
   setName: string;
   compareMode: boolean;
-  realizations: number[];
+  realizations: (number | string)[];
+  snapnum: number;
   grid: number;
   MAS: string;
   threads: number;
@@ -61,11 +66,19 @@ export type PowerSpectrumSidebarProps = {
  * level deeper). See PowerSpectrumSidebar.mdx. */
 export function PowerSpectrumSidebar({ params, onChange, onRemove }: PowerSpectrumSidebarProps) {
   const catalog = useCatalogMetadata();
+  const nSnapshots = catalog?.n_snapshots ?? FALLBACK_N_SNAPSHOTS;
   const rsdAxis = rsdAxisFromLabel(params.rsdLabel);
 
   return (
-    <ParamsSidebar title="Power Spectrum">
+    <ParamsSidebar title="Power Spectrum" footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
       <RealizationFields catalog={catalog} value={params} onChange={(v) => onChange({ ...params, ...v })} />
+      <Slider
+        label="Snapshot"
+        min={0}
+        max={nSnapshots - 1}
+        value={params.snapnum}
+        onChange={(snapnum) => onChange({ ...params, snapnum })}
+      />
       <OptionSlider
         label="Grid size"
         options={[128, 256, 512, 1024]}
@@ -122,7 +135,6 @@ export function PowerSpectrumSidebar({ params, onChange, onRemove }: PowerSpectr
         checked={params.showLinearPk}
         onChange={(showLinearPk) => onChange({ ...params, showLinearPk })}
       />
-      <Button variant="secondary" onClick={onRemove}>Remove plot</Button>
     </ParamsSidebar>
   );
 }

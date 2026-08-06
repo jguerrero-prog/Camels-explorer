@@ -29,6 +29,35 @@
   grid-column: span 2;
 }
 
+/* Real fix (2026-08-06, direct user feedback): the spanning 3rd tile above
+   was still bound by the SAME `minmax(480px, 1fr)` row track as the two
+   cells above it, so it scrolled internally (PlotTile's own `overflow-y:
+   auto`) instead of displaying in full like a real stacked-view tile.
+   Scoped via `:has()` to exactly the 3-tile case (mirrors the sibling
+   selector above), this overrides the container's 2 real rows explicitly:
+   the first keeps the normal minmax sizing, the second is `auto` - grows
+   to fit the tile's actual content instead of capping it, so PlotTile's
+   own internal scroll never has anything to scroll. */
+.viewer--grid:has(> *:nth-child(3):last-child) {
+  grid-template-rows: minmax(480px, 1fr) auto;
+}
+
+/* `auto` alone doesn't fully solve it: PlotTile's own `overflow-y: auto`
+   (see PlotTile.css) makes the browser treat its intrinsic/auto size as
+   decoupled from its real (scrollable) content height - a scroll
+   container's contribution to a grid track's `auto` sizing is its own
+   small minimum, not its true content height, so the row still measured
+   short even with the fix above. Overriding this one tile's overflow to
+   `visible` restores its real content height as what the grid track
+   actually sizes against. Both axes have to be set together - per the
+   CSS Overflow spec, if `overflow-x`/`overflow-y` disagree (one
+   `visible`, the other not - `.plot-tile` sets `overflow-x: hidden`),
+   the `visible` one is silently computed back to `auto`, which would
+   quietly undo this fix if only `overflow-y` were touched here. */
+.viewer--grid:has(> *:nth-child(3):last-child) > *:nth-child(3):last-child {
+  overflow: visible;
+}
+
 .viewer--stacked {
   display: flex;
   flex-direction: column;

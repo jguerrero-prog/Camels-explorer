@@ -1,0 +1,39 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as ArrowOverlayStories from './ArrowOverlay.stories';
+
+<Meta of={ArrowOverlayStories} />
+
+# ArrowOverlay
+
+The toolbar's Arrow tool (added 2026-08-06, no Figma design - requested directly: "the ability to add an arrow at any length"). Two clicks (start, then end) draw a straight arrow of arbitrary length/direction. Distinct from Annotate: an arrow points AT something without necessarily saying anything about it - no text, no callout.
+
+## Token
+
+- `--color-accent-gradient-end` — the line/arrowhead color
+
+## Spec
+
+<Canvas of={ArrowOverlayStories.Playground} />
+<Controls />
+
+An absolutely-positioned SVG spanning the whole chart area, one `<line>` per real arrow with a `<marker>` arrowhead. Coordinates are set directly on the SVG elements as percentages (`x1="30%"`, not a `viewBox` + transform) - straight lines stay straight under independent x/y-axis percentage scaling, and this avoids needing the chart area's actual pixel size at render/draw time. Clicking a drawn arrow deletes it (no separate delete button/handle, since the line itself is the only real hit target). `draftA` (the first click, awaiting the second) renders as a small dot - real visible feedback that the start point registered before the arrow itself exists.
+
+`AwaitingSecondClick` shows that in-between state directly, without needing an actual first click in the docs canvas.
+
+## Usecase
+
+- Rendered by `App.tsx`'s `renderAnnotationOverlay(tile)` alongside `AnnotationOverlay`/`NoteOverlay`/`LinkedBrushOverlay` for the same tile - all four share one `annotationOverlay` slot on `PlotTile`.
+- Only wired when Arrow mode is on (`App.tsx`'s `arrowMode`, part of the shared `activeTool` state - only one click-driven tool owns the next chart click at a time).
+- `PlotTile`'s `onChartClick` routes both the first and second click through `App.tsx`'s `handleChartAreaClick`, which holds the pending start point (`arrowDraftA`) as a single global value (only one tile can be mid-arrow at once).
+
+## Code
+
+```tsx
+import { ArrowOverlay } from '@/components/ArrowOverlay/ArrowOverlay';
+
+<ArrowOverlay
+  arrows={arrowsByTile[tile.id] ?? []}
+  onDelete={(id) => removeArrow(tile.id, id)}
+  draftA={arrowDraftA?.tileId === tile.id ? arrowDraftA : null}
+/>
+```

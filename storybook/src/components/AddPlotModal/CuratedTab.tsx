@@ -1,16 +1,14 @@
 import { useEffect, useState } from 'react';
 import { SelectField } from '../SelectField/SelectField';
-import { NumberStepper } from '../NumberStepper/NumberStepper';
+import { SingleRealizationFields } from '../SingleRealizationFields/SingleRealizationFields';
+import type { Catalog } from '../../lib/useCatalogMetadata';
 
 export type CuratedSelection = {
   suite: string;
   set: string;
-  realization: number;
+  realization: number | string;
   statistic: string;
 };
-
-type CatalogSet = { name: string; label: string; realizations: number; description: string };
-type Catalog = { suites: string[]; sets: CatalogSet[]; statistics: string[] };
 
 // Dev-only, matches api/main.py's own CORS allowlist comment - revisit
 // before any real deployment/packaging (see desktop.py's eventual rewrite).
@@ -23,7 +21,15 @@ export type CuratedTabProps = {
 
 /** The real, wired tab - Suite/Set/Realization/Statistic options are
  * fetched live from GET /api/metadata (backed directly by backend.py's own
- * SUITES/SET_REALIZATIONS/STATISTICS constants), not hardcoded here. */
+ * SUITES/SET_REALIZATIONS/STATISTICS constants), not hardcoded here.
+ *
+ * Suite/Set/Realization itself is `SingleRealizationFields` (2026-08-05) -
+ * this tab used to hand-roll its own copy of that block against a smaller
+ * local `Catalog` type that didn't know about SB's per-suite realization
+ * count or 1P's parameter+variation naming, so picking either here (before
+ * a tile even existed) produced a realization no real fetch could resolve.
+ * Reusing the shared component - which already handles both - fixes that
+ * and means a future third special-cased set only needs fixing once. */
 export function CuratedTab({ selection, onChange }: CuratedTabProps) {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [error, setError] = useState(false);
@@ -67,31 +73,15 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
     return <p className="curated-tab__loading">Loading real suite/set/statistic data…</p>;
   }
 
-  const activeSet = catalog.sets.find((s) => s.name === selection.set) ?? catalog.sets[0];
-
   return (
     <>
-      <SelectField
-        label="Suite"
-        value={selection.suite}
-        options={catalog.suites}
-        onChange={(suite) => onChange({ ...selection, suite })}
-      />
-      <SelectField
-        label="Set"
-        value={activeSet.label}
-        options={catalog.sets.map((s) => s.label)}
-        onChange={(label) => {
-          const next = catalog.sets.find((s) => s.label === label)!;
-          onChange({ ...selection, set: next.name, realization: 0 });
-        }}
-        caption={`${activeSet.realizations.toLocaleString()} realizations, ${activeSet.description.split(': ')[1] ?? activeSet.description}`}
-      />
-      <NumberStepper
-        label="Realization"
-        value={selection.realization}
-        onChange={(realization) => onChange({ ...selection, realization })}
-        caption={`0–${activeSet.realizations - 1}`}
+      <SingleRealizationFields
+        catalog={catalog}
+        value={{ suite: selection.suite, setName: selection.set, realization: selection.realization }}
+        onChange={(v) => onChange({ ...selection, suite: v.suite, set: v.setName, realization: v.realization })}
+        allowedSuites={catalog.statistic_suites[selection.statistic]}
+        allowedSets={catalog.statistic_sets[selection.statistic]}
+        hideRealizationValueControls
       />
       <SelectField
         label="Statistic"

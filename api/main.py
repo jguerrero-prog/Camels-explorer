@@ -10,7 +10,7 @@ Run from the repo root (not from api/) so `import backend` resolves:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routers import catalogs, fields, halos, metadata, statistics
+from api.routers import catalogs, custom, fields, halos, metadata, statistics
 
 app = FastAPI(title="CAMELS Explorer API", version="0.1.0")
 
@@ -33,6 +33,7 @@ app.include_router(catalogs.router, prefix="/api")
 app.include_router(fields.router, prefix="/api")
 app.include_router(halos.router, prefix="/api")
 app.include_router(metadata.router, prefix="/api")
+app.include_router(custom.router, prefix="/api")
 
 
 @app.get("/api/health")

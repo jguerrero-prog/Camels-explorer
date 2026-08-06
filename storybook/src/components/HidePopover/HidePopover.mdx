@@ -1,0 +1,66 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as HidePopoverStories from './HidePopover.stories';
+
+<Meta of={HidePopoverStories} />
+
+# HidePopover
+
+Real (added 2026-08-06, direct user feedback: *"I want us to create a hide feature on the toolbar. This hide feature gives users the ability to hide annotations, arrows, notes, or the paramreadouts... could apply across the whole canvas, or per panel"*). Opens below the toolbar's new "Hide" (eye-slash) button, same anchor pattern as `RatioDiffPopover`/`CopyAsCodePopover`.
+
+## Token
+
+- `--color-surface-popover` — card background
+- `--color-border-subtle` — card border, pointer, checkbox divider
+- `--font-label` (Lato) — title, checkbox labels, caption
+
+## Spec
+
+<Canvas of={HidePopoverStories.Default} />
+<Controls />
+
+- Same pointer/card shell as `CopyAsCodePopover` (260px wide, narrower — no code block to fit). Header: "Hide" title + `×` close.
+- `Radio` control ("This panel" / "All panels") picks the scope; below it, 4 `Checkbox` rows (Annotations, Arrows, Notes, Param readouts).
+- When scope is "This panel" and no tile is focused, every checkbox disables and a caption explains why — matches `CopyAsCodePopover`'s own honest "click a tile first" gap rather than a click that silently does nothing.
+
+<Canvas of={HidePopoverStories.SomeHiddenAllPanels} />
+<Canvas of={HidePopoverStories.PanelScopeNoTileFocused} />
+<Canvas of={HidePopoverStories.PanelScopeWithTileFocused} />
+
+## Usecase
+
+**Real, deliberate model — hiding is a snapshot action, not a live filter** (see `UI_REFINEMENTS_EPIC.md` ticket #3 for the full decision record):
+
+- Checking **Annotations** (at whichever scope) calls `onToggle('annotations', true)`, which App.tsx turns into stamping `hidden: true` on every `Annotation` that exists *right now* in that scope (`AnnotationOverlay.tsx`'s own `hidden?: boolean` field) — not a `Set<'annotations'>` checked live at render time. An annotation created afterward, while the box is still checked, starts visible regardless — it wasn't there to be stamped. It only becomes hidden the next time the box goes unchecked→checked again. Same rule for **Arrows** (`ArrowShape.hidden`) and **Notes** (`NoteShape.hidden`).
+- **Param readouts are the one exception** — a tile has no per-item array to stamp, and no "creation moment" distinct from its own readout. So that checkbox is a genuinely *live* gate (`PlotTile`'s `readoutsHidden` prop, computed fresh on every render from `hidePerPanel[tileId]?.readouts ?? hideAllPanels.readouts`) — a brand-new tile added while readouts are globally hidden inherits that immediately, with no fresh-item exemption.
+- This component doesn't know which of the two models is behind a given checkbox — both read/write through the same `values`/`onToggle` shape. The distinction lives entirely in App.tsx's `handleHideToggle`.
+- **Scope independence**: "All panels" and "This panel" track *separate* checkbox state (`hideAllPanels` vs. `hidePerPanel[focusedTileId]`) — switching the `Radio` swaps which one this popover shows, it doesn't merge or reset either.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { HidePopover } from '@/components/HidePopover/HidePopover';
+import type { HideCategory, HideScope, HideValues } from '@/components/HidePopover/HidePopover';
+
+function HideToolUsage({
+  hideAllPanels, hidePerPanel, focusedTileId, onToggle,
+}: {
+  hideAllPanels: HideValues;
+  hidePerPanel: Record<string, HideValues>;
+  focusedTileId: string | null;
+  onToggle: (scope: HideScope, category: HideCategory, value: boolean) => void;
+}) {
+  const [scope, setScope] = useState<HideScope>('all');
+  const values = scope === 'all' ? hideAllPanels : (hidePerPanel[focusedTileId ?? ''] ?? { annotations: false, arrows: false, notes: false, readouts: false });
+  return (
+    <HidePopover
+      scope={scope}
+      onScopeChange={setScope}
+      values={values}
+      onToggle={(category, value) => onToggle(scope, category, value)}
+      panelDisabled={scope === 'panel' && !focusedTileId}
+      onClose={() => {}}
+    />
+  );
+}
+```

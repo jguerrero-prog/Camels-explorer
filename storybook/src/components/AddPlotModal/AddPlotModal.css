@@ -96,24 +96,81 @@
   background: linear-gradient(to right, var(--color-accent-gradient-start), var(--color-accent-gradient-end));
 }
 
+/* Real fix (2026-08-05, direct user feedback): keeps the modal's overall
+   footprint identical whether Curated or Custom is active. `.add-plot-
+   modal__fields` used to only have a `max-height` (via the outer dialog's
+   own `calc(100vh - 64px)` cap), so it still grew to fit Custom's longer
+   content (base pickers + N filter values + the tree) - a real, visible
+   height difference vs Curated's much shorter form. `260px` is Curated's
+   own natural, settled rendered height at a normal desktop viewport -
+   measured directly (Playwright, `el.style.height = 'auto'` after the
+   modal's async Suite/Set/Statistic defaults finish loading, confirmed
+   identical across all 15 real statistics since Curated's field set
+   never grows past its 3 dropdowns regardless of which is picked) - not
+   the ~362px an earlier, unsettled measurement produced. Custom's content
+   now scrolls inside that same fixed height instead of stretching the
+   dialog. `min-height: 0` on both the wrap and the fields area preserves
+   the original shrink behavior on a short viewport (where `.add-plot-
+   modal`'s own `max-height` bites). */
+.add-plot-modal__fields-wrap {
+  position: relative;
+  min-height: 0;
+}
+
 .add-plot-modal__fields {
   display: flex;
   flex-direction: column;
   gap: 18px;
   padding: 22px 24px;
   overflow-y: auto;
+  height: 260px;
   min-height: 0;
+  box-sizing: content-box;
+}
+
+/* Bottom "more below" cue - only rendered (AddPlotModal.tsx) while the
+   fields area is actually scrolled short of its end, so it's absent for
+   Curated's own short form and any short Custom selection. Matches
+   `.add-plot-modal`'s own background (--color-surface-content), not
+   ParamsSidebar's --color-surface-chrome - this is the dialog's fade, not
+   a sidebar's. A late-stop gradient (65% rather than 100%) so the fade
+   reads as an actual dissolve of the last partial row rather than a
+   sharp clip with a faint tint on top of it. */
+.add-plot-modal__fields-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48px;
+  background: linear-gradient(to bottom, transparent 0%, var(--color-surface-content) 65%);
+  border-radius: 0 0 16px 16px;
+  pointer-events: none;
 }
 
 .add-plot-modal__footer {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 10px;
   padding: 16px 24px;
   flex-shrink: 0;
 }
 
+/* Real (2026-08-06 heuristic pass) - a one-line, muted reason the confirm
+   button is disabled, same tone/weight as this modal's own field-level
+   captions (see AddPlotModal.mdx/CustomTab's ".custom-tab__caption").
+   `margin-right: auto` pushes it to the footer's leading edge, opposite
+   the Cancel/Add Plot buttons this row already right-aligns. */
+.add-plot-modal__footer-hint {
+  margin: 0 auto 0 0;
+  font-family: var(--font-label);
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
 .add-plot-modal__btn-cancel {
+  flex-shrink: 0;
+  white-space: nowrap;
   padding: 10px 18px;
   border: 1px solid var(--color-border-subtle);
   border-radius: 10px;
@@ -126,6 +183,8 @@
 }
 
 .add-plot-modal__btn-confirm {
+  flex-shrink: 0;
+  white-space: nowrap;
   padding: 10px 18px;
   border: none;
   border-radius: 10px;

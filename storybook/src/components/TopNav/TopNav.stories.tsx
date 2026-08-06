@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { TopNav } from './TopNav';
 import { Toolbar } from '../Toolbar/Toolbar';
 import type { ViewMode } from '../Toolbar/Toolbar';
+import { LoadingIndicator } from '../LoadingIndicator/LoadingIndicator';
 
 const meta: Meta<typeof TopNav> = {
   title: 'Sections/TopNav',
@@ -37,4 +38,13 @@ function WithToolbarDemo() {
 
 export const WithToolbar: Story = {
   render: () => <WithToolbarDemo />,
+};
+
+/** Real usage: LoadingIndicator (added 2026-08-05) renders in its own flex
+ * group with Add Plot, immediately to its left, regardless of whether
+ * `toolbar` is present - see LoadingIndicator.mdx. */
+export const WithLoadingIndicator: Story = {
+  args: {
+    loadingIndicator: <LoadingIndicator onStop={() => {}} />,
+  },
 };

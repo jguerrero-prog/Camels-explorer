@@ -14,9 +14,14 @@ export type TopNavProps = {
    * frame shows breadcrumbs/toolbar/Add Plot in one row, not two. Omit
    * entirely (not just hide) when no plot exists yet - see TopNav.mdx. */
   toolbar?: ReactNode;
+  /** LoadingIndicator, added 2026-08-05 on direct request ("perhaps on the
+   * right of the top nav, left of the Add plot button") - rendered in its
+   * own flex group with the Add Plot button so it always sits immediately
+   * to its left regardless of whether `toolbar` is present. */
+  loadingIndicator?: ReactNode;
 };
 
-export function TopNav({ folderName, projectName, onAddPlot, toolbar }: TopNavProps) {
+export function TopNav({ folderName, projectName, onAddPlot, toolbar, loadingIndicator }: TopNavProps) {
   return (
     <header className="top-nav">
       <div className="top-nav__path">
@@ -25,10 +30,13 @@ export function TopNav({ folderName, projectName, onAddPlot, toolbar }: TopNavPr
         <span className="top-nav__path-segment top-nav__path-segment--current">{projectName}</span>
       </div>
       {toolbar}
-      <button type="button" className="top-nav__add-plot" onClick={onAddPlot}>
-        <img src={plusIcon} alt="" />
-        Add Plot
-      </button>
+      <div className="top-nav__actions">
+        {loadingIndicator}
+        <button type="button" className="top-nav__add-plot" onClick={onAddPlot}>
+          <img src={plusIcon} alt="" />
+          Add Plot
+        </button>
+      </div>
     </header>
   );
 }

@@ -4,13 +4,13 @@ dataclass). Every param here mirrors the matching backend.py function's
 real signature 1:1 - no renaming, no reordering, no invented defaults.
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 
 import backend as B
-from api.deps import require
+from api.deps import require, resolved_set_name
 from api.serialization import to_jsonable
 
 router = APIRouter(tags=["statistics"])
@@ -18,7 +18,7 @@ router = APIRouter(tags=["statistics"])
 
 @router.get("/power-spectrum")
 def power_spectrum(
-    suite: str, set_name: str, realization: int, snapnum: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str, snapnum: int,
     grid: int, MAS: str, threads: int,
     ptype: list[int] = Query([0, 1, 4]),
     snapshot_path: Optional[str] = None,
@@ -27,20 +27,20 @@ def power_spectrum(
     rsd_axis: Optional[int] = None,
     multipole: str = "P0",
 ):
-    result = B.get_power_spectrum(
+    result = require(B.get_power_spectrum(
         suite, set_name, realization, snapnum, grid, MAS, threads, ptype,
         snapshot_path=snapshot_path, fetch_public=fetch_public,
         k_range=k_range, rsd_axis=rsd_axis, multipole=multipole,
-    )
+    ))
     return to_jsonable(result)
 
 
 @router.get("/power-spectrum/plot.png")
 def power_spectrum_plot(
-    suite: str, set_name: str, snapnum: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], snapnum: int,
     grid: int, MAS: str, threads: int,
     ptype: list[int] = Query([0, 1, 4]),
-    realizations: list[int] = Query(...),
+    realizations: list[str] = Query(...),
     fetch_public: bool = False,
     k_range: str = "standard",
     rsd_axis: Optional[int] = None,
@@ -50,123 +50,123 @@ def power_spectrum_plot(
     """Static matplotlib render - see stellar_mass_function_plot's docstring
     (same shared rendering path, backend.py's _render_result_png), plus the
     real linear-theory-Pk dashed overlay app.py's own checkbox draws."""
-    png = B.render_power_spectrum_png(
+    png = require(B.render_power_spectrum_png(
         suite, set_name, realizations, snapnum, grid, MAS, threads, ptype,
         fetch_public=fetch_public, k_range=k_range, rsd_axis=rsd_axis,
         multipole=multipole, show_linear_pk=show_linear_pk,
-    )
+    ))
     return Response(content=png, media_type="image/png")
 
 
 @router.get("/halo-mass-function")
 def halo_mass_function(
-    suite: str, set_name: str, realization: int, snapnum: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str, snapnum: int,
     RMmin: float, RMmax: float, bins: int,
     subfind_path: Optional[str] = None,
     fetch_public: bool = False,
 ):
-    result = B.get_halo_mass_function(
+    result = require(B.get_halo_mass_function(
         suite, set_name, realization, snapnum, RMmin, RMmax, bins,
         subfind_path=subfind_path, fetch_public=fetch_public,
-    )
+    ))
     return to_jsonable(result)
 
 
 @router.get("/stellar-mass-function")
 def stellar_mass_function(
-    suite: str, set_name: str, realization: int, snapnum: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str, snapnum: int,
     SMmin: float, SMmax: float, bins: int,
     subfind_path: Optional[str] = None,
     fetch_public: bool = False,
 ):
-    result = B.get_stellar_mass_function(
+    result = require(B.get_stellar_mass_function(
         suite, set_name, realization, snapnum, SMmin, SMmax, bins,
         subfind_path=subfind_path, fetch_public=fetch_public,
-    )
+    ))
     return to_jsonable(result)
 
 
 @router.get("/stellar-mass-function/plot.png")
 def stellar_mass_function_plot(
-    suite: str, set_name: str, snapnum: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], snapnum: int,
     SMmin: float, SMmax: float, bins: int,
-    realizations: list[int] = Query(...),
+    realizations: list[str] = Query(...),
     fetch_public: bool = False,
 ):
     """Static matplotlib render - the *default* way this statistic is shown
     (matches app.py's own plotting block; see render_stellar_mass_function_png's
     docstring). The frontend's interactive Plotly chart is the opt-in
     alternative built from the same /stellar-mass-function JSON data."""
-    png = B.render_stellar_mass_function_png(
+    png = require(B.render_stellar_mass_function_png(
         suite, set_name, realizations, snapnum, SMmin, SMmax, bins,
         fetch_public=fetch_public,
-    )
+    ))
     return Response(content=png, media_type="image/png")
 
 
 @router.get("/halo-mass-function/plot.png")
 def halo_mass_function_plot(
-    suite: str, set_name: str, snapnum: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], snapnum: int,
     RMmin: float, RMmax: float, bins: int,
-    realizations: list[int] = Query(...),
+    realizations: list[str] = Query(...),
     fetch_public: bool = False,
 ):
     """Static matplotlib render - see stellar_mass_function_plot's docstring
     (same shared rendering path, backend.py's _render_mass_range_png)."""
-    png = B.render_halo_mass_function_png(
+    png = require(B.render_halo_mass_function_png(
         suite, set_name, realizations, snapnum, RMmin, RMmax, bins,
         fetch_public=fetch_public,
-    )
+    ))
     return Response(content=png, media_type="image/png")
 
 
 @router.get("/baryon-fraction")
 def baryon_fraction(
-    suite: str, set_name: str, realization: int, snapnum: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str, snapnum: int,
     RMmin: float, RMmax: float, bins: int,
     subfind_path: Optional[str] = None,
     fetch_public: bool = False,
 ):
-    result = B.get_baryon_fraction(
+    result = require(B.get_baryon_fraction(
         suite, set_name, realization, snapnum, RMmin, RMmax, bins,
         subfind_path=subfind_path, fetch_public=fetch_public,
-    )
+    ))
     return to_jsonable(result)
 
 
 @router.get("/baryon-fraction/plot.png")
 def baryon_fraction_plot(
-    suite: str, set_name: str, snapnum: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], snapnum: int,
     RMmin: float, RMmax: float, bins: int,
-    realizations: list[int] = Query(...),
+    realizations: list[str] = Query(...),
     fetch_public: bool = False,
 ):
     """Static matplotlib render - see stellar_mass_function_plot's docstring
     (same shared rendering path, backend.py's _render_mass_range_png)."""
-    png = B.render_baryon_fraction_png(
+    png = require(B.render_baryon_fraction_png(
         suite, set_name, realizations, snapnum, RMmin, RMmax, bins,
         fetch_public=fetch_public,
-    )
+    ))
     return Response(content=png, media_type="image/png")
 
 
 @router.get("/sfr-history")
 def sfr_history(
-    suite: str, set_name: str, realization: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int,
     z_min: float, z_max: float, bins: int,
     sfrh_path: Optional[str] = None,
     fetch_public: bool = False,
 ):
-    result = B.get_sfr_history(
+    result = require(B.get_sfr_history(
         suite, set_name, realization, z_min, z_max, bins,
         sfrh_path=sfrh_path, fetch_public=fetch_public,
-    )
+    ))
     return to_jsonable(result)
 
 
 @router.get("/sfr-history/plot.png")
 def sfr_history_plot(
-    suite: str, set_name: str,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)],
     z_min: float, z_max: float, bins: int,
     realizations: list[int] = Query(...),
     fetch_public: bool = False,
@@ -179,47 +179,47 @@ def sfr_history_plot(
     """Static matplotlib render - see stellar_mass_function_plot's docstring
     (same shared rendering path, backend.py's _render_result_png), plus the
     real symbolic-regression-fit dashed overlay app.py's own checkbox draws."""
-    png = B.render_sfr_history_png(
+    png = require(B.render_sfr_history_png(
         suite, set_name, realizations, z_min, z_max, bins,
         fetch_public=fetch_public, show_symbolic_fit=show_symbolic_fit,
         Om=Om, s8=s8, A1=A1, A3=A3,
-    )
+    ))
     return Response(content=png, media_type="image/png")
 
 
 @router.get("/scaling-relations")
 def scaling_relations(
-    suite: str, set_name: str, realization: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str,
     SMmin: float, SMmax: float, bins: int,
     snapnum: int = 33,
     fetch_public: bool = False,
 ):
-    result = B.get_scaling_relations(
+    result = require(B.get_scaling_relations(
         suite, set_name, realization, SMmin, SMmax, bins,
         snapnum=snapnum, fetch_public=fetch_public,
-    )
+    ))
     return to_jsonable(result)
 
 
 @router.get("/scaling-relations/plot.png")
 def scaling_relations_plot(
-    suite: str, set_name: str, realization: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str,
     SMmin: float, SMmax: float, bins: int,
     snapnum: int = 33,
     fetch_public: bool = False,
 ):
     """Static matplotlib render (2x2 panel + conditional metallicity row) -
     always has a value (real or synthetic fallback, like the JSON endpoint)."""
-    png = B.render_scaling_relations_png(
+    png = require(B.render_scaling_relations_png(
         suite, set_name, realization, SMmin, SMmax, bins,
         snapnum=snapnum, fetch_public=fetch_public,
-    )
+    ))
     return Response(content=png, media_type="image/png")
 
 
 @router.get("/bispectrum")
 def bispectrum(
-    suite: str, set_name: str, realization: int, field: str,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, field: str,
     mu_index: int = 7,
     fetch_public: bool = False,
 ):
@@ -232,18 +232,17 @@ def bispectrum(
 
 @router.get("/bispectrum/plot.png")
 def bispectrum_plot(
-    suite: str, set_name: str, field: str,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], field: str,
     mu_index: int = 7,
     realizations: list[int] = Query(...),
     fetch_public: bool = False,
 ):
     """Static matplotlib render - see stellar_mass_function_plot's
     docstring (same shared rendering path, backend.py's
-    _render_result_png). No synthetic fallback (matches the JSON endpoint)
-    - a 500 here means none of the selected realizations have real data."""
-    png = B.render_bispectrum_png(
+    _render_result_png). No synthetic fallback (matches the JSON endpoint)."""
+    png = require(B.render_bispectrum_png(
         suite, set_name, realizations, field, mu_index=mu_index, fetch_public=fetch_public,
-    )
+    ))
     return Response(content=png, media_type="image/png")
 
 
@@ -273,7 +272,7 @@ def field_pdf_plot(
 
 @router.get("/lyman-alpha-spectrum")
 def lyman_alpha_spectrum(
-    suite: str, set_name: str, realization: int, snapnum: int, sightline: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, snapnum: int, sightline: int,
     fetch_public: bool = False,
 ):
     result = require(B.get_lya_spectrum(
@@ -284,7 +283,7 @@ def lyman_alpha_spectrum(
 
 @router.get("/lyman-alpha-spectrum/plot.png")
 def lyman_alpha_spectrum_plot(
-    suite: str, set_name: str, realization: int, snapnum: int, sightline: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, snapnum: int, sightline: int,
     fetch_public: bool = False,
 ):
     """Static matplotlib render (2-row shared-x: flux + column density) -
@@ -296,7 +295,7 @@ def lyman_alpha_spectrum_plot(
 
 
 @router.get("/linear-pk-ics")
-def linear_pk_ics(suite: str, set_name: str, realization: int):
+def linear_pk_ics(suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str):
     result = require(B.get_linear_pk_ics(suite, set_name, realization))
     k, pk = result
     return {"k": to_jsonable(k), "pk": to_jsonable(pk)}

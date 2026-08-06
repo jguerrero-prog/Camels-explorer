@@ -23,6 +23,7 @@ export function IconRail({ activePanel, onSelectPanel }: IconRailProps) {
         onClick={() => onSelectPanel(activePanel === 'project' ? null : 'project')}
         aria-pressed={activePanel === 'project'}
         aria-label="Project"
+        title="Project"
       >
         <img src={projectIcon} alt="" />
       </button>
@@ -32,10 +33,11 @@ export function IconRail({ activePanel, onSelectPanel }: IconRailProps) {
         onClick={() => onSelectPanel(activePanel === 'files' ? null : 'files')}
         aria-pressed={activePanel === 'files'}
         aria-label="Files"
+        title="Files"
       >
         <img src={filesIcon} alt="" />
       </button>
-      <button type="button" className="icon-rail__button" aria-label="Settings">
+      <button type="button" className="icon-rail__button" aria-label="Settings" title="Settings">
         <img src={settingsIcon} alt="" />
       </button>
     </nav>

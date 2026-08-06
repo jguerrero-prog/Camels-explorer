@@ -1,0 +1,71 @@
+/* Shell matches CopyAsCodePopover's own pointer/card language - see that
+   file's docs for why (Toolbar only supplies the anchor position, not the
+   pointer). */
+.hide-popover {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 260px;
+  padding: 12px;
+  background: var(--color-surface-popover);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 12px;
+  box-shadow: 0px 6px 8px rgba(0, 0, 0, 0.2), 0px 18px 20px rgba(0, 0, 0, 0.4);
+}
+
+.hide-popover__pointer {
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  width: 14px;
+  height: 14px;
+  background: var(--color-surface-popover);
+  border-top: 1px solid var(--color-border-subtle);
+  border-left: 1px solid var(--color-border-subtle);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.hide-popover__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hide-popover__title {
+  margin: 0;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.hide-popover__close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: var(--color-surface-content);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.hide-popover__caption {
+  margin: -4px 0 0;
+  font-family: var(--font-label);
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.hide-popover__checkboxes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-border-subtle);
+}

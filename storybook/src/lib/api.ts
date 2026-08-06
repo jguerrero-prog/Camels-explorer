@@ -24,13 +24,13 @@ export async function fetchMassRangeResult(
   params: {
     suite: string;
     setName: string;
-    realization: number;
+    realization: number | string;
     snapnum: number;
     min: number;
     max: number;
     bins: number;
   },
-): Promise<Result> {
+): Promise<Result | null> {
   const qs = new URLSearchParams({
     suite: params.suite,
     set_name: params.setName,
@@ -42,6 +42,7 @@ export async function fetchMassRangeResult(
   qs.set(config.minParam, String(params.min));
   qs.set(config.maxParam, String(params.max));
   const res = await fetch(`${API_BASE}/${config.endpoint}?${qs}`);
+  if (res.status === 404) return null; // real gap: no data for this suite/set/realization
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -57,7 +58,7 @@ export function massRangeImageUrl(
   params: {
     suite: string;
     setName: string;
-    realizations: number[];
+    realizations: (number | string)[];
     snapnum: number;
     min: number;
     max: number;
@@ -79,7 +80,7 @@ export function massRangeImageUrl(
 export async function fetchPowerSpectrum(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   grid: number;
   MAS: string;
@@ -88,7 +89,7 @@ export async function fetchPowerSpectrum(params: {
   kRange: 'standard' | 'allk';
   rsdAxis: number | null;
   multipole: string;
-}): Promise<Result> {
+}): Promise<Result | null> {
   const qs = new URLSearchParams({
     suite: params.suite,
     set_name: params.setName,
@@ -104,6 +105,7 @@ export async function fetchPowerSpectrum(params: {
   for (const p of params.ptype) qs.append('ptype', String(p));
   if (params.rsdAxis !== null) qs.set('rsd_axis', String(params.rsdAxis));
   const res = await fetch(`${API_BASE}/power-spectrum?${qs}`);
+  if (res.status === 404) return null; // real gap: no data for this suite/set/realization
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -111,7 +113,7 @@ export async function fetchPowerSpectrum(params: {
 export function powerSpectrumImageUrl(params: {
   suite: string;
   setName: string;
-  realizations: number[];
+  realizations: (number | string)[];
   snapnum: number;
   grid: number;
   MAS: string;
@@ -142,7 +144,7 @@ export function powerSpectrumImageUrl(params: {
 export async function fetchBispectrum(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   field: string;
   muIndex: number;
 }): Promise<Result | null> {
@@ -163,7 +165,7 @@ export async function fetchBispectrum(params: {
 export function bispectrumImageUrl(params: {
   suite: string;
   setName: string;
-  realizations: number[];
+  realizations: (number | string)[];
   field: string;
   muIndex: number;
 }): string {
@@ -180,11 +182,11 @@ export function bispectrumImageUrl(params: {
 export async function fetchSFRHistory(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   zMin: number;
   zMax: number;
   bins: number;
-}): Promise<Result> {
+}): Promise<Result | null> {
   const qs = new URLSearchParams({
     suite: params.suite,
     set_name: params.setName,
@@ -195,6 +197,7 @@ export async function fetchSFRHistory(params: {
     fetch_public: 'true',
   });
   const res = await fetch(`${API_BASE}/sfr-history?${qs}`);
+  if (res.status === 404) return null; // real gap: no data for this suite/set/realization
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -202,7 +205,7 @@ export async function fetchSFRHistory(params: {
 export function sfrHistoryImageUrl(params: {
   suite: string;
   setName: string;
-  realizations: number[];
+  realizations: (number | string)[];
   zMin: number;
   zMax: number;
   bins: number;
@@ -241,7 +244,7 @@ export type XrayProfilesMeta = { note: string; nHalos: number };
 export async function fetchXrayProfilesMeta(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
 }): Promise<XrayProfilesMeta | null> {
   const qs = new URLSearchParams({
     suite: params.suite, set_name: params.setName, realization: String(params.realization),
@@ -254,7 +257,7 @@ export async function fetchXrayProfilesMeta(params: {
   return { note: data.note, nHalos: data.log_mass.length };
 }
 
-export function xrayProfilesImageUrl(params: { suite: string; setName: string; realization: number }): string {
+export function xrayProfilesImageUrl(params: { suite: string; setName: string; realization: number | string }): string {
   const qs = new URLSearchParams({
     suite: params.suite, set_name: params.setName, realization: String(params.realization),
     fetch_public: 'true',
@@ -267,7 +270,7 @@ export type HaloProfilesMeta = { note: string; nHalos: number };
 export async function fetchHaloProfilesMeta(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   field: string;
 }): Promise<HaloProfilesMeta | null> {
@@ -285,7 +288,7 @@ export async function fetchHaloProfilesMeta(params: {
 export function haloProfilesImageUrl(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   field: string;
   highlightRank: number;
@@ -303,7 +306,7 @@ export type ColorMassDiagramMeta = { note: string; nGalaxies: number };
 export async function fetchColorMassDiagramMeta(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   band1: string;
   band2: string;
@@ -325,7 +328,7 @@ export async function fetchColorMassDiagramMeta(params: {
 export function colorMassDiagramImageUrl(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   band1: string;
   band2: string;
@@ -372,7 +375,7 @@ export type LymanAlphaSpectrumMeta = { note: string };
 export async function fetchLymanAlphaSpectrumMeta(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   sightline: number;
 }): Promise<LymanAlphaSpectrumMeta | null> {
@@ -390,7 +393,7 @@ export async function fetchLymanAlphaSpectrumMeta(params: {
 export function lymanAlphaSpectrumImageUrl(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   sightline: number;
 }): string {
@@ -416,7 +419,7 @@ export type HaloCatalog = {
 export async function fetchHaloCatalog(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
 }): Promise<HaloCatalog> {
   const qs = new URLSearchParams({
@@ -427,6 +430,7 @@ export async function fetchHaloCatalog(params: {
     fetch_public: 'true',
   });
   const res = await fetch(`${API_BASE}/halo-catalog?${qs}`);
+  if (res.status === 404) return null; // real gap: no halo catalog for this suite/set/realization
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -452,18 +456,19 @@ export type ScalingRelationsMeta = { note: string; source: string };
 export async function fetchScalingRelationsMeta(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   SMmin: number;
   SMmax: number;
   bins: number;
   snapnum: number;
-}): Promise<ScalingRelationsMeta> {
+}): Promise<ScalingRelationsMeta | null> {
   const qs = new URLSearchParams({
     suite: params.suite, set_name: params.setName, realization: String(params.realization),
     SMmin: String(params.SMmin), SMmax: String(params.SMmax), bins: String(params.bins),
     snapnum: String(params.snapnum), fetch_public: 'true',
   });
   const res = await fetch(`${API_BASE}/scaling-relations?${qs}`);
+  if (res.status === 404) return null; // real gap: no data for this suite/set/realization
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   return { note: data.note, source: data.source };
@@ -472,7 +477,7 @@ export async function fetchScalingRelationsMeta(params: {
 export function scalingRelationsImageUrl(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   SMmin: number;
   SMmax: number;
   bins: number;
@@ -491,14 +496,15 @@ export type FieldMap2DMeta = { note: string; source: string };
 export async function fetchFieldMap2DMeta(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   field: string;
-}): Promise<FieldMap2DMeta> {
+}): Promise<FieldMap2DMeta | null> {
   const qs = new URLSearchParams({
     suite: params.suite, set_name: params.setName, realization: String(params.realization),
     field: params.field, fetch_public: 'true',
   });
   const res = await fetch(`${API_BASE}/field-map-2d?${qs}`);
+  if (res.status === 404) return null; // real gap: no data for this suite/set/realization
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   return { note: data.note, source: data.source };
@@ -507,7 +513,7 @@ export async function fetchFieldMap2DMeta(params: {
 export function fieldMap2DImageUrl(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   field: string;
 }): string {
   const qs = new URLSearchParams({
@@ -527,17 +533,18 @@ export type DensityField3D = {
 export async function fetchDensityField3D(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   snapnum: number;
   grid: number;
   field: string;
-}): Promise<DensityField3D> {
+}): Promise<DensityField3D | null> {
   const qs = new URLSearchParams({
     suite: params.suite, set_name: params.setName, realization: String(params.realization),
     snapnum: String(params.snapnum), grid: String(params.grid), field: params.field,
     fetch_public: 'true',
   });
   const res = await fetch(`${API_BASE}/density-field-3d?${qs}`);
+  if (res.status === 404) return null; // real gap: no data for this suite/set/realization
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -555,14 +562,18 @@ export type VoidCatalog = {
 export async function fetchVoidCatalog(params: {
   suite: string;
   setName: string;
-  realization: number;
-}): Promise<VoidCatalog> {
+  realization: number | string;
+}): Promise<VoidCatalog | null> {
   const qs = new URLSearchParams({
     suite: params.suite, set_name: params.setName, realization: String(params.realization),
     fetch_public: 'true',
   });
   const res = await fetch(`${API_BASE}/void-catalog?${qs}`);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  // The API deliberately returns 200 + a literal `null` body (not a 404)
+  // when there are no real voids for this selection - void catalog is an
+  // optional overlay, not the tile's main content (see api/routers/
+  // fields.py's void_catalog docstring). `null` propagates here as-is.
   return res.json();
 }
 
@@ -576,16 +587,190 @@ export type ParticleCloud = {
 export async function fetchParticleCloud(params: {
   suite: string;
   setName: string;
-  realization: number;
+  realization: number | string;
   maxParticles: number;
   snapnum: number;
-}): Promise<ParticleCloud> {
+}): Promise<ParticleCloud | null> {
   const qs = new URLSearchParams({
     suite: params.suite, set_name: params.setName, realization: String(params.realization),
     max_particles: String(params.maxParticles), snapnum: String(params.snapnum),
     fetch_public: 'true',
   });
   const res = await fetch(`${API_BASE}/particle-cloud?${qs}`);
+  if (res.status === 404) return null; // real gap: no data for this suite/set/realization
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+// Custom tab (added 2026-08-05): real, live, cross-realization queries
+// against Flatiron's own public FlatHUB API, proxied through
+// api/routers/custom.py - genuinely different from every fetch above,
+// which is always scoped to one suite/set/realization's own files. These
+// three endpoints query the whole ~2.9B-row ensemble at once.
+
+export type CustomFieldStats = {
+  count?: number;
+  min?: number;
+  max?: number;
+  avg?: number;
+  /** Only present for enum fields (simulation_suite/simulation_set/type) -
+   * real per-value counts, not used for slider bounds. */
+  terms?: { value: number | boolean; count: number }[];
+  others?: number;
+};
+
+export type CustomField = {
+  name: string;
+  title: string;
+  descr?: string;
+  type: string;
+  dtype: string;
+  units?: string;
+  enum?: string[];
+  required?: boolean;
+  stats?: CustomFieldStats;
+};
+
+/** Real fetch for GET /api/custom/fields - every queryable field for the
+ * live FlatHUB catalog, with real min/max/avg stats where available.
+ * Powers CustomTab/CustomSidebar's field pickers and slider bounds -
+ * nothing here is invented (see api/routers/custom.py's own docstring). */
+export async function fetchCustomFields(): Promise<CustomField[]> {
+  const res = await fetch(`${API_BASE}/custom/fields`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+/** Real, un-flattened field metadata (GET /api/custom/field-tree) - the
+ * same fields `fetchCustomFields` returns, but with FlatHUB's own real
+ * nesting preserved (`sub`) instead of flattened to leaf-only. A node with
+ * `sub` is a browsable group (params, Group, Subhalo, and nested groups
+ * like Group_CM/Group_MassType within them); a node without `sub` is a
+ * real, addable leaf field - its `name` is already the fully-qualified
+ * leaf name (`Group_CM_x`, `params_Omega_m`, etc.), not re-prefixed
+ * client-side. Powers CustomFilterTree's "+ Add" browsing UI - a flat
+ * list can't represent that a field belongs to a group without inventing
+ * grouping logic the live schema already gives for free. */
+export type CustomFieldTreeNode = {
+  name: string;
+  title: string;
+  descr?: string;
+  units?: string;
+  stats?: CustomFieldStats;
+  sub?: CustomFieldTreeNode[];
+};
+
+export async function fetchCustomFieldTree(): Promise<CustomFieldTreeNode[]> {
+  const res = await fetch(`${API_BASE}/custom/field-tree`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+/** A field the user has added as a filter (see CustomFilterTree) only
+ * actually constrains a query once a real min/max has been set away from
+ * the field's full live-stats range - matching the field-tree's own
+ * "Nothing is pre-selected" behavior. That real value-setting only
+ * happens in CustomSidebar (see CustomFilterValues) - so a field can be
+ * "added" (present in CustomSelection.activeFilterFields) with no entry
+ * here at all, meaning unconstrained/full-range, not yet "enabled". */
+export type CustomParamRange = { min: number; max: number };
+
+/** The filterable subset of CustomSelection (see CustomFieldsForm.tsx) -
+ * shared between the row-count preview and the real Scatterplot data
+ * fetch so both build the exact same filters object from the exact same
+ * fields, and between CustomTab (creation) and CustomSidebar
+ * (post-creation edit). */
+export type CustomFilterSelection = {
+  type: string;
+  suite: string;
+  set: string;
+  paramFilters: Record<string, CustomParamRange>;
+};
+
+export type CustomFilters = Record<string, string | { gte: number; lte: number }>;
+
+/** Real field name -> value/range, exactly the shape GET /api/custom/count
+ * and /custom/data both take. A field is omitted entirely (not just set to
+ * its full stats range) whenever it's unconstrained - "Any" suite/set, or
+ * a field that's been added to the Filters tree but never actually had a
+ * range dragged in CustomFilterValues (no `paramFilters` entry at all) -
+ * confirmed live: omitting entirely is a legal "no filter" (both endpoints
+ * 200 with the full ~2.9B-row count when filters={}), and it sidesteps
+ * float32 stats bounds (e.g. Omega_m's real min is 0.10000000149011612)
+ * silently clipping edge rows a naive "gte: stats.min" would introduce. */
+export function buildCustomFilters(selection: CustomFilterSelection): CustomFilters {
+  const filters: CustomFilters = {};
+  if (selection.type) filters.type = selection.type;
+  if (selection.suite) filters.simulation_suite = selection.suite;
+  if (selection.set) filters.simulation_set = selection.set;
+  for (const [field, range] of Object.entries(selection.paramFilters)) {
+    filters[field] = { gte: range.min, lte: range.max };
+  }
+  return filters;
+}
+
+/** Real row count matching `filters` - FlatHUB's own UI shows this same
+ * "Filtered to N out of 2,927,443,277 total rows" preview, so a user isn't
+ * surprised by how many rows a filter combination matches before adding
+ * the tile. Real 502 (not 404) on a live FlatHUB query failure - see
+ * api/routers/custom.py's custom_count - propagated as a thrown Error,
+ * not a `null`, since there's no "this selection legitimately has zero
+ * data" case here the way there is for per-realization file fetches. */
+export async function fetchCustomCount(filters: CustomFilters): Promise<number> {
+  const qs = new URLSearchParams({ filters: JSON.stringify(filters) });
+  const res = await fetch(`${API_BASE}/custom/count?${qs}`);
+  if (!res.ok) throw new Error(`Row-count query failed: HTTP ${res.status}`);
+  return res.json();
+}
+
+/** Real matching rows (only the requested fields, only for rows where
+ * they're present - see api/routers/custom.py's custom_data docstring).
+ * Powers Scatterplot - raw rows, not pre-binned buckets. */
+export async function fetchCustomData(
+  fields: string[],
+  filters: CustomFilters,
+  limit = 2000,
+): Promise<Record<string, number>[]> {
+  const qs = new URLSearchParams({
+    fields: fields.join(','),
+    filters: JSON.stringify(filters),
+    limit: String(limit),
+  });
+  const res = await fetch(`${API_BASE}/custom/data?${qs}`);
+  if (!res.ok) throw new Error(`Row-data query failed: HTTP ${res.status}`);
+  return res.json();
+}
+
+/** One real bucketing request field - matches api/routers/custom.py's
+ * `custom_histogram`/FlatHUB's own HistogramField schema exactly. */
+export type CustomHistogramField = { field: string; size: number; log: boolean };
+
+/** One real bucket - `key` has one entry per requested `fields` (one for
+ * Histogram, two for Heatmap: [xEdge, yEdge]). `quartiles`, when the
+ * `/histogram` request included a `quartiles` field name, is that field's
+ * real [min, q1, median, q3, max] five-number summary for rows falling in
+ * this bucket - confirmed directly against a live response, not assumed
+ * from docs (see this file's own dev notes / Table 1 row 91's box-plot
+ * scoping). */
+export type CustomHistogramBucket = { key: number[]; count: number; quartiles?: number[] };
+
+export type CustomHistogramResponse = { sizes: number[]; buckets: CustomHistogramBucket[] };
+
+/** Real pre-binned data - powers Histogram (one field), Heatmap (two
+ * fields - FlatHUB's histogram natively supports N-D binning), and Box
+ * Plot (one bucketing field + `quartiles` naming the field to summarize)
+ * - see api/routers/custom.py's custom_histogram docstring. */
+export async function fetchCustomHistogram(
+  fields: CustomHistogramField[],
+  filters: CustomFilters,
+  quartiles?: string,
+): Promise<CustomHistogramResponse> {
+  const qs = new URLSearchParams({
+    fields: JSON.stringify(fields),
+    filters: JSON.stringify(filters),
+  });
+  if (quartiles) qs.set('quartiles', quartiles);
+  const res = await fetch(`${API_BASE}/custom/histogram?${qs}`);
+  if (!res.ok) throw new Error(`Histogram query failed: HTTP ${res.status}`);
   return res.json();
 }

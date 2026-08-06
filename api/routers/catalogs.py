@@ -4,10 +4,12 @@ per-halo mass-accretion histories traced through them.
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
 
 import backend as B
-from api.deps import require
+from api.deps import require, resolved_set_name
 from api.serialization import to_jsonable
 
 router = APIRouter(tags=["catalogs"])
@@ -15,7 +17,7 @@ router = APIRouter(tags=["catalogs"])
 
 @router.get("/halo-catalog")
 def halo_catalog(
-    suite: str, set_name: str, realization: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str,
     snapnum: int = 33,
     fetch_public: bool = False,
 ):
@@ -25,7 +27,7 @@ def halo_catalog(
 
 @router.get("/halo-catalog/alt")
 def alt_halo_catalog(
-    finder: str, suite: str, set_name: str, realization: int,
+    finder: str, suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int,
     snapnum: int = 33,
     fetch_public: bool = False,
 ):
@@ -36,14 +38,14 @@ def alt_halo_catalog(
 
 
 @router.get("/sam-catalog")
-def sam_catalog(set_name: str, realization: int, fetch_public: bool = False):
+def sam_catalog(set_name: Annotated[str, Depends(resolved_set_name)], realization: int, fetch_public: bool = False):
     result = require(B.get_sam_catalog(set_name, realization, fetch_public=fetch_public))
     return to_jsonable(result)
 
 
 @router.get("/cross-finder-hmf")
 def cross_finder_hmf(
-    suite: str, set_name: str, realization: int, snapnum: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, snapnum: int,
     mass_min: float, mass_max: float, bins: int,
     fetch_public: bool = False,
 ):
@@ -56,7 +58,7 @@ def cross_finder_hmf(
 
 @router.get("/merger-history")
 def merger_history(
-    suite: str, set_name: str, realization: int, subfind_id: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, subfind_id: int,
     root_snapnum: int = 33,
     variant: str = "SubLink",
     fetch_public: bool = False,
@@ -70,7 +72,7 @@ def merger_history(
 
 @router.get("/consistent-trees-history")
 def consistent_trees_history(
-    suite: str, set_name: str, realization: int, halo_id: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, halo_id: int,
     fetch_public: bool = False,
 ):
     result = require(B.get_consistent_trees_history(

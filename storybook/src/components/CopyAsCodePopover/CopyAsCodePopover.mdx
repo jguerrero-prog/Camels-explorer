@@ -1,0 +1,39 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as CopyAsCodePopoverStories from './CopyAsCodePopover.stories';
+
+<Meta of={CopyAsCodePopoverStories} />
+
+# CopyAsCodePopover
+
+The toolbar's "Copy as code" tool (Figma node `1076-10`'s "plot-code-modal") - anchored below the toolbar button by `Toolbar`'s own `.toolbar__popover-anchor` (see `Toolbar.mdx`), not by this component. `code` is real, runnable Python against `backend.py`'s actual function signatures (`App.tsx`'s `generateTileCode`) - deliberately NOT the aspirational `camels_viz` API shown in the original Figma copy, which doesn't exist anywhere in this codebase.
+
+## Token
+
+- `--color-surface-popover` — the popover's own dark surface
+- `--color-syntax-keyword` / `--color-syntax-string` / `--color-syntax-number` / `--color-syntax-comment` — the code block's own syntax highlighting (see below)
+- `--color-success` — the transient "Copied" confirmation text
+
+## Spec
+
+<Canvas of={CopyAsCodePopoverStories.Playground} />
+<Controls />
+
+A small header ("Plot Code" + Copy/Close icon buttons) above a `<pre>` code block in JetBrains Mono. Real, narrowly-scoped syntax highlighting (added 2026-08-06, `lib/highlightPython.ts`) - a small regex tokenizer for exactly the fixed subset of Python `generateTileCode` emits (comments, single-quoted strings, numbers, `True`/`False`/`None`/`import`/`as`), not a general-purpose highlighting library pulled in for one code block. Clicking the copy icon copies the real, unstyled `code` string to the clipboard and shows a 1.5s "Copied" confirmation - the highlighting is purely a display concern, never part of what's copied.
+
+The `CustomTileCode` story shows the Custom tile's own different code shape (`flathub_client` instead of `backend`, plus a real `#`-comment line for an unconstrained filter field) - confirms the tokenizer handles both of `generateTileCode`'s real branches, not just the common one.
+
+## Usecase
+
+- Rendered by `App.tsx` inside `Toolbar`'s `copyAsCodePopover` prop, only while the popover is open for the currently-focused tile.
+- `code` comes from `generateTileCode(tile)` - `null` for a tile kind with no real backend.py call templated yet, in which case `App.tsx` doesn't render this popover at all rather than showing an empty code block.
+
+## Code
+
+```tsx
+import { CopyAsCodePopover } from '@/components/CopyAsCodePopover/CopyAsCodePopover';
+
+<CopyAsCodePopover
+  code={generateTileCode(focusedTile)}
+  onClose={() => setCopyAsCodeOpen(false)}
+/>
+```

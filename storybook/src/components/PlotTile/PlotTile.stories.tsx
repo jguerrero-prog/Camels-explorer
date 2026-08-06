@@ -56,6 +56,57 @@ export const SingleRealization: Story = {
   },
 };
 
+// Real (Toolbar's Hide feature, added 2026-08-06) - same args as
+// SingleRealization, but with readoutsHidden set. Unlike TableMode below,
+// this is a genuinely live prop (see PlotTile.tsx's own docs on the
+// readouts exception to the snapshot-stamp Hide model) - the chart stays,
+// only the readout row disappears.
+export const ReadoutsHidden: Story = {
+  args: {
+    title: 'Stellar Mass Function',
+    chart: {
+      series: [{ label: 'LH_278', ...decliningCurve(1) }],
+      xLabel: 'Stellar mass [Msun/h]',
+      yLabel: 'dn/dlogM [(Mpc/h)^-3]',
+      imageUrl: `${IMAGE_BASE}&realizations=0`,
+    },
+    readoutGroups: [
+      { label: 'Suite / Set', value: 'IllustrisTNG · LH' },
+      { label: 'Realizations (compare)', value: '278' },
+      { label: 'Stellar mass range', value: '1e9 – 5e11' },
+      { label: 'Bins', value: '10' },
+    ],
+    halos: { rows: SAMPLE_ROWS },
+    readoutsHidden: true,
+  },
+};
+
+// Real fix (2026-08-06, direct user feedback): open the mode dropdown next
+// to the title and pick "Table" - the chart/readout swap out entirely for
+// UnderlyingHalos at the tile's full body height, rather than the table
+// living as a collapsible section stacked below the chart (the old
+// behavior, which competed with the chart for space in a grid cell). This
+// story starts on "Static" like SingleRealization - the dropdown itself is
+// the thing to interact with here, not a separate args combination.
+export const TableMode: Story = {
+  args: {
+    title: 'Stellar Mass Function',
+    chart: {
+      series: [{ label: 'LH_278', ...decliningCurve(1) }],
+      xLabel: 'Stellar mass [Msun/h]',
+      yLabel: 'dn/dlogM [(Mpc/h)^-3]',
+      imageUrl: `${IMAGE_BASE}&realizations=0`,
+    },
+    readoutGroups: [
+      { label: 'Suite / Set', value: 'IllustrisTNG · LH' },
+      { label: 'Realizations (compare)', value: '278' },
+      { label: 'Stellar mass range', value: '1e9 – 5e11' },
+      { label: 'Bins', value: '10' },
+    ],
+    halos: { rows: SAMPLE_ROWS },
+  },
+};
+
 // Real usage: X-ray Halo Profiles/Halo Gas Profiles and 5 other statistics
 // (added 2026-08-05) - app.py renders these exclusively via st.pyplot(),
 // no Plotly equivalent, so chart.kind is 'static-image' (StaticImageChart,

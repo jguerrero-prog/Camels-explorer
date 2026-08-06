@@ -9,7 +9,7 @@ export type BispectrumParams = {
   suite: string;
   setName: string;
   compareMode: boolean;
-  realizations: number[];
+  realizations: (number | string)[];
   field: string;
   /** Index into GET /api/metadata's bispectrum.mu_values - matches
    * get_bispectrum's own real `mu_index` param directly (not the mu value
@@ -43,8 +43,14 @@ export function BispectrumSidebar({ params, onChange, onRemove }: BispectrumSide
   const currentMu = muValues[params.muIndex] ?? muValues[equilateralIndex];
 
   return (
-    <ParamsSidebar title="Bispectrum">
-      <RealizationFields catalog={catalog} value={params} onChange={(v) => onChange({ ...params, ...v })} />
+    <ParamsSidebar title="Bispectrum" footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
+      <RealizationFields
+        catalog={catalog}
+        value={params}
+        onChange={(v) => onChange({ ...params, ...v })}
+        allowedSuites={catalog?.statistic_suites['Bispectrum']}
+        allowedSets={catalog?.statistic_sets['Bispectrum']}
+      />
       <SelectField
         label="Field"
         value={params.field}
@@ -60,7 +66,6 @@ export function BispectrumSidebar({ params, onChange, onRemove }: BispectrumSide
           `${mu > 0 ? '+' : ''}${mu.toFixed(1)}${muValues.indexOf(mu) === equilateralIndex ? ' (equilateral)' : ''}`
         }
       />
-      <Button variant="secondary" onClick={onRemove}>Remove plot</Button>
     </ParamsSidebar>
   );
 }

@@ -5,7 +5,7 @@ import * as IconRailStories from './IconRail.stories';
 
 # IconRail
 
-The leftmost 76px column of the app shell — the persistent left sidebar from the "Skeleton" frame (Figma "Denario" file, node `1113:1583`). Three icon buttons plus a placeholder avatar; no logo wired here yet (see Spec).
+The leftmost 48px column of the app shell — the persistent left sidebar from the "Skeleton" frame (Figma "Denario" file, node `1113:1583`). Three icon buttons plus a placeholder avatar; no logo wired here yet (see Spec).
 
 ## Token
 
@@ -18,9 +18,9 @@ The leftmost 76px column of the app shell — the persistent left sidebar from t
 <Canvas of={IconRailStories.Playground} />
 <Controls />
 
-- Width: 76px, full height, background `--color-surface-chrome`, 1px right border `--color-border`.
-- Top slot: a 44px circular placeholder avatar — **not the CAMELS logo**. The Figma frame did ship a real logo image here, but per direct instruction this component deliberately does not wire it in; it's an empty avatar until that's revisited.
-- Three 44×44 buttons (rounded 12px), each holding a 20×20 icon: Project, Files, Settings — matching `STUDIO_PLAN.md`'s "Left icon rail: Project and Files panels" section.
+- Width: 48px (real fix, 2026-08-06 — down from 76px on direct user feedback, avatar/buttons scaled down to match so nothing chokes in the narrower column), full height, background `--color-surface-chrome`, 1px right border `--color-border`.
+- Top slot: a 32px circular placeholder avatar — **not the CAMELS logo**. The Figma frame did ship a real logo image here, but per direct instruction this component deliberately does not wire it in; it's an empty avatar until that's revisited.
+- Three 32×32 buttons (rounded 9px), each holding a 16×16 icon: Project, Files, Settings — matching `STUDIO_PLAN.md`'s "Left icon rail: Project and Files panels" section.
 
 **Real bug fixed 2026-08-04:** `.icon-rail` set `height: 100%` and `padding: 16px 0 24px` but never `box-sizing: border-box` — the default `content-box` sizing added the padding on top of the already-100%-tall content box, rendering 40px taller than the viewport (900px viewport → 940px rendered). Since `.app-shell` itself has no `overflow: hidden`, that overflow extended the whole page's scroll height, revealing the page's default white background below the app shell — reported as "extra white space at the bottom of the canvas." Every other sized component in this codebase already sets `box-sizing: border-box`; this one had simply been missed.
 

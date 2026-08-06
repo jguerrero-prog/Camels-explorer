@@ -11,7 +11,7 @@ export type SFRHistoryParams = {
   suite: string;
   setName: string;
   compareMode: boolean;
-  realizations: number[];
+  realizations: (number | string)[];
   zMin: number;
   zMax: number;
   bins: number;
@@ -48,8 +48,13 @@ export function SFRHistorySidebar({ params, onChange, onRemove }: SFRHistorySide
   const a3Range = model?.a3_range ?? FALLBACK_A3_RANGE;
 
   return (
-    <ParamsSidebar title="SFR History">
-      <RealizationFields catalog={catalog} value={params} onChange={(v) => onChange({ ...params, ...v })} />
+    <ParamsSidebar title="SFR History" footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
+      <RealizationFields
+        catalog={catalog}
+        value={params}
+        onChange={(v) => onChange({ ...params, ...v })}
+        allowedSuites={catalog?.statistic_suites['SFR History']}
+      />
       <NumberStepper
         label="z min"
         value={params.zMin}
@@ -85,6 +90,7 @@ export function SFRHistorySidebar({ params, onChange, onRemove }: SFRHistorySide
             label="Ωm"
             min={omRange[0]}
             max={omRange[1]}
+            step={0.01}
             value={params.Om}
             onChange={(Om) => onChange({ ...params, Om })}
             formatValue={(v) => v.toFixed(2)}
@@ -93,6 +99,7 @@ export function SFRHistorySidebar({ params, onChange, onRemove }: SFRHistorySide
             label="σ8"
             min={s8Range[0]}
             max={s8Range[1]}
+            step={0.01}
             value={params.s8}
             onChange={(s8) => onChange({ ...params, s8 })}
             formatValue={(v) => v.toFixed(2)}
@@ -101,6 +108,7 @@ export function SFRHistorySidebar({ params, onChange, onRemove }: SFRHistorySide
             label="A_SN1 (galactic wind energy)"
             min={a1Range[0]}
             max={a1Range[1]}
+            step={0.01}
             value={params.A1}
             onChange={(A1) => onChange({ ...params, A1 })}
             formatValue={(v) => v.toFixed(2)}
@@ -109,14 +117,13 @@ export function SFRHistorySidebar({ params, onChange, onRemove }: SFRHistorySide
             label="A_AGN1 (BH feedback energy)"
             min={a3Range[0]}
             max={a3Range[1]}
+            step={0.01}
             value={params.A3}
             onChange={(A3) => onChange({ ...params, A3 })}
             formatValue={(v) => v.toFixed(2)}
           />
         </>
       )}
-
-      <Button variant="secondary" onClick={onRemove}>Remove plot</Button>
     </ParamsSidebar>
   );
 }

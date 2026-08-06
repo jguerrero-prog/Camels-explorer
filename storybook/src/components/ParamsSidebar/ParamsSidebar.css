@@ -1,13 +1,27 @@
+/* Real fix (2026-08-06, direct user feedback): horizontal padding used to
+   live on this outer element, which put the scroll area's own native
+   scrollbar flush against field controls with zero gap - "the scroll
+   vertical line appears very close to the params." Moved the horizontal
+   inset down to `__header`/`__footer`/`__scroll` individually (see each
+   below) so the scroll track can sit in its own gutter at the panel's
+   true right edge instead. */
 .params-sidebar {
   width: 280px;
   height: 100%;
   background: var(--color-surface-chrome);
   border-right: 1px solid var(--color-border);
-  padding: 24px 20px;
+  padding: 24px 0;
   display: flex;
   flex-direction: column;
   gap: 18px;
   box-sizing: border-box;
+}
+
+.params-sidebar__header {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 0 20px;
 }
 
 .params-sidebar__title {
@@ -22,4 +36,73 @@
   width: 100%;
   height: 1px;
   background: var(--color-border);
+}
+
+.params-sidebar__footer {
+  padding: 0 20px;
+}
+
+/* Real fix (2026-08-06) - see ParamsSidebar.tsx's own docs. `flex: 1 1
+   auto` lets this take the panel's remaining height below the title/
+   divider, above `footer`, which sits outside as this component's own
+   direct child so it never scrolls out of view; `min-height: 0` overrides
+   the default `min-height: auto` a flex item gets, which would otherwise
+   block it shrinking below its content and keep `overflow-y: auto` on the
+   child from ever engaging. */
+.params-sidebar__scroll-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Real fix (2026-08-06, direct user feedback): `padding-right` reserves a
+   real gutter between field content and the scroll track, which a native
+   scrollbar renders at the far edge of - the box's true corner, not flush
+   against whatever control happens to reach the panel's own right edge.
+   `padding-left` matches `__header`/`__footer`'s own 20px inset so field
+   content still lines up with the title above it. */
+.params-sidebar__scroll {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 0 8px 0 20px;
+}
+
+/* Thin, low-weight scrollbar - same real precedent as SelectField's own
+   dropdown list scrollbar (see SelectField.css), narrower and more muted
+   here since "reduce the weight of it" was the explicit ask; this scrolls
+   a much taller region much more often than a single dropdown does. */
+.params-sidebar__scroll::-webkit-scrollbar {
+  width: 5px;
+}
+
+.params-sidebar__scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.params-sidebar__scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-border-subtle) 70%, transparent);
+  border-radius: 3px;
+}
+
+.params-sidebar__scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-border-subtle);
+}
+
+/* Bottom "more below" cue - only rendered while the content is actually
+   scrolled short of its end (ParamsSidebar.tsx). Matches this panel's own
+   background (--color-surface-chrome) so it reads as a fade into the
+   sidebar's real surface, not a mismatched patch. A late-stop gradient
+   (65% rather than 100%) so the last partial row visibly dissolves
+   instead of just being sliced off with a faint tint on top. */
+.params-sidebar__fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 48px;
+  background: linear-gradient(to bottom, transparent 0%, var(--color-surface-chrome) 65%);
+  pointer-events: none;
 }

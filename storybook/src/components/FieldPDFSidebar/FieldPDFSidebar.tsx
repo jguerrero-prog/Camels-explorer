@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ParamsSidebar } from '../ParamsSidebar/ParamsSidebar';
 import { SelectField } from '../SelectField/SelectField';
 import { OptionSlider } from '../OptionSlider/OptionSlider';
@@ -36,13 +37,25 @@ export function FieldPDFSidebar({ params, onChange, onRemove }: FieldPDFSidebarP
   const redshifts = catalog?.pdf_redshifts ?? FALLBACK_REDSHIFTS;
   const fieldLabels = fields.map((f) => `${f.key} - ${f.label}`);
   const currentFieldLabel = fields.find((f) => f.key === params.field);
+  const allowedSuites = catalog?.statistic_suites['Field PDF'];
+  const suiteOptions = (catalog?.suites ?? [params.suite]).filter((s) => !allowedSuites || allowedSuites.includes(s));
+
+  // Auto-correct: only relevant if CuratedTab ever seeds an initial suite
+  // that isn't real for Field PDF specifically - see RealizationFields'
+  // own comment for the full reasoning.
+  useEffect(() => {
+    if (allowedSuites && suiteOptions.length > 0 && !suiteOptions.includes(params.suite)) {
+      onChange({ ...params, suite: suiteOptions[0] });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allowedSuites, params.suite]);
 
   return (
-    <ParamsSidebar title="Field PDF">
+    <ParamsSidebar title="Field PDF" footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
       <SelectField
         label="Suite"
         value={params.suite}
-        options={catalog?.suites ?? [params.suite]}
+        options={suiteOptions}
         onChange={(suite) => onChange({ ...params, suite })}
       />
       <SelectField
@@ -64,7 +77,6 @@ export function FieldPDFSidebar({ params, onChange, onRemove }: FieldPDFSidebarP
         onChange={(redshift) => onChange({ ...params, redshift })}
         formatValue={(z) => z.toFixed(2)}
       />
-      <Button variant="secondary" onClick={onRemove}>Remove plot</Button>
     </ParamsSidebar>
   );
 }

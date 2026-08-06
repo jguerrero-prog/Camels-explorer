@@ -1,0 +1,42 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as CustomAggregateChartStories from './CustomAggregateChart.stories';
+
+<Meta of={CustomAggregateChartStories} />
+
+# CustomAggregateChart
+
+Real FlatHUB-backed rendering (added 2026-08-06) for the Custom tab's 3 non-scatter chart types: Histogram, Heatmap, and Box Plot. Powers the same live `/custom/histogram` endpoint Scatterplot's `fetchCustomData` sibling doesn't use - see `lib/api.ts`'s `fetchCustomHistogram`.
+
+## Token
+
+Shares `PlotChart`'s own light-surface styling (imports `PlotChart.css` directly) rather than `Plotly3DChart`'s dark scene theme, since this sits in the same white chart card as Scatterplot, not a volumetric 3D view:
+- transparent paper/plot background, `#1A1A1A` text, `#E5E5E5` gridlines (hardcoded, matching `PlotChart.tsx`'s own precedent for its guaranteed-white surface)
+
+## Spec
+
+<Canvas of={CustomAggregateChartStories.Histogram} />
+<Canvas of={CustomAggregateChartStories.Heatmap} />
+<Canvas of={CustomAggregateChartStories.BoxPlot} />
+<Controls />
+
+Three real, distinct Plotly trace types for three real, distinct bucket shapes:
+- **Histogram** — a `bar` trace, one bucket → one bar.
+- **Heatmap** — a `heatmap` trace. The API returns a flat `[{x, y, count}]` bucket list, not a grid - this component reshapes it into Plotly's z-matrix-of-rows shape (unique sorted x's as columns, unique sorted y's as rows) client-side.
+- **Box Plot** — a `box` trace using Plotly's own "precomputed quartiles" mode (`q1`/`median`/`q3`/`lowerfence`/`upperfence` arrays, `boxpoints: false`) - FlatHUB's `quartiles` response is already a real 5-number summary per bucket, so this never re-derives statistics from raw points.
+
+All three plot the exact buckets `/custom/histogram` returned - no client-side re-binning.
+
+## Usecase
+
+- Rendered by `App.tsx`'s Custom tile branch, inside `PlotTile`'s `kind: 'plotly-3d'` escape hatch (an opaque pre-built `ReactNode`, despite the name - the same slot `DensityFieldChart`/`ParticleCloudChart` use, reused here for a 2D chart since `PlotTileChart`'s `kind: 'plotly'` branch only knows `PlotChart`'s own single-trace-type shape).
+- `data` comes from `App.tsx`'s `loadCustomHistogramTile`/`loadCustomHeatmapTile`/`loadCustomBoxplotTile`, branching on `CustomSelection.chartType` - see `CustomTileState`'s own `CustomResult` discriminated union.
+
+## Code
+
+```tsx
+import { CustomAggregateChart } from '@/components/CustomAggregateChart/CustomAggregateChart';
+
+<CustomAggregateChart
+  data={{ kind: 'histogram', xLabel: result.xLabel, logX: selection.logX, buckets: result.buckets }}
+/>
+```

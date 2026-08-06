@@ -26,6 +26,18 @@
   background: var(--color-border-subtle);
 }
 
+.toolbar__tool-wrap {
+  position: relative;
+}
+
+.toolbar__popover-anchor {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+}
+
 .toolbar__divider {
   width: 1px;
   height: 20px;

@@ -3,26 +3,26 @@ as backend.py's own doc comments on each of these) - X-ray/gas profiles and
 the photometric color-mass diagram.
 """
 
-from typing import Optional
+from typing import Annotated, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import Response
 
 import backend as B
-from api.deps import require
+from api.deps import require, resolved_set_name
 from api.serialization import to_jsonable
 
 router = APIRouter(tags=["halos"])
 
 
 @router.get("/xray-profiles")
-def xray_profiles(suite: str, set_name: str, realization: int, fetch_public: bool = False):
+def xray_profiles(suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, fetch_public: bool = False):
     result = require(B.get_xray_profiles(suite, set_name, realization, fetch_public=fetch_public))
     return to_jsonable(result)
 
 
 @router.get("/xray-profiles/plot.png")
-def xray_profiles_plot(suite: str, set_name: str, realization: int, fetch_public: bool = False):
+def xray_profiles_plot(suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, fetch_public: bool = False):
     """Static matplotlib render (viridis-by-mass multi-line + colorbar) -
     real-data only, no Plotly equivalent (matches app.py's own st.pyplot-
     only rendering for this statistic)."""
@@ -32,7 +32,7 @@ def xray_profiles_plot(suite: str, set_name: str, realization: int, fetch_public
 
 @router.get("/halo-profiles")
 def halo_profiles(
-    suite: str, set_name: str, realization: int, snapnum: int, field: str,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, snapnum: int, field: str,
     fetch_public: bool = False,
 ):
     result = require(B.get_halo_profiles(
@@ -43,7 +43,7 @@ def halo_profiles(
 
 @router.get("/halo-profiles/plot.png")
 def halo_profiles_plot(
-    suite: str, set_name: str, realization: int, snapnum: int, field: str,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, snapnum: int, field: str,
     highlight_rank: int = 1,
     fetch_public: bool = False,
 ):
@@ -59,7 +59,7 @@ def halo_profiles_plot(
 
 @router.get("/color-mass-diagram")
 def color_mass_diagram(
-    suite: str, set_name: str, realization: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str,
     color: Optional[str] = None,
     band1: Optional[str] = None,
     band2: Optional[str] = None,
@@ -78,7 +78,7 @@ def color_mass_diagram(
 
 @router.get("/color-mass-diagram/plot.png")
 def color_mass_diagram_plot(
-    suite: str, set_name: str, realization: int,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str,
     band1: Optional[str] = None,
     band2: Optional[str] = None,
     snapnum: int = 33,

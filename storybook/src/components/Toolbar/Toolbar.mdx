@@ -9,7 +9,7 @@ The tool row that sits in the header between the folder/project name and "Add Pl
 
 ## Token
 
-- `--color-border-subtle` — the divider between the tool group and the AI agent icon, and the active-tool background tint
+- `--color-border-subtle` — the active-tool background tint
 - `--color-surface-toggle` / `--color-surface-toggle-active` — the grid/stacked view-mode toggle's own background and its selected option
 
 ## Spec
@@ -17,12 +17,13 @@ The tool row that sits in the header between the folder/project name and "Add Pl
 <Canvas of={ToolbarStories.Playground} />
 <Controls />
 
-Left to right: **Annotate → Ratio/diff → Ruler → Linked brushing → Copy provenance → Copy as code** (six 36×36 tools, 18×18 icons, 8px radius) → a 1px divider → **AI agent** → an 8px spacer → a grid/stacked **view-mode toggle** (32×32 options inside a padded, rounded container). Every real name matches a toolbar candidate already listed in `STUDIO_PLAN.md`'s "Adding tiles" section almost exactly — this frame is that list, built.
+Left to right: **Annotate → Arrow → Note → Hide → Ratio/diff → Ruler → Linked brushing → Copy provenance → Copy as code** (nine 36×36 tools, 18×18 icons, 8px radius) → an 8px spacer → a grid/stacked **view-mode toggle** (32×32 options inside a padded, rounded container).
 
-**This is skeleton-level, not a working toolbar:**
-- Every tool prop (`onAnnotate`, `onRatioDiff`, etc.) is optional and does nothing by default — none of these seven tools have real behavior wired yet. This component is the real, named slots, not the features themselves.
-- Only `viewMode`/`onViewModeChange` are functional — the one piece this pass actually needed, since it drives `Viewer`.
-- The real `tool-ratio-diff` icon in Figma has small chevron overlays baked into its own SVG (no separate button chrome around it, unlike its five siblings). This component simplifies it to the same plain icon-button treatment as the others — a deliberate skeleton-level simplification, not a missed detail.
+**Real addition (2026-08-06, direct user feedback): Hide.** Opens a popover (`HidePopover.mdx`) with 4 checkboxes - Annotations, Arrows, Notes, Param readouts - plus a This-panel/All-panels scope switch. Same `toolbar__tool-wrap`/`toolbar__popover-anchor` pattern as Ratio/diff and Copy as code (a real popover tool, not a toggle-mode one - no `hideActive` prop, the button's own look never changes).
+
+**Real fix (2026-08-06, direct user feedback): the AI agent icon was removed.** It was a named-but-unwired skeleton slot from the very first pass of this component and never gained real behavior - rather than continue carrying a permanently-inert button (and the divider that only existed to separate it from the real tools), both were deleted outright. Every remaining tool listed above is fully wired to real behavior in `App.tsx` - this is no longer a skeleton-level component.
+
+- The real `tool-ratio-diff` icon in Figma had small chevron overlays baked into its own SVG - simplified to the same plain icon-button treatment as its siblings (a deliberate choice, not a missed detail), then further reworked 2026-08-06 (removed the chevron, adjusted the glyph's own scale) after direct feedback that it read visibly smaller than the rest of the row.
 
 ## Usecase
 

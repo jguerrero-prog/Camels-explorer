@@ -50,8 +50,20 @@ body,
    --color-surface-canvas). Set explicitly rather than relying on an
    inherited fallback that happened to look wrong. */
 .app-shell__canvas {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: hidden;
   background: var(--color-surface-canvas);
+}
+
+/* Copy provenance's toast (Toast.mdx) - anchored to the canvas rather
+   than any specific tile, since it's a confirmation of an action just
+   taken (clipboard write), not a per-tile annotation. */
+.app-shell__toast-anchor {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
 }

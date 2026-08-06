@@ -1,0 +1,47 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as NoteOverlayStories from './NoteOverlay.stories';
+
+<Meta of={NoteOverlayStories} />
+
+# NoteOverlay
+
+The toolbar's Note tool (added 2026-08-06, no Figma design - requested directly: "the ability to add a note, different from annotation"). A free-floating, draggable text note dropped with one click. Deliberately distinct from Annotate: no anchor pin/dot (a note isn't tied to one precise data point) and no author/timestamp callout - just text on the canvas.
+
+## Token
+
+- `--color-note-surface` (`--brand-deep-crimson`) — the card's own flat fill
+- `--color-note-border` (`--brand-crimson-red`) — a one-step-brighter edge in the same red family, purely for a crisp flat-card outline, not for contrast
+- `--color-note-text` (`--color-text-emphasis`) — white, verified 9.3:1 contrast against the surface (WCAG AAA)
+
+## Spec
+
+<Canvas of={NoteOverlayStories.Playground} />
+<Controls />
+
+**Real fix (2026-08-06, direct user feedback):** the original card was a translucent warm-amber wash over the canvas, which failed WCAG contrast - a translucent fill's real contrast depends on whatever sits behind it, unreliable by construction. Now a flat, fully OPAQUE cardinal-red card with white text - a real index card a researcher could screenshot straight into a presentation slide, not a floating glassmorphic panel. Contrast verified via the standard relative-luminance formula: white-on-`#8B1A1A` = 9.3:1, comfortably clearing WCAG AAA's 7:1 bar, not just AA's 4.5:1.
+
+A drag handle sits along the top edge (mousedown+drag repositions the note - a free note has no "correct" location the way a pinned annotation does); the delete `×` sits in the same row. Clicking the text switches to an editable `<textarea>` with Save; `draft` (a just-placed, not-yet-saved note) renders the same editable state with no delete button yet, since there's nothing real to delete.
+
+`OnWhiteChartCard` is the primary reference view here - the exact real-world context (a white Plotly chart card) this redesign was built to read cleanly against.
+
+## Usecase
+
+- Rendered by `App.tsx`'s `renderAnnotationOverlay(tile)` alongside `AnnotationOverlay`/`ArrowOverlay`/`LinkedBrushOverlay`.
+- Only wired when Note mode is on (`App.tsx`'s `noteMode`, part of the shared `activeTool` state).
+- Dragging reads/writes fractional (`xFrac`/`yFrac`) coordinates against the tile's own `.plot-tile__chart-area` bounding box - the same coordinate space every other click-placed overlay in this app uses, so a note stays correctly placed regardless of how large the tile renders.
+
+## Code
+
+```tsx
+import { NoteOverlay } from '@/components/NoteOverlay/NoteOverlay';
+
+<NoteOverlay
+  notes={notesByTile[tile.id] ?? []}
+  onSaveText={(id, text) => saveNoteText(tile.id, id, text)}
+  onDelete={(id) => removeNote(tile.id, id)}
+  onMove={(id, xFrac, yFrac) => moveNote(tile.id, id, xFrac, yFrac)}
+  draft={noteDraft?.tileId === tile.id ? noteDraft : null}
+  onSaveDraft={(text) => saveNoteDraft(tile.id, text)}
+  onCancelDraft={() => setNoteDraft(null)}
+/>
+```

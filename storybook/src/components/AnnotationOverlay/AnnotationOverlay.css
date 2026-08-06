@@ -1,0 +1,129 @@
+/* Real (Figma node 1055-10) - pin is a plain gradient-filled circle with a
+   white ring (the design's own annotation-pin is exactly this shape, no
+   icon detail), so it's built directly in CSS rather than as a separate
+   SVG asset. */
+.annotation-pin {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: linear-gradient(90deg, var(--color-accent-gradient-start), var(--color-accent-gradient-end));
+  border: 2px solid white;
+  cursor: pointer;
+  z-index: 5;
+}
+
+/* Real fix (2026-08-06, same flat-card treatment as NoteOverlay's own
+   card - direct user feedback): a flat callout has square corners and
+   sits on the page, not above it - no border-radius, no drop shadow. */
+.annotation-callout {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 240px;
+  padding: 12px 14px;
+  background: var(--color-surface-content);
+  border: 1px solid var(--color-border);
+  cursor: default;
+  z-index: 6;
+}
+
+.annotation-callout__author-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.annotation-callout__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+
+.annotation-callout__time {
+  flex: 1;
+  font-family: var(--font-label);
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* Real fix (2026-08-06, same hover-reveal as NoteOverlay's own delete
+   button): hidden by default, revealed on hovering the callout (or, for
+   keyboard use, once the delete button itself holds focus - see
+   `.annotation-callout:focus-within` below). */
+.annotation-callout__delete {
+  background: none;
+  border: none;
+  color: var(--color-text-muted);
+  opacity: 0;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.1s ease;
+}
+
+.annotation-callout:hover .annotation-callout__delete,
+.annotation-callout:focus-within .annotation-callout__delete {
+  opacity: 1;
+}
+
+.annotation-callout__text {
+  margin: 0;
+  font-family: var(--font-label);
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.annotation-callout__input {
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+  background: var(--color-surface-control);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  padding: 8px;
+  font-family: var(--font-label);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  box-sizing: border-box;
+}
+
+.annotation-callout__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.annotation-callout__cancel,
+.annotation-callout__save {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.annotation-callout__cancel {
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-muted);
+}
+
+.annotation-callout__save {
+  background: linear-gradient(90deg, var(--color-accent-gradient-start), var(--color-accent-gradient-end));
+  border: none;
+  color: white;
+}
+
+.annotation-callout__save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

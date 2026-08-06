@@ -4,7 +4,11 @@
   height: 100%;
   min-height: 320px;
   background: var(--color-surface-chart);
-  border-radius: 8px;
+  /* Real fix (2026-08-06, direct user feedback): flat, square-cornered -
+     matches the outer plot panel's own corner-radius removal (see
+     PlotTile.css). Shared by every real chart surface (PlotChart,
+     Plotly3DChart, CustomAggregateChart, StaticImageChart all render into
+     this same `.plot-chart` div), so one fix here covers all of them. */
   box-sizing: border-box;
   padding: 8px;
 }
@@ -26,39 +30,4 @@
   font-family: var(--font-ui);
   font-size: 13px;
   color: #6B7280;
-}
-
-/* This toggle sits directly on the chart card's own guaranteed-white
-   surface (--color-surface-chart), not the app's dark chrome - same
-   reasoning as PlotChart's Plotly layout.font color being hardcoded to
-   #1A1A1A rather than a semantic text token. Not part of the app-wide
-   semantic token contract; scoped deliberately to this white surface. */
-.plot-chart__toggle {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 2;
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  background: rgba(0, 0, 0, 0.05);
-  border-radius: 6px;
-}
-
-.plot-chart__toggle-btn {
-  padding: 4px 10px;
-  border: none;
-  border-radius: 4px;
-  background: none;
-  font-family: var(--font-label);
-  font-weight: 700;
-  font-size: 11px;
-  color: rgba(0, 0, 0, 0.55);
-  cursor: pointer;
-}
-
-.plot-chart__toggle-btn--active {
-  background: #FFFFFF;
-  color: rgba(0, 0, 0, 0.85);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }

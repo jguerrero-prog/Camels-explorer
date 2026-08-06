@@ -1,8 +1,11 @@
+/* Real fix (2026-08-06, direct user feedback): 64px → 48px. Children
+   below (Add Plot button, icons) were resized proportionally so nothing
+   clips/chokes in the shorter bar - see each rule's own comment. */
 .top-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 64px;
+  height: 48px;
   padding: 0 28px;
   background: var(--color-surface-chrome);
   border-bottom: 1px solid var(--color-border);
@@ -32,24 +35,35 @@
   color: var(--color-text-emphasis);
 }
 
+.top-nav__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Real fix (2026-08-06, direct user feedback): flipped from the purple/
+   red accent gradient to a solid light surface with dark text (see
+   `--color-add-plot-*` in semantic.css for why this button gets its own
+   token pair). Height/padding/font-size/radius scaled down to fit the
+   nav's own 64px → 48px height change without choking. */
 .top-nav__add-plot {
   display: flex;
   align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 16px;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
   border: none;
-  border-radius: 12px;
+  border-radius: 9px;
   cursor: pointer;
-  background: linear-gradient(to right, var(--color-accent-gradient-start), var(--color-accent-gradient-end));
-  box-shadow: 0px 8px 9px rgba(0, 0, 0, 0.4);
+  background: var(--color-add-plot-surface);
+  box-shadow: 0px 2px 6px rgba(0, 0, 0, 0.25);
   font-family: var(--font-label);
   font-weight: 600;
-  font-size: 14px;
-  color: var(--color-text-emphasis);
+  font-size: 13px;
+  color: var(--color-add-plot-text);
 }
 
 .top-nav__add-plot img {
-  width: 18px;
-  height: 18px;
+  width: 14px;
+  height: 14px;
 }

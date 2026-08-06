@@ -1,11 +1,9 @@
-<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
 <g id="tool-ratio-diff">
 <g id="ratio-diff">
-<path id="Vector" d="M15 8.5L7.5 12.25L15 16L22.5 12.25L15 8.5Z" stroke="white" stroke-linecap="round" stroke-linejoin="round"/>
-<path id="Vector_2" d="M7.5 19.75L15 23.5L22.5 19.75" stroke="white" stroke-linecap="round" stroke-linejoin="round"/>
-<path id="Vector_3" d="M7.5 16L15 19.75L22.5 16" stroke="white" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector" d="M9 2.25L2.25 5.625L9 9L15.75 5.625L9 2.25Z" stroke="white" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_2" d="M2.25 12.375L9 15.75L15.75 12.375" stroke="white" stroke-linecap="round" stroke-linejoin="round"/>
+<path id="Vector_3" d="M2.25 9L9 12.375L15.75 9" stroke="white" stroke-linecap="round" stroke-linejoin="round"/>
 </g>
-<line id="chevron-left" x1="25.8485" y1="26" x2="28.5355" y2="28.687" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
-<line id="chevron-right" x1="30" y1="29.1515" x2="32.687" y2="26.4645" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
 </g>
 </svg>

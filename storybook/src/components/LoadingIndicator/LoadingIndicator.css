@@ -1,0 +1,58 @@
+/* Real fix (2026-08-06): scaled down from 40px to match TopNav's own
+   64px → 48px height change (same 32px target the Add Plot button got,
+   for visual consistency between the two - noticed while verifying that
+   change, not separately requested). */
+.loading-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 9px;
+  background: var(--color-surface-chrome);
+  border: 1px solid var(--color-border-subtle);
+}
+
+.loading-indicator__icon {
+  font-size: 14px;
+  line-height: 1;
+  /* A held-still emoji doesn't read as "busy" - a slow, gentle bounce sells
+     the cue without being distracting next to the rest of TopNav. */
+  animation: loading-indicator-bounce 0.9s ease-in-out infinite;
+}
+
+@keyframes loading-indicator-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-indicator__icon {
+    animation: none;
+  }
+}
+
+.loading-indicator__label {
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.loading-indicator__stop {
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-label);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.loading-indicator__stop:hover {
+  background: var(--color-surface-toggle-active);
+}

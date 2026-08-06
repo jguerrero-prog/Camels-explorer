@@ -26,6 +26,7 @@ function axisConfig(title: string) {
 }
 
 type PinnedPoint = { x: number; y: number; z: number; text: string };
+type Point3 = { x: number; y: number; z: number };
 
 export type Plotly3DChartProps = {
   /** Pre-built go.Volume/go.Scatter3d-shaped trace objects - callers
@@ -39,6 +40,23 @@ export type Plotly3DChartProps = {
    * enough shapes that forcing one type here isn't worth the friction. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any[];
+  /** Real (Figma node 1059-415's ruler-line/ruler-handle/ruler-readout) -
+   * App.tsx's Ruler toolbar tool. Reuses the exact same `event.points[0].
+   * x/y/z` click payload the existing "pin" feature above already proves
+   * out on a real go.Volume trace - two clicks give two real 3D points, so
+   * the distance readout is a genuine Euclidean distance in this scene's
+   * own Mpc/h units, not a screen-space measurement. Mutually exclusive
+   * with the click-to-pin feature (both are click-driven; only one can
+   * own a given click) - ruler mode takes over clicks entirely while on. */
+  rulerMode?: boolean;
+  /** Real (2026-08-06, direct user feedback): click-to-pin is genuinely
+   * useful on 3D Density Field, where a click has a real scalar `value`
+   * (the density magnitude) worth reading out - but 3D Particle Cloud's
+   * points carry no such value, so the pin only ever showed x/y/z, and the
+   * user asked to remove it there entirely rather than keep a feature with
+   * nothing real to say. Defaults to `true` so Density Field (the only
+   * other real caller) is unaffected; `ParticleCloudChart` passes `false`. */
+  pinEnabled?: boolean;
 };
 
 /** The shared real Plotly 3D shell for 3D Density Field (go.Volume) and 3D
@@ -47,10 +65,38 @@ export type Plotly3DChartProps = {
  * "cube", zero margin, height 650, no displayModeBar chrome - matching
  * every other Interactive chart in this app, which hides Plotly's default
  * toolbar since Toolbar owns that role instead). See Plotly3DChart.mdx. */
-export function Plotly3DChart({ data }: Plotly3DChartProps) {
+export function Plotly3DChart({ data, rulerMode, pinEnabled = true }: Plotly3DChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphDivRef = useRef<HTMLElement | null>(null);
   const [pinned, setPinned] = useState<PinnedPoint | null>(null);
+  const [rulerA, setRulerA] = useState<Point3 | null>(null);
+  const [rulerB, setRulerB] = useState<Point3 | null>(null);
+
+  // Ruler mode owns clicks exclusively - reset any half-drawn measurement
+  // the moment it's turned off, rather than leaving a stale line/readout
+  // from a previous session once the user switches back to pin mode.
+  useEffect(() => {
+    if (!rulerMode) {
+      setRulerA(null);
+      setRulerB(null);
+    }
+  }, [rulerMode]);
+
+  const rulerDistance = rulerA && rulerB
+    ? Math.sqrt((rulerB.x - rulerA.x) ** 2 + (rulerB.y - rulerA.y) ** 2 + (rulerB.z - rulerA.z) ** 2)
+    : null;
+  const rulerLineTrace = rulerA && rulerB
+    ? [{
+        type: 'scatter3d',
+        mode: 'lines+markers',
+        x: [rulerA.x, rulerB.x], y: [rulerA.y, rulerB.y], z: [rulerA.z, rulerB.z],
+        line: { color: PIN_COLOR, width: 4, dash: 'dash' },
+        marker: { color: PIN_COLOR, size: 4 },
+        hoverinfo: 'skip' as const,
+        showlegend: false,
+      }]
+    : [];
+  const plotData = rulerLineTrace.length ? [...data, ...rulerLineTrace] : data;
 
   // Same real bug class PlotChart's own Interactive mode already fixed:
   // react-plotly.js's useResizeHandler only catches *window* resizes, not
@@ -67,13 +113,25 @@ export function Plotly3DChart({ data }: Plotly3DChartProps) {
 
   return (
     <div className="plot-chart plotly-3d-chart" ref={containerRef}>
-      {pinned && (
+      {pinEnabled && pinned && (
         <button type="button" className="plotly-3d-chart__clear-pin" onClick={() => setPinned(null)}>
           Clear pin
         </button>
       )}
+      {rulerMode && (rulerA || rulerB) && (
+        <button
+          type="button"
+          className="plotly-3d-chart__clear-pin"
+          onClick={() => {
+            setRulerA(null);
+            setRulerB(null);
+          }}
+        >
+          Clear ruler
+        </button>
+      )}
       <Plot
-        data={data}
+        data={plotData}
         layout={{
           scene: {
             xaxis: axisConfig('x [Mpc/h]'),
@@ -86,8 +144,10 @@ export function Plotly3DChart({ data }: Plotly3DChartProps) {
             // naturally with the camera as the user rotates/pans/zooms,
             // and stays put while they explore elsewhere in the scene,
             // unlike the default hover label which disappears the moment
-            // the pointer leaves that point.
-            annotations: pinned
+            // the pointer leaves that point. The ruler's distance readout
+            // (Figma node 1059-415's ruler-readout) is the same real
+            // scene-anchored annotation shape, at the real midpoint.
+            annotations: pinEnabled && pinned
               ? [{
                   x: pinned.x, y: pinned.y, z: pinned.z,
                   text: pinned.text,
@@ -99,7 +159,17 @@ export function Plotly3DChart({ data }: Plotly3DChartProps) {
                   bordercolor: PIN_COLOR,
                   borderpad: 4,
                 }]
-              : [],
+              : rulerA && rulerB && rulerDistance !== null
+                ? [{
+                    x: (rulerA.x + rulerB.x) / 2, y: (rulerA.y + rulerB.y) / 2, z: (rulerA.z + rulerB.z) / 2,
+                    text: `${rulerDistance.toFixed(2)} Mpc/h`,
+                    showarrow: false,
+                    font: { color: AXIS_TEXT_COLOR, size: 13 },
+                    bgcolor: 'rgba(20, 20, 26, 0.9)',
+                    bordercolor: PIN_COLOR,
+                    borderpad: 4,
+                  }]
+                : [],
           },
           margin: { l: 0, r: 0, t: 0, b: 0 },
           paper_bgcolor: 'transparent',
@@ -118,6 +188,31 @@ export function Plotly3DChart({ data }: Plotly3DChartProps) {
           const point = event.points?.[0] as unknown as
             { x?: number; y?: number; z?: number; value?: number; text?: string } | undefined;
           if (!point || point.x === undefined || point.y === undefined || point.z === undefined) return;
+          const clicked = { x: point.x, y: point.y, z: point.z };
+
+          if (rulerMode) {
+            // Two clicks make one measurement; a third starts a fresh one
+            // rather than silently extending the old line.
+            if (!rulerA || (rulerA && rulerB)) {
+              setRulerA(clicked);
+              setRulerB(null);
+            } else {
+              setRulerB(clicked);
+            }
+            return;
+          }
+
+          if (!pinEnabled) return;
+
+          // Real bug fixed 2026-08-05: rotating/panning/zooming a gl3d scene
+          // can itself register as a `plotly_click` (a stray hit near a data
+          // point mid-drag) - once a pin already exists, that was silently
+          // moving it and forcing an annotation re-render on every such hit,
+          // which is what read as "lots of delays" while exploring. Once
+          // pinned, ignore further clicks entirely until "Clear pin" is
+          // pressed - matches the user's own stated intent ("keep their
+          // finger in that part of the viz" while they explore elsewhere).
+          if (pinned) return;
           const lines = [
             `x: ${point.x.toFixed(2)}`,
             `y: ${point.y.toFixed(2)}`,

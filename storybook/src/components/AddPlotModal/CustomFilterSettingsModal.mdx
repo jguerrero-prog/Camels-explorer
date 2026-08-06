@@ -1,0 +1,53 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as CustomFilterSettingsModalStories from './CustomFilterSettingsModal.stories';
+
+<Meta of={CustomFilterSettingsModalStories} />
+
+# CustomFilterSettingsModal
+
+Real fix (2026-08-06, direct user feedback: *"the filter settings on the side menu has a poor experience... turn 'filter settings' to instead open up a modal where all of the filters live and all of the context fits with no cutoffs"*). The real, live `CustomFilterTree` (`GET /api/custom/field-tree`) used to live in two separate cramped homes — inline inside `CustomFieldsForm` at tile-creation time (the Add Plot modal's ~400px column) and collapsed-by-default inside `CustomFilterSettings`' own sidebar section post-creation (the 280px `ParamsSidebar` column). Both now open this one shared, full-size modal instead — same real tree, same "+ Add"/"Remove" toggles, just given real room.
+
+## Token
+
+- `--color-surface-content` — modal card background
+- `--color-border` / `--color-border-subtle` — card border, divider, tree guide-lines
+- `--font-label` (Lato) — title, tree labels/captions
+
+## Spec
+
+<Canvas of={CustomFilterSettingsModalStories.FoFHaloType} />
+<Controls />
+
+- 560px card, same backdrop/dialog shell language as `AddPlotModal` (full-screen `rgba(0,0,0,0.6)` backdrop, centered), but a distinct component — no tabs, no footer, since this modal only ever does one job.
+- Header: "Filter settings" title + 28px `×` close button. Divider. Body: caption + the real `CustomFilterTree`, capped to viewport height with its own scroll.
+- Closes via the `×` button, `Escape`, or a backdrop click (`onMouseDown` on the backdrop itself, guarded so a click that starts inside the card and drags out doesn't also close it).
+
+<Canvas of={CustomFilterSettingsModalStories.WithFieldsAlreadyAdded} />
+<Canvas of={CustomFilterSettingsModalStories.NoTypeSelectedYet} />
+<Canvas of={CustomFilterSettingsModalStories.TreeFetchError} />
+
+## Usecase
+
+- **`CustomTab`** (Add Plot modal, tile creation) and **`CustomSidebar`** (`ParamsSidebar`, post-creation editing) both render `CustomFilterSettings` — a thin trigger button showing "Filter settings…" plus a live count of active filter fields — which owns this modal's `open`/`close` state and passes `tree`/`treeError`/`selection`/`onChange` straight through. Neither caller talks to `CustomFilterSettingsModal` directly.
+- The tree shown is filtered to the current `selection.type` via `filterTreeForType` (`params` + whichever of `Group`/`Subhalo` matches) — the same filtering `CustomFieldsForm`'s old inline tree used, just called from here now.
+- Toggling a leaf's "+ Add"/"Remove" calls `toggleCustomFilterField`, which also drops any already-set range for a removed field — shared logic, not duplicated between the modal and any other tree consumer.
+- **Real, deliberate scope**: this modal only ever picks *which* fields are active filters, never *what value* they're filtered to — range/value editing stays in `CustomFilterValues` (sidebar-only, post-creation), since fixing a range blind inside a modal you have to close to see the effect of was the exact interaction bug a user caught in an earlier pass of this tab.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { CustomFilterSettings } from '@/components/AddPlotModal/CustomFilterSettings';
+import type { CustomSelection } from '@/components/AddPlotModal/CustomFieldsForm';
+import { useCustomFieldTree } from '@/lib/useCustomFields';
+
+function CustomFilterSettingsUsage({ selection, onChange }: {
+  selection: CustomSelection;
+  onChange: (s: CustomSelection) => void;
+}) {
+  const { tree, error: treeError } = useCustomFieldTree();
+  // CustomFilterSettings owns the open/close state and renders
+  // CustomFilterSettingsModal internally once opened.
+  return <CustomFilterSettings tree={tree} treeError={treeError} selection={selection} onChange={onChange} />;
+}
+```

@@ -1,0 +1,123 @@
+/* Real fix (2026-08-06, direct user feedback: "fails WCAG" + "something
+   researchers would like to have displayed... grab a screenshot and use it
+   in a presentation"). The original translucent warm-amber card (rgba
+   over the canvas + light text) had no reliable contrast, since a
+   translucent fill's real contrast depends on whatever chart/background
+   sits behind it. Now a flat, OPAQUE card - a real index card, not a
+   glassmorphic overlay - so it reads the same everywhere it's dropped and
+   survives a straight screenshot into a slide. See semantic.css's own
+   `--color-note-*` docs for the verified 9.3:1 (WCAG AAA) contrast math. */
+.note-card {
+  position: absolute;
+  transform: translate(-8px, -8px);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 200px;
+  padding: 10px 12px;
+  background: var(--color-note-surface);
+  border: 1px solid var(--color-note-border);
+  /* Real fix (2026-08-06, direct user feedback): a flat index card has
+     square corners and sits on the page, not above it - no border-radius,
+     no drop shadow. */
+  z-index: 6;
+  cursor: default;
+}
+
+.note-card--dragging {
+  cursor: grabbing;
+  opacity: 0.85;
+}
+
+.note-card__handle {
+  display: flex;
+  justify-content: flex-end;
+  height: 6px;
+  margin: -4px -4px 0 0;
+  cursor: grab;
+}
+
+/* Real fix (2026-08-06, direct user feedback): hidden by default - a flat
+   index card meant for a presentation screenshot shouldn't show its own
+   delete control at rest. Revealed on hovering the card (or, for keyboard
+   use, once the delete button itself holds focus - see
+   `.note-card:focus-within` below) rather than removed from the layout
+   entirely, so it's still a real, reachable target the instant it's
+   visible. */
+.note-card__delete {
+  background: none;
+  border: none;
+  color: var(--color-note-text);
+  opacity: 0;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  transition: opacity 0.1s ease;
+}
+
+.note-card:hover .note-card__delete,
+.note-card:focus-within .note-card__delete {
+  opacity: 0.75;
+}
+
+.note-card__delete:hover {
+  opacity: 1;
+}
+
+.note-card__text {
+  margin: 0;
+  font-family: var(--font-label);
+  font-size: 13px;
+  color: var(--color-note-text);
+  cursor: text;
+  white-space: pre-wrap;
+}
+
+.note-card__input {
+  width: 100%;
+  min-height: 60px;
+  resize: vertical;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--color-note-border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-family: var(--font-label);
+  font-size: 13px;
+  color: var(--color-note-text);
+  box-sizing: border-box;
+}
+
+.note-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.note-card__cancel,
+.note-card__save {
+  align-self: flex-end;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: var(--font-label);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.note-card__cancel {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: var(--color-note-text);
+}
+
+.note-card__save {
+  background: var(--color-note-text);
+  border: none;
+  color: var(--color-note-surface);
+}
+
+.note-card__save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

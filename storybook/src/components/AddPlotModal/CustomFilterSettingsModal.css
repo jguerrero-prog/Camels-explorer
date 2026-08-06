@@ -1,0 +1,72 @@
+/* Same real backdrop/dialog shell language as AddPlotModal.css - a
+   distinct component (not a variant/reuse of AddPlotModal itself) since
+   this has no tabs/footer/confirm-cancel, just a header + scrollable
+   body. Deliberately wider/taller than AddPlotModal (560px vs 440px) -
+   "no cutoffs" was the explicit ask, and this hosts the same field tree
+   that used to fight truncation in a 280px sidebar column. */
+.filter-settings-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.filter-settings-modal {
+  width: 560px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface-content);
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  box-shadow: 0px 20px 40px -8px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.filter-settings-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 20px 16px 24px;
+  flex-shrink: 0;
+}
+
+.filter-settings-modal__title {
+  margin: 0;
+  font-family: var(--font-label);
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--color-text-primary);
+}
+
+.filter-settings-modal__close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.filter-settings-modal__divider {
+  height: 1px;
+  background: var(--color-border);
+  flex-shrink: 0;
+}
+
+.filter-settings-modal__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
