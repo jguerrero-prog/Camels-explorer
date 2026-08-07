@@ -1,7 +1,16 @@
-/** Real fetch helpers for the API server (api/main.py, port 8010) - shared
- * by App.tsx's tile-focus wiring. Dev-only base URL, same as
- * AddPlotModal/CuratedTab.tsx's own API_BASE - revisit before packaging. */
-const API_BASE = 'http://localhost:8010/api';
+/** Real fetch helpers for the API server (api/main.py) - shared by
+ * App.tsx's tile-focus wiring. Single source of truth for the API base URL
+ * - `useCatalogMetadata.ts`/`AddPlotModal/CuratedTab.tsx` import this
+ * rather than redeclaring their own copy (real fix, 2026-08-07, ahead of
+ * the first real deployment - see `Dockerfile`/`api/main.py`'s own static-
+ * file mount). `VITE_API_BASE` lets a deploy override this explicitly;
+ * without it, a dev build (`npm run dev`, two separate servers on 5173/
+ * 8010) keeps talking to the old hardcoded dev URL, and a production
+ * build (`npm run build`) defaults to a same-origin `/api` - correct once
+ * `api/main.py` serves both the API and the built frontend from one
+ * origin, with no CORS involved at all. */
+export const API_BASE: string =
+  import.meta.env.VITE_API_BASE ?? (import.meta.env.DEV ? 'http://localhost:8010/api' : '/api');
 
 export type Result = {
   x: number[];

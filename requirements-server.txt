@@ -1,0 +1,21 @@
+# Runtime dependencies for the deployed FastAPI server only (api/,
+# backend.py) - a trimmed copy of requirements.txt (2026-08-07, first
+# deploy) that drops streamlit/pywebview: confirmed via a direct import
+# scan that neither backend.py nor api/ import them at module level (both
+# are only used by app.py/desktop.py, which this deploy never runs), and
+# pywebview specifically needs GUI libraries (GTK/Qt) that aren't
+# installed in a headless container and aren't worth adding for a
+# dependency this path never touches. Keep in sync with requirements.txt's
+# real runtime pins by hand - there are few enough lines here that a
+# generated/derived file would be more ceremony than value.
+fastapi==0.128.8
+uvicorn==0.39.0
+python-dotenv==1.2.1
+numpy==2.0.2
+pandas==2.3.3
+h5py==3.14.0
+fsspec==2025.10.0
+aiohttp==3.13.5
+requests==2.32.5
+matplotlib==3.9.4
+plotly==6.9.0
