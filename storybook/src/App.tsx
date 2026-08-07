@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { IconRail } from './components/IconRail/IconRail';
 import type { IconRailPanel } from './components/IconRail/IconRail';
 import { TopNav } from './components/TopNav/TopNav';
@@ -57,6 +57,8 @@ import { DensityField3DSidebar } from './components/DensityField3DSidebar/Densit
 import type { DensityField3DParams } from './components/DensityField3DSidebar/DensityField3DSidebar';
 import { ParticleCloud3DSidebar } from './components/ParticleCloud3DSidebar/ParticleCloud3DSidebar';
 import type { ParticleCloud3DParams } from './components/ParticleCloud3DSidebar/ParticleCloud3DSidebar';
+import { ICParticlesSidebar } from './components/ICParticlesSidebar/ICParticlesSidebar';
+import type { ICParticlesParams } from './components/ICParticlesSidebar/ICParticlesSidebar';
 import { DensityFieldChart } from './components/DensityFieldChart/DensityFieldChart';
 import { ParticleCloudChart } from './components/ParticleCloudChart/ParticleCloudChart';
 import { Plotly3DChart } from './components/Plotly3DChart/Plotly3DChart';
@@ -78,7 +80,9 @@ import {
   fetchFieldMap2DMeta, fieldMap2DImageUrl,
   fetchDensityField3D, fetchVoidCatalog,
   fetchParticleCloud,
-  fetchSamCatalog,
+  fetchSamCatalog, SAM_OCTANTS,
+  fetchICParticles, N_IC_FILES,
+  fetchProgressive,
   fetchCustomFields, fetchCustomData, buildCustomFilters, fetchCustomHistogram,
 } from './lib/api';
 import type { Result, VoidCatalog, CustomField, CustomHistogramField, HaloCatalogRow } from './lib/api';
@@ -452,6 +456,26 @@ type ParticleCloud3DTileState = {
   error?: string;
 };
 
+/** Initial Conditions (added 2026-08-07). Originally sampled just one of
+ * N_IC_FILES real Gadget Format I files; per direct user request
+ * ("actually wire in all 47... use lazy loading... so we don't slow down
+ * the site") this now renders file 0 immediately (fast first paint, see
+ * loadICParticlesTile) then fetches the remaining 46 in the background
+ * with capped concurrency, appending their particles as they land (see
+ * streamRemainingICFiles) - `filesLoaded` tracks progress for the tile's
+ * own readout rather than blocking the UI on all 47 up front. */
+type ICParticles3DTileState = {
+  id: string;
+  kind: 'ic-particles-3d';
+  params: ICParticlesParams;
+  positions: number[][];
+  note: string;
+  source: string;
+  filesLoaded: number;
+  loading: boolean;
+  error?: string;
+};
+
 /** CAMELS-SAM (added 2026-08-07, direct user request) - `app.py`'s own
  * "CAMELS-SAM" tab, backed by the already-real `get_sam_catalog()`/
  * `GET /sam-catalog`. Genuinely different from every catalog-backed tile
@@ -468,6 +492,11 @@ type CamelsSamTileState = {
   rows: HaloCatalogRow[];
   rawRows: HaloCatalogRow[] | null;
   note: string;
+  // Octant 0 renders immediately (fast first paint); the remaining 7 of
+  // SAM_OCTANTS load in the background and append here (2026-08-07, direct
+  // user request - see streamRemainingSamOctants) - tracks progress rather
+  // than blocking on the complete 8-octant realization up front.
+  octantsLoaded: number;
   loading: boolean;
   error?: string;
 };
@@ -609,6 +638,7 @@ type CanvasTile =
   | FieldMap2DTileState
   | DensityField3DTileState
   | ParticleCloud3DTileState
+  | ICParticles3DTileState
   | CamelsSamTileState
   | BlackholeMergersTileState
   | CustomTileState
@@ -1091,15 +1121,126 @@ async function loadParticleCloud3DTile(id: string, params: ParticleCloud3DParams
   };
 }
 
+/** Fetches only ics.0 for a fast first render - see ICParticles3DTileState's
+ * own comment. `maxParticles` is a TOTAL budget across all N_IC_FILES real
+ * files, split evenly per file, not a per-file cap. */
+async function loadICParticlesTile(id: string, params: ICParticlesParams): Promise<ICParticles3DTileState> {
+  const perFile = Math.max(1, Math.round(params.maxParticles / N_IC_FILES));
+  const result = await fetchICParticles({ ...params, maxParticles: perFile, fileIndex: 0 });
+  if (result === null) {
+    throw new Error(
+      'No Initial Conditions file for this suite/set/realization. Try IllustrisTNG, SIMBA, or Astrid.',
+    );
+  }
+  return {
+    id, kind: 'ic-particles-3d', params,
+    positions: result.positions, note: result.note, source: result.source, filesLoaded: 1, loading: false,
+  };
+}
+
+/** Fetches the remaining N_IC_FILES-1 real Gadget IC files in the
+ * background (file 0 already rendered by loadICParticlesTile) and appends
+ * each file's particles to the tile as they arrive, batching flushes every
+ * 4 files so 46 more fetches don't trigger 46 back-to-back Scatter3d
+ * redraws. Capped at 6 concurrent requests against Flatiron's public
+ * webspace. Bails out silently once the tile's request sequence goes
+ * stale (removed / refetched with different params). */
+function streamRemainingICFiles(
+  id: string,
+  seq: number,
+  params: ICParticlesParams,
+  requestSeqRef: MutableRefObject<Map<string, number>>,
+  setTiles: Dispatch<SetStateAction<CanvasTile[]>>,
+) {
+  const perFile = Math.max(1, Math.round(params.maxParticles / N_IC_FILES));
+  let pendingPositions: number[][] = [];
+  let filesLoaded = 1;
+  const flush = () => {
+    if (pendingPositions.length === 0) return;
+    const positions = pendingPositions;
+    pendingPositions = [];
+    const loaded = filesLoaded;
+    setTiles((prev) =>
+      prev.map((t) =>
+        t.id === id && t.kind === 'ic-particles-3d'
+          ? { ...t, positions: [...t.positions, ...positions], filesLoaded: loaded }
+          : t,
+      ),
+    );
+  };
+  fetchProgressive(
+    N_IC_FILES - 1,
+    (i) => fetchICParticles({ ...params, maxParticles: perFile, fileIndex: i + 1 }),
+    (result) => {
+      filesLoaded += 1;
+      if (result) pendingPositions.push(...result.positions);
+      if (filesLoaded % 4 === 0 || filesLoaded === N_IC_FILES) flush();
+    },
+    { concurrency: 6, isCancelled: () => requestSeqRef.current.get(id) !== seq },
+  ).then(flush);
+}
+
 async function loadCamelsSamTile(id: string, params: CamelsSamParams): Promise<CamelsSamTileState> {
-  const catalog = await fetchSamCatalog(params.realization);
+  const catalog = await fetchSamCatalog(params.realization, SAM_OCTANTS[0]);
   if (catalog === null) {
     throw new Error('No CAMELS-SAM catalog for this realization - try another one (0-999).');
   }
   return {
     id, kind: 'camels-sam', params,
-    rows: catalog.frame, rawRows: catalog.raw_frame, note: catalog.note, loading: false,
+    rows: catalog.frame, rawRows: catalog.raw_frame, note: catalog.note, octantsLoaded: 1, loading: false,
   };
+}
+
+/** Fetches the remaining 7 of SAM_OCTANTS in the background (octant 0 is
+ * already rendered by loadCamelsSamTile) and appends each octant's rows as
+ * they land, batching flushes every 2 octants so 7 more fetches don't
+ * trigger 7 back-to-back re-renders. See ICParticles3DTileState's own
+ * comment for the identical rationale/pattern applied to Initial
+ * Conditions. Bails out silently once the tile's request sequence goes
+ * stale (removed / refetched with different params). */
+function streamRemainingSamOctants(
+  id: string,
+  seq: number,
+  params: CamelsSamParams,
+  requestSeqRef: MutableRefObject<Map<string, number>>,
+  setTiles: Dispatch<SetStateAction<CanvasTile[]>>,
+) {
+  let pendingRows: HaloCatalogRow[] = [];
+  let pendingRawRows: HaloCatalogRow[] = [];
+  let octantsLoaded = 1;
+  const flush = () => {
+    if (pendingRows.length === 0) return;
+    const rows = pendingRows;
+    const rawRows = pendingRawRows;
+    pendingRows = [];
+    pendingRawRows = [];
+    const loaded = octantsLoaded;
+    setTiles((prev) =>
+      prev.map((t) =>
+        t.id === id && t.kind === 'camels-sam'
+          ? {
+              ...t,
+              rows: [...t.rows, ...rows],
+              rawRows: rawRows.length ? [...(t.rawRows ?? []), ...rawRows] : t.rawRows,
+              octantsLoaded: loaded,
+            }
+          : t,
+      ),
+    );
+  };
+  fetchProgressive(
+    SAM_OCTANTS.length - 1,
+    (i) => fetchSamCatalog(params.realization, SAM_OCTANTS[i + 1]),
+    (catalog) => {
+      octantsLoaded += 1;
+      if (catalog) {
+        pendingRows.push(...catalog.frame);
+        if (catalog.raw_frame) pendingRawRows.push(...catalog.raw_frame);
+      }
+      if (octantsLoaded % 2 === 0 || octantsLoaded === SAM_OCTANTS.length) flush();
+    },
+    { concurrency: 4, isCancelled: () => requestSeqRef.current.get(id) !== seq },
+  ).then(flush);
 }
 
 async function loadBlackholeMergersTile(id: string, params: BlackholeMergersParams): Promise<BlackholeMergersTileState> {
@@ -1528,6 +1669,7 @@ export function App() {
       case 'field-map-2d': return '2D Field Map';
       case 'density-field-3d': return '3D Density Field';
       case 'particle-cloud-3d': return '3D Particle Cloud';
+      case 'ic-particles-3d': return 'Initial Conditions';
       case 'custom': return customTileTitle(tile.result);
       case 'empty': return tile.title;
       default: return '';
@@ -2068,6 +2210,25 @@ export function App() {
       });
   };
 
+  const refetchICParticlesTile = (id: string, params: ICParticlesParams) => {
+    const seq = bumpRequestSeq(id);
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'ic-particles-3d' ? { ...t, params, loading: true } : t)),
+    );
+    loadICParticlesTile(id, params)
+      .then((updated) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) => prev.map((t) => (t.id === id ? updated : t)));
+        streamRemainingICFiles(id, seq, params, requestSeqRef, setTiles);
+      })
+      .catch((err) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'ic-particles-3d' ? { ...t, loading: false, error: String(err) } : t)),
+        );
+      });
+  };
+
   const refetchCamelsSamTile = (id: string, params: CamelsSamParams) => {
     const seq = bumpRequestSeq(id);
     setTiles((prev) =>
@@ -2077,6 +2238,7 @@ export function App() {
       .then((updated) => {
         if (requestSeqRef.current.get(id) !== seq) return;
         setTiles((prev) => prev.map((t) => (t.id === id ? updated : t)));
+        streamRemainingSamOctants(id, seq, params, requestSeqRef, setTiles);
       })
       .catch((err) => {
         if (requestSeqRef.current.get(id) !== seq) return;
@@ -2166,7 +2328,7 @@ export function App() {
     if (selection.statistic === 'CAMELS-SAM') {
       const params: CamelsSamParams = { realization: Number(selection.realization) || 0 };
       const placeholder: CamelsSamTileState = {
-        id, kind: 'camels-sam', params, rows: [], rawRows: null, note: '', loading: true,
+        id, kind: 'camels-sam', params, rows: [], rawRows: null, note: '', octantsLoaded: 0, loading: true,
       };
       replaceTile(placeholder);
       focusTile(id);
@@ -2366,6 +2528,21 @@ export function App() {
       return;
     }
 
+    if (selection.statistic === 'Initial Conditions') {
+      const params: ICParticlesParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+        maxParticles: 20_000,
+      };
+      const placeholder: ICParticles3DTileState = {
+        id, kind: 'ic-particles-3d', params,
+        positions: [], note: '', source: '', filesLoaded: 0, loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchICParticlesTile(id, params);
+      return;
+    }
+
     // Real, honest gap (see PlotTile.mdx's Usecase): every other statistic
     // still adds a title-only empty tile, rather than fabricate a chart.
     replaceTile({ id, kind: 'empty', title: selection.statistic });
@@ -2503,6 +2680,13 @@ export function App() {
         <ParticleCloud3DSidebar
           params={focusedTile.params}
           onChange={(params) => refetchParticleCloud3DTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'ic-particles-3d' && (
+        <ICParticlesSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchICParticlesTile(focusedTile.id, params)}
           onRemove={() => removeTile(focusedTile.id)}
         />
       )}
@@ -3118,6 +3302,33 @@ export function App() {
                   );
                 }
 
+                if (tile.kind === 'ic-particles-3d') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      error={tile.error}
+                      title="Initial Conditions"
+                      chart={{
+                        kind: 'plotly-3d',
+                        content: (
+                          <ParticleCloudChart
+                            positions={tile.positions}
+                            rulerMode={rulerMode && tile.id === focusedTileId}
+                          />
+                        ),
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Particles', value: tile.positions.length.toLocaleString() },
+                        { label: 'Files loaded', value: `${tile.filesLoaded}/${N_IC_FILES}` },
+                      ]}
+                      halos={null}
+                      {...commonPlotTileProps(tile)}
+                    />
+                  );
+                }
+
                 if (tile.kind === 'camels-sam') {
                   return (
                     <PlotTile
@@ -3129,6 +3340,7 @@ export function App() {
                         { label: 'Set', value: 'LH (Santa Cruz SAM)' },
                         { label: 'Realization', value: String(tile.params.realization) },
                         { label: 'Galaxies', value: tile.rows.length.toLocaleString() },
+                        { label: 'Octants loaded', value: `${tile.octantsLoaded}/${SAM_OCTANTS.length}` },
                       ]}
                       halos={{
                         rows: tile.rows,

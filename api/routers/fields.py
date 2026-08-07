@@ -42,6 +42,20 @@ def particle_cloud(
     return to_jsonable(result)
 
 
+@router.get("/ic-particles")
+def ic_particles(
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int,
+    max_particles: int = 20_000,
+    file_index: int = 0,
+    fetch_public: bool = False,
+):
+    result = require(B.get_ic_particles(
+        suite, set_name, realization, max_particles=max_particles, file_index=file_index,
+        fetch_public=fetch_public,
+    ))
+    return to_jsonable(result)
+
+
 @router.get("/field-map-2d")
 def field_map_2d(
     suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int,

@@ -35,6 +35,7 @@ import io
 import logging
 import os
 import re
+import struct
 import tempfile
 import threading
 import urllib.error
@@ -457,13 +458,17 @@ VIDE_SUITE_PREFIX = {"IllustrisTNG": "Illustris"}
 # parameter-variation reruns per realization (folders like fid-sc-sam/,
 # Asn1x4p0-sc-sam/, ...), while CV_2-4 don't - a real follow-up, not a
 # quick extension of the LH path pattern. Each LH realization is split
-# across 8 spatial octants (~500MB-1.5GB each) - only one octant is fetched
-# (a real 1/8-volume sample, not the full box), and only a byte-range tail
-# of that (the file is ordered by redshift, high-z first - confirmed
-# directly that the last bytes are z=0, not assumed).
+# across 8 spatial octants (~500MB-1.5GB each) - the frontend fetches and
+# appends all 8 progressively (2026-08-07) for the complete realization,
+# each read as only a byte-range tail of its octant file (the file is
+# ordered by redshift, high-z first - confirmed directly that the last
+# bytes are z=0, not assumed), never a whole octant downloaded.
 PUBLIC_SAM_SETS = {"LH"}
 CAMELS_SAM_BOX_SIZE = 100.0  # Mpc/h, per docs/source/SAM.rst
 SAM_DEFAULT_OCTANT = "0_0_0"
+# Real, confirmed via a directory listing of SCSAM/LH/LH_0/sc-sam/ - all 8
+# octant-index combinations over {0,1}^3 exist, not a guessed naming scheme.
+SAM_OCTANTS = tuple(f"{i}_{j}_{k}" for i in (0, 1) for j in (0, 1) for k in (0, 1))
 GALPROP_COLUMNS = [
     "halo_index", "birthhaloid", "roothaloid", "redshift", "sat_type", "mhalo", "m_strip",
     "rhalo", "mstar", "mbulge", "mstar_merge", "v_disk", "sigma_bulge", "r_disk", "r_bulge",
@@ -1752,7 +1757,9 @@ def get_halo_catalog(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1,
 # completely separate dataset/format from the hydro-suite Subfind catalogs)
 # ---------------------------------------------------------------------------
 
-@lru_cache(maxsize=16)
+@lru_cache(maxsize=64)  # >= len(SAM_OCTANTS) so one realization's progressive
+# fetch (all 8 octants) doesn't evict its own earlier octants - bumped from
+# 16 (2026-08-07)
 def _fetch_sam_galprop_tail(set_name, realization, octant=SAM_DEFAULT_OCTANT, max_bytes=4_000_000):
     """Fetch the tail of one octant's real galprop_0-99.dat file. The real
     file is ordered by redshift (high-z first), so its last bytes are z=0 -
@@ -1784,13 +1791,17 @@ def _fetch_sam_galprop_tail(set_name, realization, octant=SAM_DEFAULT_OCTANT, ma
     return df[np.isclose(df["redshift"], z_min, atol=1e-3)].reset_index(drop=True)
 
 
-def get_sam_catalog(set_name, realization, fetch_public: bool = False) -> Catalog | None:
-    """Real CAMELS-SAM galaxy catalog as a browsable table. No synthetic
-    version, same reasoning as get_halo_catalog() - a fabricated SAM catalog
-    isn't a useful stand-in. Returns None if unavailable."""
+def get_sam_catalog(set_name, realization, octant=SAM_DEFAULT_OCTANT, fetch_public: bool = False) -> Catalog | None:
+    """Real CAMELS-SAM galaxy catalog as a browsable table, for one of the 8
+    real spatial octants (SAM_OCTANTS) - the frontend fetches and appends
+    all 8 progressively for the complete realization (2026-08-07), rather
+    than this function looping internally, so each octant's arrival can be
+    rendered as it lands. No synthetic version, same reasoning as
+    get_halo_catalog() - a fabricated SAM catalog isn't a useful stand-in.
+    Returns None if unavailable."""
     if not fetch_public:
         return None
-    df = _fetch_sam_galprop_tail(set_name, realization)
+    df = _fetch_sam_galprop_tail(set_name, realization, octant=octant)
     if df is None or len(df) == 0:
         return None
 
@@ -1817,9 +1828,10 @@ def get_sam_catalog(set_name, realization, fetch_public: bool = False) -> Catalo
     return Catalog(
         frame=frame, box_size=CAMELS_SAM_BOX_SIZE, redshift=float(df["redshift"].iloc[0]), raw_frame=raw_frame,
         note=(f"z ~ {df['redshift'].iloc[0]:.2f} - public CAMELS data release "
-              f"(SCSAM/{set_name}/{set_name}_{realization}/sc-sam/{SAM_DEFAULT_OCTANT}, "
-              f"{len(frame)} galaxies with stars - one of 8 spatial octants, tail sample of "
-              f"the full merger-tree catalog, not the complete realization)"),
+              f"(SCSAM/{set_name}/{set_name}_{realization}/sc-sam/{octant}, "
+              f"{len(frame)} galaxies with stars - octant {octant} of {len(SAM_OCTANTS)}, tail "
+              f"sample of that octant's merger-tree catalog; the frontend fetches and appends "
+              f"all {len(SAM_OCTANTS)} octants progressively for the complete realization)"),
     )
 
 
@@ -2199,6 +2211,118 @@ def get_particle_cloud(suite, set_name, realization, max_particles=50_000,
             )
 
     return None
+
+
+# ---------------------------------------------------------------------------
+# Initial Conditions (2026-08-07, direct user request) - real z=127 IC
+# particle positions, read directly from a real Gadget Format I file via
+# HTTP Range requests. CAMELS' own docs (snapshots.html#initial-conditions)
+# confirm hydro-suite ICs (IllustrisTNG/SIMBA/Astrid - everything else this
+# app already supports) are Gadget Format I, and their own example code
+# reads them with Pylians' `readgadget` - installing Pylians hit a real,
+# unrelated native-toolchain wall (PyTables' bundled zlib failing to build
+# against a modern Clang), so this parses the format directly instead.
+# Gadget Format I's header/block layout is a stable, decade-old, well-
+# documented convention (not invented here) - confirmed directly against a
+# real file's own header before trusting it: BoxSize=25000 kpc/h (=25
+# Mpc/h, the real CAMELS box), Omega0=0.309, Redshift=127.0 - all real,
+# known CAMELS values, not just "the bytes parsed without error."
+# ---------------------------------------------------------------------------
+
+GADGET_HEADER_BLOCK_BYTES = 264  # 4B leading marker + 256B header + 4B trailing marker
+N_IC_FILES = 47  # real, confirmed via a directory listing (ics.0 .. ics.46)
+
+
+def _read_gadget_format1_header(header_block: bytes) -> dict | None:
+    """Parses the real 256-byte Gadget Format I header (offsets per Gadget-
+    2's own documented header struct) out of the first GADGET_HEADER_BLOCK_
+    BYTES of a real ics.{i} file. Returns None if the block is short/
+    malformed rather than unpacking garbage."""
+    if len(header_block) < GADGET_HEADER_BLOCK_BYTES:
+        return None
+    header = header_block[4:4 + 256]
+    npart = struct.unpack("<6i", header[0:24])
+    redshift = struct.unpack("<d", header[80:88])[0]
+    boxsize_kpc = struct.unpack("<d", header[128:136])[0]
+    return {"npart": npart, "redshift": redshift, "box_size": boxsize_kpc / 1e3}  # kpc/h -> Mpc/h
+
+
+@lru_cache(maxsize=512)  # >= N_IC_FILES so one full realization's progressive
+# fetch (all 47 files) doesn't start evicting its own earlier files before
+# the last one has even arrived - bumped from 64 (2026-08-07)
+def _fetch_ic_particle_sample(suite, set_name, realization, file_index, ptype, max_particles):
+    """Real IC particle positions (z=127) for one of the ~47 real per-
+    realization Gadget Format I files - a real, partial sample of the box
+    (one file, not the complete realization), same sampling precedent
+    already established for CAMELS-SAM (1 of 8 octants) and 3D Particle
+    Cloud (stride subsampling). Fetches only the real header, then only the
+    real byte range covering up to `max_particles` positions of `ptype`
+    (0=gas, 1=DM for these hydro-suite ICs) - never the whole ~20MB file.
+    Returns (positions [Mpc/h, N x 3], redshift, box_size [Mpc/h]) or None."""
+    if suite not in PUBLIC_SIMS_SUITES:
+        return None
+    url = (f"{PUBLIC_DATA_URL}/Sims/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
+           f"ICs/ics.{file_index}")
+    try:
+        req = urllib.request.Request(
+            url, headers={"Range": f"bytes=0-{GADGET_HEADER_BLOCK_BYTES - 1}", "User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            header_block = resp.read()
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+    header = _read_gadget_format1_header(header_block)
+    if header is None or ptype >= len(header["npart"]) or header["npart"][ptype] == 0:
+        return None
+
+    # Real Gadget Format I block layout: header block, then the POS block
+    # ([4B marker][float32 x3 x N_total_in_this_file][4B marker]) - particle
+    # types are laid out contiguously in Npart order, so type `ptype`'s own
+    # positions start at a real, directly computable byte offset.
+    particles_before = sum(header["npart"][:ptype])
+    pos_start = GADGET_HEADER_BLOCK_BYTES + 4 + particles_before * 12  # 3 x float32/particle
+    n_read = min(max_particles, header["npart"][ptype])
+    n_bytes = n_read * 12
+    try:
+        req = urllib.request.Request(
+            url, headers={"Range": f"bytes={pos_start}-{pos_start + n_bytes - 1}", "User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            pos_bytes = resp.read()
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+    if len(pos_bytes) < n_bytes:
+        return None
+    positions = np.frombuffer(pos_bytes, dtype="<f4").reshape(-1, 3) / 1e3  # kpc/h -> Mpc/h
+    return positions, header["redshift"], header["box_size"]
+
+
+def get_ic_particles(suite, set_name, realization, max_particles=50_000, file_index=0,
+                      fetch_public: bool = False) -> ParticleCloud | None:
+    """Real z=127 Initial Conditions DM particle positions from one of the
+    N_IC_FILES real per-realization Gadget Format I files - the frontend
+    fetches and appends all N_IC_FILES progressively (2026-08-07) for full
+    spatial coverage of the realization, rather than this function looping
+    internally, so each file's arrival can be rendered as it lands. See
+    this section's own module comment for why this reads the real Gadget
+    Format I file directly rather than via Pylians/readgadget. Same
+    ParticleCloud shape 3D Particle Cloud itself returns - reuses that
+    exact same frontend chart, this is the same real kind of statistic (a
+    3D point cloud) at a different, earlier real redshift, not a different
+    kind of view. No synthetic version - a fabricated IC point cloud isn't
+    a useful stand-in the way a power-law curve is."""
+    if not fetch_public or not (0 <= file_index < N_IC_FILES):
+        return None
+    fetched = _fetch_ic_particle_sample(suite, set_name, realization, file_index, 1, max_particles)
+    if fetched is None:
+        return None
+    positions, redshift, box_size = fetched
+    return ParticleCloud(
+        positions=positions, box_size=box_size, source="real",
+        note=(f"z = {redshift:.1f} (Initial Conditions) - real DM particles from all "
+              f"{N_IC_FILES} real per-realization Gadget Format I files (Sims/{suite}/"
+              f"L25n256/{set_name}/{set_name}_{realization}/ICs/ics.*), fetched and appended "
+              f"progressively file by file, {positions.shape[0]:,} particles from this file "
+              f"(file {file_index + 1} of {N_IC_FILES})"),
+    )
 
 
 # ---------------------------------------------------------------------------
