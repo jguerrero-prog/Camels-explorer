@@ -645,29 +645,88 @@ type CanvasTile =
   | CustomTileState
   | EmptyTileState;
 
-/** Real, human-readable description of a tile's data provenance - the
- * toolbar's Copy provenance tool (Figma node 1066-10) copies this to the
- * clipboard verbatim. For every real per-file/per-catalog statistic this
- * is exactly backend.py's own Result.note - already real text describing
- * the exact public CAMELS file/computation behind what's on screen
- * (to_jsonable() already serialized it into every fetch response; it
- * just wasn't read into tile state until now). Custom has no single file
- * behind it (a live cross-ensemble FlatHUB query), so it gets its own,
- * honestly-different description rather than a fabricated file path.
- * `null` for a tile with nothing to describe yet (empty, or a note-
- * carrying tile that hasn't finished its first real fetch). */
+/** Mirrors the literal `title=` string each tile kind's own PlotTile
+ * render call already uses - kept as one lookup rather than threading a
+ * title field onto every tile state type, since these strings are already
+ * the real, single source of truth for what's on screen. Top-level (not
+ * inside the App component) so describeTileProvenance can reuse it for
+ * the citation sentence's statistic name, rather than duplicating this
+ * switch a second time. */
+function tileDisplayTitle(tile: CanvasTile): string {
+  switch (tile.kind) {
+    case 'mass-range': return tile.statistic;
+    case 'power-spectrum': return 'Power Spectrum';
+    case 'bispectrum': return 'Bispectrum';
+    case 'sfr-history': return 'SFR History';
+    case 'xray-halo-profiles': return 'X-ray Halo Profiles';
+    case 'halo-gas-profiles': return 'Halo Gas Profiles';
+    case 'color-mass-diagram': return 'Color-Mass Diagram';
+    case 'field-pdf': return 'Field PDF';
+    case 'lyman-alpha-spectrum': return 'Lyman-alpha Spectrum';
+    case 'galaxy-scaling-relations': return 'Galaxy Scaling Relations';
+    case 'field-map-2d': return '2D Field Map';
+    case 'density-field-3d': return '3D Density Field';
+    case 'particle-cloud-3d': return '3D Particle Cloud';
+    case 'ic-particles-3d': return 'Initial Conditions';
+    case 'camels-sam': return 'CAMELS-SAM';
+    case 'blackhole-mergers': return 'Black Hole Mergers';
+    case 'custom': return customTileTitle(tile.result);
+    case 'empty': return tile.title;
+    default: return '';
+  }
+}
+
+// The two real CAMELS papers every public-data statistic in this app is
+// built from, regardless of suite/set/statistic - verified directly
+// against the arXiv abstract pages (2026-08-07, direct user request: Copy
+// provenance was leaking internal-engineering language like "fetched and
+// appended progressively" into text meant to go in a manuscript). Suite/
+// statistic-specific papers (e.g. CAMELS-SAM's own Perez et al. 2023)
+// deliberately not included - the two below are always correct for every
+// tile, a per-statistic paper would need its own independent verification
+// and isn't worth the added citation-accuracy surface right now.
+const CAMELS_CITATION = 'the CAMELS project (Villaescusa-Navarro et al. 2021, 2023)';
+const CAMELS_DATA_URL = 'https://camels.readthedocs.io';
+
+/** Manuscript-ready citation sentence for a tile - the toolbar's Copy
+ * provenance tool (Figma node 1066-10) copies this to the clipboard
+ * verbatim. Deliberately NOT backend.py's own Result.note (that free text
+ * is written for internal/debugging purposes - HTTP Range requests, byte
+ * offsets, which of N files was sampled - exactly the language a peer
+ * reviewer would flag). This is built fresh from each tile's own
+ * structured suite/set/realization params instead, so it's always a
+ * clean sentence regardless of how the engineering note reads. `null` for
+ * a tile with nothing to describe yet (empty, or a tile that hasn't
+ * finished its first real fetch). */
 function describeTileProvenance(tile: CanvasTile): string | null {
   if (tile.kind === 'empty') return null;
+  const statistic = tileDisplayTitle(tile) || 'Data';
+
   if (tile.kind === 'custom') {
-    const filters = tile.selection.activeFilterFields;
-    const filterText = filters.length > 0 ? `, filtered on ${filters.join(', ')}` : '';
-    return (
-      `live FlatHUB query (flathub.flatironinstitute.org/api/camels/data) - `
-      + `type=${tile.selection.type || '(none)'}${filterText}, ${tile.matchedCount} matching rows `
-      + `across the public CAMELS ensemble`
-    );
+    return `${statistic} from ${CAMELS_CITATION}, queried live via the public FlatHub interface, ${CAMELS_DATA_URL}.`;
   }
-  return tile.note || null;
+  if (tile.kind === 'camels-sam') {
+    return `${statistic} (Santa Cruz Semi-Analytic Model, LH set, realization ${tile.params.realization}) from ${CAMELS_CITATION}, ${CAMELS_DATA_URL}.`;
+  }
+
+  const p = 'params' in tile ? (tile.params as Record<string, unknown>) : null;
+  const suite = p && typeof p.suite === 'string' ? p.suite : null;
+  const setName = p && typeof p.setName === 'string' ? p.setName : null;
+  const realizations = p && Array.isArray(p.realizations)
+    ? p.realizations.map(String)
+    : p && typeof p.realization !== 'undefined'
+      ? [String(p.realization)]
+      : [];
+  const realizationText = realizations.length === 0
+    ? ''
+    : realizations.length === 1
+      ? `, realization ${realizations[0]}`
+      : `, realizations ${realizations.join(', ')}`;
+
+  if (suite && setName) {
+    return `${statistic} for ${suite} (${setName} set${realizationText}) from ${CAMELS_CITATION}, ${CAMELS_DATA_URL}.`;
+  }
+  return `${statistic} from ${CAMELS_CITATION}, ${CAMELS_DATA_URL}.`;
 }
 
 const py = (s: string | number | boolean) =>
@@ -1650,32 +1709,6 @@ export function App() {
   const [ratioDiffResult, setRatioDiffResult] = useState<
     { forTileId: string; targetLabel: string; mode: 'ratio' | 'difference'; x: number[]; y: number[] } | null
   >(null);
-
-  /** Mirrors the literal `title=` string each tile kind's own PlotTile
-   * render call already uses - kept as one lookup rather than threading
-   * a title field onto every tile state type, since these strings are
-   * already the real, single source of truth for what's on screen. */
-  const tileDisplayTitle = (tile: CanvasTile): string => {
-    switch (tile.kind) {
-      case 'mass-range': return tile.statistic;
-      case 'power-spectrum': return 'Power Spectrum';
-      case 'bispectrum': return 'Bispectrum';
-      case 'sfr-history': return 'SFR History';
-      case 'xray-halo-profiles': return 'X-ray Halo Profiles';
-      case 'halo-gas-profiles': return 'Halo Gas Profiles';
-      case 'color-mass-diagram': return 'Color-Mass Diagram';
-      case 'field-pdf': return 'Field PDF';
-      case 'lyman-alpha-spectrum': return 'Lyman-alpha Spectrum';
-      case 'galaxy-scaling-relations': return 'Galaxy Scaling Relations';
-      case 'field-map-2d': return '2D Field Map';
-      case 'density-field-3d': return '3D Density Field';
-      case 'particle-cloud-3d': return '3D Particle Cloud';
-      case 'ic-particles-3d': return 'Initial Conditions';
-      case 'custom': return customTileTitle(tile.result);
-      case 'empty': return tile.title;
-      default: return '';
-    }
-  };
 
   const tileCaption = (tile: CanvasTile): string => {
     const p = 'params' in tile ? (tile.params as Record<string, unknown>) : null;
