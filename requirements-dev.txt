@@ -1,0 +1,4 @@
+# Test-only dependencies - see tests/ (added 2026-08-06, code-quality
+# audit: this project had zero automated backend test coverage before).
+-r requirements.txt
+pytest==8.4.2

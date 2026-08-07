@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import './RatioDiffPopover.css';
 
 export type RatioDiffCandidate = {
@@ -21,15 +22,30 @@ export type RatioDiffPopoverProps = {
   onCompare: (mode: 'ratio' | 'difference') => void;
   mode: 'ratio' | 'difference';
   onModeChange: (mode: 'ratio' | 'difference') => void;
+  /** Real fix (2026-08-06, code-quality audit): the sourced Figma frame
+   * (989-10) has no close button in this popover's own header, so one
+   * isn't added here either - but every other popover in the app (Hide,
+   * Copy as code) can be dismissed with Escape, and this one couldn't.
+   * Optional only because App.tsx is this component's one real caller and
+   * always provides it - not because a caller skipping it is expected. */
+  onClose?: () => void;
 };
 
 /** Real (Figma node 989-10's ratio-diff-popover) - "Compare against"
  * popover for the Ratio/diff overlay tool. */
 export function RatioDiffPopover({
-  candidates, selectedTileId, onSelect, onNewPlot, onCompare, mode, onModeChange,
+  candidates, selectedTileId, onSelect, onNewPlot, onCompare, mode, onModeChange, onClose,
 }: RatioDiffPopoverProps) {
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose?.();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="ratio-diff-popover">
+    <div className="ratio-diff-popover" role="dialog" aria-label="Compare against">
       <div className="ratio-diff-popover__header">
         <p className="ratio-diff-popover__eyebrow">Compare against</p>
       </div>

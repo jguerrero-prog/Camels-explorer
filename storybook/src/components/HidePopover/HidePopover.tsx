@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Radio } from '../Radio/Radio';
 import { Checkbox } from '../Checkbox/Checkbox';
 import './HidePopover.css';
@@ -50,8 +51,21 @@ export type HidePopoverProps = {
  * from `values`/`onToggle` identically. */
 export function HidePopover({ scope, onScopeChange, values, onToggle, panelDisabled, onClose }: HidePopoverProps) {
   const disabled = scope === 'panel' && panelDisabled;
+
+  // Real fix (2026-08-06, code-quality audit): every other popover/dropdown
+  // in the app (SelectField, ChartModeDropdown, FieldMapGroupControl)
+  // closes on Escape - this one didn't, a real inconsistency, not a
+  // deliberate omission.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
   return (
-    <div className="hide-popover">
+    <div className="hide-popover" role="dialog" aria-label="Hide">
       <div className="hide-popover__pointer" aria-hidden="true" />
       <div className="hide-popover__header">
         <p className="hide-popover__title">Hide</p>

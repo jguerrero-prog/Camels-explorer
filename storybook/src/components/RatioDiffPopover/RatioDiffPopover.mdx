@@ -23,6 +23,8 @@ The toolbar's "Ratio / diff overlay" tool (Figma node `989-10`'s "ratio-diff-pop
 
 `NoOtherTiles` shows the real empty state - "No other tiles yet - add one to compare against." - rather than a disabled/empty-looking list.
 
+**Real fix (2026-08-06, code-quality audit): closes on Escape.** Every other popover in the app (`HidePopover`, `CopyAsCodePopover`) could already be dismissed with Escape - this one couldn't, a real inconsistency, not a deliberate omission. No new visible close button was added, though - the sourced Figma frame's own header has none, and inventing one here would be a real visual deviation from that source, not an accessibility fix. `onClose` is optional (App.tsx is this component's one real caller and always provides it).
+
 ## Usecase
 
 - Rendered by `App.tsx` inside `Toolbar`'s `ratioDiffPopover` prop, anchored below the Ratio/diff toolbar button, only while open.

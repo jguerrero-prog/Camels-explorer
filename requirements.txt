@@ -1,0 +1,29 @@
+# Real, direct runtime dependencies for backend.py, api/, flathub_client.py,
+# app.py (the Streamlit prototype), and desktop.py - derived from an actual
+# import scan of those files (2026-08-06 code-quality audit), not copied
+# from a template. Versions pinned to what this project has been developed
+# and verified against (see the active .venv) - exact pins over open-ended
+# ranges, since "a way to reproduce this exact environment" was the real gap
+# being closed here, not "the newest compatible version of everything."
+fastapi==0.128.8
+uvicorn==0.39.0
+python-dotenv==1.2.1
+numpy==2.0.2
+pandas==2.3.3
+h5py==3.14.0
+fsspec==2025.10.0
+matplotlib==3.9.4
+plotly==6.9.0
+streamlit==1.50.0
+pywebview==6.2.1
+
+# Optional, NOT required for the FastAPI backend or Streamlit app to run -
+# only gates real per-particle 3D-field gridding from raw snapshots
+# (backend.py's HAVE_CAMELS_LIBRARY / _fetch_and_grid_snapshot). A heavy
+# scientific C-extension; every other real-data feature (CAESAR, SubLink,
+# Halo Gas Profiles, Photometry, Field PDF, Lyman-alpha, X-ray profiles,
+# etc.) needs only fsspec above, not this - see backend.py's own
+# HAVE_FSSPEC/HAVE_CAMELS_LIBRARY split. Not on PyPI as a working release
+# for macOS as of this writing (see backend.py's own comment) - install
+# from GitHub HEAD if you want raw-snapshot gridding:
+#   pip install git+https://github.com/franciscovillaescusa/Pylians3.git
