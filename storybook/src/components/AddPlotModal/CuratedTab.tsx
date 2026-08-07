@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { SelectField } from '../SelectField/SelectField';
 import { SingleRealizationFields } from '../SingleRealizationFields/SingleRealizationFields';
 import type { Catalog } from '../../lib/useCatalogMetadata';
+import { API_BASE } from '../../lib/api';
 
 export type CuratedSelection = {
   suite: string;
@@ -9,10 +10,6 @@ export type CuratedSelection = {
   realization: number | string;
   statistic: string;
 };
-
-// Dev-only, matches api/main.py's own CORS allowlist comment - revisit
-// before any real deployment/packaging (see desktop.py's eventual rewrite).
-const API_BASE = 'http://localhost:8010/api';
 
 export type CuratedTabProps = {
   selection: CuratedSelection;
