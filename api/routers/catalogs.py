@@ -38,7 +38,14 @@ def alt_halo_catalog(
 
 
 @router.get("/sam-catalog")
-def sam_catalog(set_name: Annotated[str, Depends(resolved_set_name)], realization: int, fetch_public: bool = False):
+def sam_catalog(set_name: str, realization: int, fetch_public: bool = False):
+    # Real bug fixed (see CLAUDE.md-tracked issue): set_name used to be
+    # wrapped in Depends(resolved_set_name), which requires a `suite` query
+    # param on every request to resolve "SB"'s per-suite folder name -
+    # irrelevant here, since CAMELS-SAM's set is always the literal "LH".
+    # This route never declared `suite` and the frontend never sent one, so
+    # FastAPI rejected every real request with a 422 before it ever reached
+    # get_sam_catalog(). Plain string param, no suite-aware resolution.
     result = require(B.get_sam_catalog(set_name, realization, fetch_public=fetch_public))
     return to_jsonable(result)
 
