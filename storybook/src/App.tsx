@@ -65,7 +65,7 @@ import { CustomAggregateChart } from './components/CustomAggregateChart/CustomAg
 import type { ColumnDef } from './components/UnderlyingHalos/UnderlyingHalos';
 import {
   fetchMassRangeResult, fetchHaloCatalog, toHaloRows, fetchAltHaloCatalog,
-  fetchMergerHistory, fetchConsistentTreesHistory, massRangeImageUrl,
+  fetchMergerHistory, fetchConsistentTreesHistory, fetchBlackholeMergers, massRangeImageUrl,
   fetchPowerSpectrum, powerSpectrumImageUrl,
   fetchBispectrum, bispectrumImageUrl,
   fetchSFRHistory, sfrHistoryImageUrl,
@@ -84,6 +84,8 @@ import {
 import type { Result, VoidCatalog, CustomField, CustomHistogramField, HaloCatalogRow } from './lib/api';
 import { CamelsSamSidebar } from './components/CamelsSamSidebar/CamelsSamSidebar';
 import type { CamelsSamParams } from './components/CamelsSamSidebar/CamelsSamSidebar';
+import { BlackholeMergersSidebar } from './components/BlackholeMergersSidebar/BlackholeMergersSidebar';
+import type { BlackholeMergersParams } from './components/BlackholeMergersSidebar/BlackholeMergersSidebar';
 import './App.css';
 
 /** DEFAULT_SNAPNUM mirrors backend.py's N_SNAPSHOTS - 1 (highest snapshot,
@@ -227,6 +229,17 @@ const SAM_COLUMNS: ColumnDef[] = [
   { key: 'x [Mpc]', label: 'x [Mpc]', width: 90, format: (r) => (r['x [Mpc]'] as number).toFixed(2) },
   { key: 'y [Mpc]', label: 'y [Mpc]', width: 90, format: (r) => (r['y [Mpc]'] as number).toFixed(2) },
   { key: 'z [Mpc]', label: 'z [Mpc]', width: 90, format: (r) => (r['z [Mpc]'] as number).toFixed(2) },
+];
+
+/** Real columns backend.py's `get_blackhole_mergers` returns (see
+ * BlackholeMergersSidebar.mdx for the real, undocumented-by-CAMELS column
+ * meaning this was inferred from). */
+const BLACKHOLE_MERGERS_COLUMNS: ColumnDef[] = [
+  { key: 'Redshift', label: 'Redshift', width: 90, format: (r) => (r.Redshift as number).toFixed(2) },
+  { key: 'Swallower BH ID', label: 'Swallower BH ID', width: 130, format: (r) => String(r['Swallower BH ID']) },
+  massCol('Swallower BH Mass [Msun/h]'),
+  { key: 'Swallowed BH ID', label: 'Swallowed BH ID', width: 130, format: (r) => String(r['Swallowed BH ID']) },
+  massCol('Swallowed BH Mass [Msun/h]'),
 ];
 
 type PlotTileState = {
@@ -459,6 +472,22 @@ type CamelsSamTileState = {
   error?: string;
 };
 
+/** Black Hole Mergers (added 2026-08-07, direct user request) - a genuinely
+ * new statistic, not a Streamlit-to-React port (app.py never had this).
+ * `get_blackhole_mergers()`'s only real output shape is a per-event table
+ * (redshift, swallower/swallowed BH id+mass) - `rows` doubles as both the
+ * chart's own scatter data and the Table mode's real catalog, same
+ * `HaloCatalogRow[]` shape every other real catalog-backed tile uses. */
+type BlackholeMergersTileState = {
+  id: string;
+  kind: 'blackhole-mergers';
+  params: BlackholeMergersParams;
+  rows: HaloCatalogRow[];
+  note: string;
+  loading: boolean;
+  error?: string;
+};
+
 /** Custom tile (added 2026-08-05) - the Add Plot modal's "Custom" tab,
  * real and wired against Flatiron's own live FlatHUB API (see
  * api/routers/custom.py, CustomTab.tsx). Genuinely different from every
@@ -581,6 +610,7 @@ type CanvasTile =
   | DensityField3DTileState
   | ParticleCloud3DTileState
   | CamelsSamTileState
+  | BlackholeMergersTileState
   | CustomTileState
   | EmptyTileState;
 
@@ -1069,6 +1099,19 @@ async function loadCamelsSamTile(id: string, params: CamelsSamParams): Promise<C
   return {
     id, kind: 'camels-sam', params,
     rows: catalog.frame, rawRows: catalog.raw_frame, note: catalog.note, loading: false,
+  };
+}
+
+async function loadBlackholeMergersTile(id: string, params: BlackholeMergersParams): Promise<BlackholeMergersTileState> {
+  const catalog = await fetchBlackholeMergers({
+    suite: params.suite, setName: params.setName, realization: params.realization,
+  });
+  if (catalog === null) {
+    throw new Error('No black hole merger events for this suite/set/realization - try IllustrisTNG.');
+  }
+  return {
+    id, kind: 'blackhole-mergers', params,
+    rows: catalog.frame, note: catalog.note, loading: false,
   };
 }
 
@@ -2043,6 +2086,24 @@ export function App() {
       });
   };
 
+  const refetchBlackholeMergersTile = (id: string, params: BlackholeMergersParams) => {
+    const seq = bumpRequestSeq(id);
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'blackhole-mergers' ? { ...t, params, loading: true } : t)),
+    );
+    loadBlackholeMergersTile(id, params)
+      .then((updated) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      })
+      .catch((err) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'blackhole-mergers' ? { ...t, loading: false, error: String(err) } : t)),
+        );
+      });
+  };
+
   const refetchCustomTile = (id: string, selection: CustomSelection) => {
     const seq = bumpRequestSeq(id);
     setTiles((prev) =>
@@ -2110,6 +2171,19 @@ export function App() {
       replaceTile(placeholder);
       focusTile(id);
       refetchCamelsSamTile(id, params);
+      return;
+    }
+
+    if (selection.statistic === 'Black Hole Mergers') {
+      const params: BlackholeMergersParams = {
+        suite: 'IllustrisTNG', setName: selection.set || 'LH', realization: selection.realization,
+      };
+      const placeholder: BlackholeMergersTileState = {
+        id, kind: 'blackhole-mergers', params, rows: [], note: '', loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchBlackholeMergersTile(id, params);
       return;
     }
 
@@ -2436,6 +2510,13 @@ export function App() {
         <CamelsSamSidebar
           params={focusedTile.params}
           onChange={(params) => refetchCamelsSamTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'blackhole-mergers' && (
+        <BlackholeMergersSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchBlackholeMergersTile(focusedTile.id, params)}
           onRemove={() => removeTile(focusedTile.id)}
         />
       )}
@@ -3058,6 +3139,42 @@ export function App() {
                         itemNoun: 'galaxies',
                         footerNoun: 'galaxies',
                         csvFilename: `LH_${tile.params.realization}_camels-sam.csv`,
+                      }}
+                      {...commonPlotTileProps(tile)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'blackhole-mergers') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      error={tile.error}
+                      title="Black Hole Mergers"
+                      chart={{
+                        series: [{
+                          label: 'merger events',
+                          x: tile.rows.map((r) => r.Redshift),
+                          y: tile.rows.map((r) => r['Swallower BH Mass [Msun/h]'] + r['Swallowed BH Mass [Msun/h]']),
+                        }],
+                        xLabel: 'Redshift',
+                        yLabel: 'Combined BH mass [Msun/h]',
+                        logY: true,
+                        mode: 'markers',
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Merger events', value: tile.rows.length.toLocaleString() },
+                      ]}
+                      halos={{
+                        rows: tile.rows,
+                        columns: BLACKHOLE_MERGERS_COLUMNS,
+                        filter: null,
+                        label: 'View merger events',
+                        itemNoun: 'events',
+                        footerNoun: 'events',
+                        csvFilename: `${tile.params.suite}_${tile.params.setName}_${tile.params.realization}_blackhole_mergers.csv`,
                       }}
                       {...commonPlotTileProps(tile)}
                     />

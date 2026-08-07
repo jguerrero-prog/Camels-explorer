@@ -550,6 +550,28 @@ export async function fetchSamCatalog(realization: number): Promise<SamCatalog> 
   return res.json();
 }
 
+/** Real (added 2026-08-07, direct user request: wire in black hole event
+ * logs) - backend.py's already-real `get_blackhole_mergers()`/
+ * `GET /blackhole-mergers`, a genuinely undocumented raw simulation-output
+ * product (see backend.py's own PUBLIC_BLACKHOLE_MERGERS_SUITES comment
+ * for the real evidence behind the column meaning). IllustrisTNG-only. */
+export type BlackholeMergers = HaloCatalog;
+
+export async function fetchBlackholeMergers(params: {
+  suite: string;
+  setName: string;
+  realization: number | string;
+}): Promise<BlackholeMergers> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/blackhole-mergers?${qs}`);
+  if (res.status === 404) return null; // real gap: no merger events for this suite/set/realization
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 /** Maps get_halo_catalog()'s real column names (backend.py) to
  * UnderlyingHalos's HaloRow shape. */
 export function toHaloRows(catalog: HaloCatalog) {
