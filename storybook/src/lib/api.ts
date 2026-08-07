@@ -435,6 +435,52 @@ export async function fetchHaloCatalog(params: {
   return res.json();
 }
 
+/** Real (added 2026-08-07, direct user request: wire in the alternate halo
+ * finders) - backend.py's already-real `get_alt_halo_catalog()`/
+ * `GET /halo-catalog/alt`, previously only wired into app.py's Streamlit
+ * Catalog Browser tab. Same real `Catalog` shape as `fetchHaloCatalog`
+ * above, just for a different finder's own real columns (AHF/Rockstar/
+ * CAESAR/CAESAR Galaxies each have their own real schema - see App.tsx's
+ * per-finder `ColumnDef` constants). */
+export type AltHaloCatalog = HaloCatalog;
+
+export async function fetchAltHaloCatalog(params: {
+  finder: string;
+  suite: string;
+  setName: string;
+  realization: number | string;
+  snapnum: number;
+}): Promise<AltHaloCatalog> {
+  const qs = new URLSearchParams({
+    finder: params.finder,
+    suite: params.suite,
+    set_name: params.setName,
+    realization: String(params.realization),
+    snapnum: String(params.snapnum),
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/halo-catalog/alt?${qs}`);
+  if (res.status === 404) return null; // real gap: no catalog from this finder for this suite/set/realization
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+/** Real (added 2026-08-07, direct user request: wire in CAMELS-SAM) -
+ * backend.py's already-real `get_sam_catalog()`/`GET /sam-catalog`,
+ * previously only reachable from app.py's own "CAMELS-SAM" tab. Same real
+ * `Catalog` shape as `fetchHaloCatalog` - hardcoded to the LH set (the
+ * only one backend.py's `PUBLIC_SAM_SETS` covers), no suite param at all
+ * (CAMELS-SAM isn't a hydro-suite product). */
+export type SamCatalog = HaloCatalog;
+
+export async function fetchSamCatalog(realization: number): Promise<SamCatalog> {
+  const qs = new URLSearchParams({ set_name: 'LH', realization: String(realization), fetch_public: 'true' });
+  const res = await fetch(`${API_BASE}/sam-catalog?${qs}`);
+  if (res.status === 404) return null; // real gap: no SAM catalog for this realization
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 /** Maps get_halo_catalog()'s real column names (backend.py) to
  * UnderlyingHalos's HaloRow shape. */
 export function toHaloRows(catalog: HaloCatalog) {

@@ -16,14 +16,33 @@ export type HaloRow = {
   stellarMetallicity: number;
 };
 
+/** Real (added 2026-08-07, direct user request: "recycle the underlying
+ * halos table" for the VIDE void catalog "to keep components consistent"
+ * rather than build a bespoke second table). Column shape is now the
+ * caller's concern - this component no longer hardcodes a halo-specific
+ * row/column shape internally. */
+export type AnyRow = Record<string, unknown>;
+export type ColumnDef = {
+  key: string;
+  label: string;
+  width: number;
+  format: (row: AnyRow) => string;
+};
+
 export type UnderlyingHalosProps = {
-  rows: HaloRow[];
+  rows: AnyRow[];
   /** backend.py's Catalog.raw_frame - curated columns + every other real
    * column this file has, same row order as `rows`. null when unavailable
    * (see get_halo_catalog's own real None case) - the "Show all available
    * fields" checkbox is disabled rather than hidden in that case, same
-   * pattern as app.py's own real Catalog Browser tab. */
+   * pattern as app.py's own real Catalog Browser tab. Real only for per-
+   * halo catalogs - the VIDE void catalog has no second, deeper field set
+   * behind its real fetch (`app.py`'s own void table just shows every
+   * column it has, always), so its caller omits this too. */
   rawRows?: Record<string, number>[] | null;
+  /** Which columns to render - defaults to the real per-halo column set
+   * (`HALO_COLUMNS`) every existing caller already relied on implicitly. */
+  columns?: ColumnDef[];
   /** Real disclosure shown above the table when the statistic feeding this
    * tile doesn't plot the same quantity any column here represents (e.g.
    * Halo Mass Function/Baryon Fraction bin by FoF group mass, which this
@@ -31,6 +50,38 @@ export type UnderlyingHalosProps = {
    * `haloMassContextNote`. Omitted for Stellar Mass Function, whose own
    * Stellar Mass column IS what's plotted. */
   massContextNote?: string;
+  /** Real numeric filter slider, keyed by one of `columns`' own field keys
+   * - defaults to the original "Minimum stellar mass" filter every
+   * existing per-halo caller relied on. `app.py`'s own real VIDE void
+   * table has no filter at all (voids number in the dozens/hundreds, not
+   * thousands) - its caller passes `null` to omit the slider rather than
+   * fabricate a filter Streamlit itself doesn't have. */
+  filter?: { key: string; label: string; format: (v: number) => string } | null;
+  /** Real wording, defaulting to the exact strings every existing per-halo
+   * caller already showed (zero behavior change for those callers). The
+   * VIDE void catalog caller overrides these to match `app.py`'s own real
+   * "Void catalog fields (VIDE)" wording/file naming instead. */
+  label?: string;
+  itemNoun?: string;
+  footerNoun?: string;
+  csvFilename?: string;
+  /** Real (wired 2026-08-07, direct user request - this replaces what used
+   * to be a permanently-disabled "+ Add a halo finder" placeholder button).
+   * `backend.py`'s `get_alt_halo_catalog()`/`GET /halo-catalog/alt` already
+   * real for AHF/Rockstar/CAESAR/CAESAR Galaxies - this renders a real
+   * dropdown (reusing the same portal `Dropdown` the column kebab/eye menus
+   * use) switching which finder's catalog `rows`/`columns` show. The fetch
+   * itself is the caller's job (`App.tsx`'s `handleSelectHaloFinder`) - this
+   * component still never fetches on its own, only `onSelect` + `current`/
+   * `options`/`loading` to reflect state. `null`/omitted for catalogs with
+   * no alternate-finder concept (the VIDE void catalog) - no button at all,
+   * not a disabled one, since there's nothing to eventually wire up there. */
+  finderPicker?: {
+    current: string;
+    options: string[];
+    onSelect: (finder: string) => void;
+    loading?: boolean;
+  } | null;
   defaultExpanded?: boolean;
   /** Real fix (2026-08-06, direct user feedback): the fullscreen table
    * view had no indication of which tile/statistic it belonged to - just
@@ -56,18 +107,11 @@ function formatRawValue(value: unknown) {
   return Math.abs(value) >= 1e4 || (Math.abs(value) < 1e-3 && value !== 0) ? value.toExponential(2) : value.toFixed(3);
 }
 
-type AnyRow = Record<string, unknown>;
-
-type ColumnDef = {
-  key: string;
-  label: string;
-  width: number;
-  format: (row: AnyRow) => string;
-};
-
 // Real column names/units match backend.py's get_halo_catalog() exactly
 // (Stellar Metallicity has no bracketed unit there either - dimensionless).
-const CURATED_COLUMNS: ColumnDef[] = [
+// Exported so PlotTile.tsx's per-halo call sites can pass it explicitly
+// as `columns` (the default value below also covers callers that don't).
+export const HALO_COLUMNS: ColumnDef[] = [
   { key: 'subfindId', label: 'Subfind ID', width: 90, format: (r) => String(r.subfindId) },
   { key: 'stellarMass', label: 'Stellar Mass [Msun/h]', width: 130, format: (r) => formatMass(r.stellarMass as number) },
   { key: 'gasMass', label: 'Gas Mass [Msun/h]', width: 120, format: (r) => formatMass(r.gasMass as number) },
@@ -140,14 +184,22 @@ function Dropdown({ top, left, onClose, children }: { top: number; left: number;
   );
 }
 
-export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpanded = false, parentTitle }: UnderlyingHalosProps) {
+const DEFAULT_FILTER = { key: 'stellarMass', label: 'Minimum stellar mass', format: formatMass };
+
+export function UnderlyingHalos({
+  rows, rawRows, columns = HALO_COLUMNS, massContextNote,
+  filter = DEFAULT_FILTER, label = 'View underlying halos', itemNoun = 'halos', footerNoun = 'halos/subhalos',
+  csvFilename = 'halos.csv', finderPicker = null,
+  defaultExpanded = false, parentTitle,
+}: UnderlyingHalosProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const maxStellarMass = useMemo(
-    () => rows.reduce((max, row) => Math.max(max, row.stellarMass), 0),
-    [rows],
+  const maxFilterValue = useMemo(
+    () => (filter ? rows.reduce((max, row) => Math.max(max, Number(row[filter.key]) || 0), 0) : 0),
+    [rows, filter],
   );
-  const [minStellarMass, setMinStellarMass] = useState(0);
+  const [filterValue, setFilterValue] = useState(0);
   const [showAllFields, setShowAllFields] = useState(false);
+  const [finderMenu, setFinderMenu] = useState<{ top: number; left: number } | null>(null);
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [pinnedKeys, setPinnedKeys] = useState<string[]>([]);
   const [columnMenu, setColumnMenu] = useState<{ key: string; top: number; left: number } | null>(null);
@@ -164,13 +216,17 @@ export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpande
   }, [fullscreen]);
 
   // Same row order/index as `rows` (backend.py's raw_frame = concat of
-  // frame + extra columns) - filtering by position keeps the mass filter
-  // consistent whichever set of columns is currently displayed.
-  const massMask = useMemo(() => rows.map((r) => r.stellarMass >= minStellarMass), [rows, minStellarMass]);
-  const filteredCurated = useMemo(() => rows.filter((_, i) => massMask[i]), [rows, massMask]);
+  // frame + extra columns) - filtering by position keeps the filter
+  // consistent whichever set of columns is currently displayed. No-op mask
+  // (everything passes) when `filter` is omitted (the VIDE void catalog).
+  const filterMask = useMemo(
+    () => (filter ? rows.map((r) => Number(r[filter.key]) >= filterValue) : rows.map(() => true)),
+    [rows, filter, filterValue],
+  );
+  const filteredCurated = useMemo(() => rows.filter((_, i) => filterMask[i]), [rows, filterMask]);
   const filteredRaw = useMemo(
-    () => (rawRows ? rawRows.filter((_, i) => massMask[i]) : null),
-    [rawRows, massMask],
+    () => (rawRows ? rawRows.filter((_, i) => filterMask[i]) : null),
+    [rawRows, filterMask],
   );
 
   const rawColumns: ColumnDef[] = useMemo(() => {
@@ -184,7 +240,7 @@ export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpande
   }, [rawRows]);
 
   const usingRaw = showAllFields && filteredRaw !== null;
-  const allColumns = usingRaw ? rawColumns : CURATED_COLUMNS;
+  const allColumns = usingRaw ? rawColumns : columns;
   const activeRows: AnyRow[] = usingRaw ? filteredRaw! : filteredCurated;
 
   const orderedColumns = useMemo(() => {
@@ -225,7 +281,7 @@ export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpande
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'halos.csv';
+    link.download = csvFilename;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -320,8 +376,8 @@ export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpande
           alt=""
           style={{ transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)' }}
         />
-        <span className="underlying-halos__label">View underlying halos</span>
-        <span className="underlying-halos__count">{filteredCurated.length.toLocaleString()} halos</span>
+        <span className="underlying-halos__label">{label}</span>
+        <span className="underlying-halos__count">{filteredCurated.length.toLocaleString()} {itemNoun}</span>
       </button>
 
       {expanded && (
@@ -335,24 +391,36 @@ export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpande
           />
 
           <div className="underlying-halos__controls">
-            <Slider
-              label="Minimum stellar mass"
-              min={0}
-              max={maxStellarMass}
-              value={minStellarMass}
-              onChange={setMinStellarMass}
-              formatValue={formatMass}
-            />
-            <button type="button" className="underlying-halos__add-finder" disabled>
-              + Add a halo finder
-            </button>
+            {filter && (
+              <Slider
+                label={filter.label}
+                min={0}
+                max={maxFilterValue}
+                value={filterValue}
+                onChange={setFilterValue}
+                formatValue={filter.format}
+              />
+            )}
+            {finderPicker && (
+              <button
+                type="button"
+                className="underlying-halos__add-finder"
+                disabled={finderPicker.loading}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setFinderMenu({ top: rect.bottom + 4, left: rect.left });
+                }}
+              >
+                {finderPicker.loading ? 'Loading…' : `Halo finder: ${finderPicker.current}`}
+              </button>
+            )}
           </div>
 
           {renderTable()}
 
           <div className="underlying-halos__footer">
             <span className="underlying-halos__remaining">
-              Showing {activeRows.length.toLocaleString()} of {rows.length.toLocaleString()} halos/subhalos
+              Showing {activeRows.length.toLocaleString()} of {rows.length.toLocaleString()} {footerNoun}
             </span>
             <button type="button" className="underlying-halos__download" onClick={downloadCsv}>
               Download CSV
@@ -415,6 +483,24 @@ export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpande
         </Dropdown>
       )}
 
+      {finderMenu && finderPicker && (
+        <Dropdown top={finderMenu.top} left={finderMenu.left} onClose={() => setFinderMenu(null)}>
+          {finderPicker.options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className="underlying-halos__dropdown-item"
+              onClick={() => {
+                finderPicker.onSelect(option);
+                setFinderMenu(null);
+              }}
+            >
+              {option === finderPicker.current ? `✓ ${option}` : option}
+            </button>
+          ))}
+        </Dropdown>
+      )}
+
       {fullscreen &&
         createPortal(
           <div className="underlying-halos__fullscreen">
@@ -422,7 +508,7 @@ export function UnderlyingHalos({ rows, rawRows, massContextNote, defaultExpande
               <div className="underlying-halos__fullscreen-header-left">
                 <span className="underlying-halos__label">
                   {parentTitle && <span className="underlying-halos__fullscreen-parent-title">{parentTitle} — </span>}
-                  View underlying halos
+                  {label}
                 </span>
                 <Checkbox
                   label="Show all available fields (raw)"
