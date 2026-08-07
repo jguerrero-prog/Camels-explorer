@@ -73,22 +73,40 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
     return <p className="curated-tab__loading">Loading real suite/set/statistic data…</p>;
   }
 
+  // Real (added 2026-08-07, direct user request) - CAMELS-SAM has no
+  // Suite/Set concept at all (backend.py's get_sam_catalog is hardcoded to
+  // the LH set), so it's appended client-side rather than through
+  // GET /api/metadata's own `statistics` list (which mirrors backend.py's
+  // STATISTICS - every other entry there genuinely is suite/set-bound).
+  // Selecting it hides SingleRealizationFields entirely - same real
+  // "no value editing inside a modal" policy `hideRealizationValueControls`
+  // already applies elsewhere, just extended to Suite/Set too since there's
+  // nothing suite/set-shaped to select for this statistic.
+  const isCamelsSam = selection.statistic === 'CAMELS-SAM';
+
   return (
     <>
-      <SingleRealizationFields
-        catalog={catalog}
-        value={{ suite: selection.suite, setName: selection.set, realization: selection.realization }}
-        onChange={(v) => onChange({ ...selection, suite: v.suite, set: v.setName, realization: v.realization })}
-        allowedSuites={catalog.statistic_suites[selection.statistic]}
-        allowedSets={catalog.statistic_sets[selection.statistic]}
-        hideRealizationValueControls
-      />
+      {!isCamelsSam && (
+        <SingleRealizationFields
+          catalog={catalog}
+          value={{ suite: selection.suite, setName: selection.set, realization: selection.realization }}
+          onChange={(v) => onChange({ ...selection, suite: v.suite, set: v.setName, realization: v.realization })}
+          allowedSuites={catalog.statistic_suites[selection.statistic]}
+          allowedSets={catalog.statistic_sets[selection.statistic]}
+          hideRealizationValueControls
+        />
+      )}
       <SelectField
         label="Statistic"
         value={selection.statistic}
-        options={catalog.statistics}
+        options={[...catalog.statistics, 'CAMELS-SAM']}
         onChange={(statistic) => onChange({ ...selection, statistic })}
       />
+      {isCamelsSam && (
+        <p className="curated-tab__loading">
+          CAMELS-SAM is a separate dataset (Santa Cruz Semi-Analytic Model), not tied to a suite/set — real for the LH set only. Realization defaults to 0, adjustable in the tile's own sidebar after adding.
+        </p>
+      )}
     </>
   );
 }

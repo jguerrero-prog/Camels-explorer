@@ -60,9 +60,11 @@ import type { ParticleCloud3DParams } from './components/ParticleCloud3DSidebar/
 import { DensityFieldChart } from './components/DensityFieldChart/DensityFieldChart';
 import { ParticleCloudChart } from './components/ParticleCloudChart/ParticleCloudChart';
 import { Plotly3DChart } from './components/Plotly3DChart/Plotly3DChart';
+import { PlotChart } from './components/PlotChart/PlotChart';
 import { CustomAggregateChart } from './components/CustomAggregateChart/CustomAggregateChart';
+import type { ColumnDef } from './components/UnderlyingHalos/UnderlyingHalos';
 import {
-  fetchMassRangeResult, fetchHaloCatalog, toHaloRows, massRangeImageUrl,
+  fetchMassRangeResult, fetchHaloCatalog, toHaloRows, fetchAltHaloCatalog, massRangeImageUrl,
   fetchPowerSpectrum, powerSpectrumImageUrl,
   fetchBispectrum, bispectrumImageUrl,
   fetchSFRHistory, sfrHistoryImageUrl,
@@ -75,9 +77,12 @@ import {
   fetchFieldMap2DMeta, fieldMap2DImageUrl,
   fetchDensityField3D, fetchVoidCatalog,
   fetchParticleCloud,
+  fetchSamCatalog,
   fetchCustomFields, fetchCustomData, buildCustomFilters, fetchCustomHistogram,
 } from './lib/api';
-import type { Result, VoidCatalog, CustomField, CustomHistogramField } from './lib/api';
+import type { Result, VoidCatalog, CustomField, CustomHistogramField, HaloCatalogRow } from './lib/api';
+import { CamelsSamSidebar } from './components/CamelsSamSidebar/CamelsSamSidebar';
+import type { CamelsSamParams } from './components/CamelsSamSidebar/CamelsSamSidebar';
 import './App.css';
 
 /** DEFAULT_SNAPNUM mirrors backend.py's N_SNAPSHOTS - 1 (highest snapshot,
@@ -92,6 +97,137 @@ const CANVAS_STATS = [
   { value: '5', label: 'Halo finders' },
 ];
 
+/** Real columns backend.py's `_fetch_public_vide_catalog` returns (radius/
+ * density_contrast top-level, everything else in `extra`) - the same real
+ * columns `app.py`'s own "Void catalog fields (VIDE)" expander shows, fed
+ * into `UnderlyingHalos` (added 2026-08-07, direct user request to reuse
+ * that table rather than build a bespoke one - see PlotTile.tsx's
+ * `PlotTileCatalogTable`). */
+const VOID_COLUMNS: ColumnDef[] = [
+  { key: 'radius', label: 'Radius [Mpc/h]', width: 110, format: (r) => (r.radius as number).toFixed(2) },
+  { key: 'density_contrast', label: 'Density Contrast (δ)', width: 150, format: (r) => (r.density_contrast as number).toFixed(3) },
+  { key: 'void_id', label: 'Void ID', width: 90, format: (r) => String(r.void_id) },
+  { key: 'num_part', label: 'Num. Particles', width: 120, format: (r) => String(r.num_part) },
+  { key: 'vol [Mpc/h^3]', label: 'Volume [Mpc/h³]', width: 130, format: (r) => (r['vol [Mpc/h^3]'] as number).toFixed(1) },
+  { key: 'vol_norm', label: 'Normalized Volume', width: 140, format: (r) => (r.vol_norm as number).toFixed(3) },
+  { key: 'central_density', label: 'Central Density', width: 130, format: (r) => (r.central_density as number).toFixed(3) },
+  { key: 'tree_level', label: 'Tree Level', width: 100, format: (r) => String(r.tree_level) },
+  { key: 'n_children', label: 'N Children', width: 100, format: (r) => String(r.n_children) },
+  { key: 'parent_id', label: 'Parent ID', width: 90, format: (r) => String(r.parent_id) },
+];
+
+/** Real (wired 2026-08-07, direct user request) - backend.py's already-real
+ * get_alt_halo_catalog()/GET /halo-catalog/alt, previously only reachable
+ * from app.py's Streamlit Catalog Browser tab. Each finder has its own
+ * real column set/units (confirmed directly against backend.py's
+ * _fetch_ahf_halos/_fetch_rockstar_halos/_fetch_caesar_halos/
+ * _fetch_caesar_galaxies) - not a reshaped version of Subfind's, so this
+ * is 4 real column lists, not 1 generic one. */
+function massCol(key: string): ColumnDef {
+  return { key, label: key, width: 130, format: (r) => (r[key] as number).toExponential(2) };
+}
+const AHF_COLUMNS: ColumnDef[] = [
+  massCol('Halo Mass [Msun/h]'), massCol('Stellar Mass [Msun/h]'), massCol('Gas Mass [Msun/h]'),
+  { key: 'Rvir [kpc/h]', label: 'Rvir [kpc/h]', width: 110, format: (r) => (r['Rvir [kpc/h]'] as number).toFixed(1) },
+  { key: 'N substructures', label: 'N Substructures', width: 140, format: (r) => String(r['N substructures']) },
+];
+const ROCKSTAR_COLUMNS: ColumnDef[] = [
+  { key: 'id', label: 'Halo ID', width: 90, format: (r) => String(r.id) },
+  massCol('Halo Mass [Msun/h]'), massCol('Stellar Mass [Msun/h]'), massCol('Gas Mass [Msun/h]'), massCol('BH Mass [Msun/h]'),
+  { key: 'Vmax [km/s]', label: 'Vmax [km/s]', width: 100, format: (r) => (r['Vmax [km/s]'] as number).toFixed(1) },
+  { key: 'Type', label: 'Type', width: 90, format: (r) => (r.Type === 0 ? 'Central' : 'Satellite') },
+];
+const CAESAR_HALO_COLUMNS: ColumnDef[] = [
+  massCol('Halo Mass [Msun]'), massCol('Stellar Mass [Msun]'), massCol('Gas Mass [Msun]'), massCol('BH Mass [Msun]'),
+  { key: 'SFR [Msun/yr]', label: 'SFR [Msun/yr]', width: 110, format: (r) => (r['SFR [Msun/yr]'] as number).toFixed(2) },
+];
+const CAESAR_GALAXY_COLUMNS: ColumnDef[] = [
+  massCol('Stellar Mass [Msun]'), massCol('Gas Mass [Msun]'), massCol('BH Mass [Msun]'), massCol('Total Mass [Msun]'),
+  { key: 'SFR [Msun/yr]', label: 'SFR [Msun/yr]', width: 110, format: (r) => (r['SFR [Msun/yr]'] as number).toFixed(2) },
+  { key: 'Stellar Half-Mass Radius [kpc/h]', label: 'Half-Mass Radius [kpc/h]', width: 160, format: (r) => (r['Stellar Half-Mass Radius [kpc/h]'] as number).toFixed(2) },
+  { key: 'Parent Halo Index', label: 'Parent Halo Index', width: 140, format: (r) => String(r['Parent Halo Index']) },
+];
+
+// Real per-suite coverage (backend.py's PUBLIC_AHF_SUITES/
+// PUBLIC_ROCKSTAR_SUITES/PUBLIC_CAESAR_SUITES) - small, stable sets
+// mirrored directly rather than round-tripped through metadata, same
+// precedent as PowerSpectrumSidebar's own PTYPE_OPTIONS.
+const HALO_FINDER_CONFIG: Record<string, {
+  columns: ColumnDef[]; filterKey: string; itemNoun: string; suites: Set<string>;
+}> = {
+  AHF: { columns: AHF_COLUMNS, filterKey: 'Stellar Mass [Msun/h]', itemNoun: 'halos', suites: new Set(['IllustrisTNG', 'SIMBA']) },
+  Rockstar: { columns: ROCKSTAR_COLUMNS, filterKey: 'Stellar Mass [Msun/h]', itemNoun: 'halos', suites: new Set(['IllustrisTNG', 'SIMBA', 'Astrid']) },
+  CAESAR: { columns: CAESAR_HALO_COLUMNS, filterKey: 'Stellar Mass [Msun]', itemNoun: 'halos', suites: new Set(['IllustrisTNG', 'SIMBA']) },
+  'CAESAR Galaxies': { columns: CAESAR_GALAXY_COLUMNS, filterKey: 'Stellar Mass [Msun]', itemNoun: 'galaxies', suites: new Set(['IllustrisTNG', 'SIMBA']) },
+};
+
+function availableHaloFinders(suite: string): string[] {
+  return ['Subfind', ...Object.keys(HALO_FINDER_CONFIG).filter((f) => HALO_FINDER_CONFIG[f].suites.has(suite))];
+}
+
+/** CAMELS-SAM's real two-panel chart, matching `app.py`'s own `st.columns(2)`
+ * layout (a real matplotlib mass-mass scatter + a real Plotly 3D position
+ * scatter) - built directly from the already-fetched catalog rows, since
+ * there's no existing `_render_result_png`/`fetchXxxResult` backend path
+ * for an ad-hoc scatter the way every other statistic's own chart has.
+ * Native Plotly for both panels rather than porting the matplotlib one -
+ * `PlotChart` already renders exactly this shape (log-log scatter,
+ * `mode: 'markers'`), so no new backend/API surface was needed. */
+function CamelsSamCharts({ rows }: { rows: HaloCatalogRow[] }) {
+  const haloMass = rows.map((r) => r['Halo Mass [Msun]']);
+  const stellarMass = rows.map((r) => r['Stellar Mass [Msun]']);
+  const sfr = rows.map((r) => r['SFR [Msun/yr]']);
+  return (
+    <div style={{ display: 'flex', width: '100%', height: '100%', gap: 8 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <PlotChart
+          series={[{ label: 'galaxies', x: haloMass, y: stellarMass }]}
+          xLabel="Halo mass [Msun]"
+          yLabel="Stellar mass [Msun]"
+          logX
+          logY
+          mode="markers"
+          displayMode="interactive"
+        />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <Plotly3DChart
+          xLabel="x [Mpc]"
+          yLabel="y [Mpc]"
+          zLabel="z [Mpc]"
+          data={[{
+            type: 'scatter3d',
+            mode: 'markers',
+            x: rows.map((r) => r['x [Mpc]']),
+            y: rows.map((r) => r['y [Mpc]']),
+            z: rows.map((r) => r['z [Mpc]']),
+            marker: {
+              size: 4,
+              color: stellarMass.map((m) => Math.log10(m)),
+              colorscale: 'Inferno',
+              showscale: true,
+              colorbar: { title: { text: 'log10 M*', font: { color: '#e5e7eb' } }, tickfont: { color: '#e5e7eb' } },
+            },
+            text: rows.map((_, i) => `M* = ${stellarMass[i].toExponential(2)} Msun<br>Mhalo = ${haloMass[i].toExponential(2)} Msun<br>SFR = ${sfr[i].toFixed(3)} Msun/yr`),
+            hoverinfo: 'text',
+          }]}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Real columns backend.py's `get_sam_catalog` returns (see
+ * CamelsSamSidebar.mdx) - fed into `UnderlyingHalos` via `PlotTile`'s
+ * `halos` prop, and into the tile's own scatter/3D charts (`loadCamelsSamTile`). */
+const SAM_COLUMNS: ColumnDef[] = [
+  massCol('Stellar Mass [Msun]'), massCol('Halo Mass [Msun]'), massCol('BH Mass [Msun]'), massCol('Cold Gas Mass [Msun]'),
+  { key: 'SFR [Msun/yr]', label: 'SFR [Msun/yr]', width: 110, format: (r) => (r['SFR [Msun/yr]'] as number).toFixed(3) },
+  { key: 'x [Mpc]', label: 'x [Mpc]', width: 90, format: (r) => (r['x [Mpc]'] as number).toFixed(2) },
+  { key: 'y [Mpc]', label: 'y [Mpc]', width: 90, format: (r) => (r['y [Mpc]'] as number).toFixed(2) },
+  { key: 'z [Mpc]', label: 'z [Mpc]', width: 90, format: (r) => (r['z [Mpc]'] as number).toFixed(2) },
+];
+
 type PlotTileState = {
   id: string;
   kind: 'mass-range';
@@ -104,6 +240,18 @@ type PlotTileState = {
   logY: boolean;
   haloRows: ReturnType<typeof toHaloRows>;
   haloRawRows: Record<string, number>[] | null;
+  /** Real (added 2026-08-07, direct user request: wire in the alternate
+   * halo finders) - 'Subfind' means the two `halo*` fields above are what's
+   * shown; anything else means `altRows`/`altRawRows` are, fetched from
+   * `GET /halo-catalog/alt` on demand (see `handleSelectHaloFinder`). Reset
+   * to 'Subfind' whenever suite/set/realization/snapnum change (the same
+   * fields that invalidate `haloRows` itself) - a stale AHF table under a
+   * newly-selected suite AHF doesn't even cover would be a worse UX than
+   * just resetting the picker. */
+  altFinder: string;
+  altRows: Record<string, unknown>[];
+  altRawRows: Record<string, number>[] | null;
+  altLoading: boolean;
   /** Real backend.py Result.note for realizations[0] - added 2026-08-06 for
    * the toolbar's Copy provenance tool (see describeTileProvenance). Same
    * field the other 9 static-image tile kinds already carried; this
@@ -275,6 +423,26 @@ type ParticleCloud3DTileState = {
   error?: string;
 };
 
+/** CAMELS-SAM (added 2026-08-07, direct user request) - `app.py`'s own
+ * "CAMELS-SAM" tab, backed by the already-real `get_sam_catalog()`/
+ * `GET /sam-catalog`. Genuinely different from every catalog-backed tile
+ * above: no Suite/Set at all (hardcoded to the LH set - see
+ * `CamelsSamSidebar.mdx`), and its own chart is built directly from the
+ * same real catalog rows the table shows (no separate `_render_result_png`/
+ * `fetchXxxResult` path - there's no existing backend render function for
+ * an ad-hoc mass-mass scatter, so this uses the already-fetched rows with
+ * plain client-side Plotly, same as the Custom tab's own scatter charts). */
+type CamelsSamTileState = {
+  id: string;
+  kind: 'camels-sam';
+  params: CamelsSamParams;
+  rows: HaloCatalogRow[];
+  rawRows: HaloCatalogRow[] | null;
+  note: string;
+  loading: boolean;
+  error?: string;
+};
+
 /** Custom tile (added 2026-08-05) - the Add Plot modal's "Custom" tab,
  * real and wired against Flatiron's own live FlatHUB API (see
  * api/routers/custom.py, CustomTab.tsx). Genuinely different from every
@@ -396,6 +564,7 @@ type CanvasTile =
   | FieldMap2DTileState
   | DensityField3DTileState
   | ParticleCloud3DTileState
+  | CamelsSamTileState
   | CustomTileState
   | EmptyTileState;
 
@@ -642,6 +811,14 @@ async function loadMassRangeTile(
     logY: first.log_y,
     haloRows: catalogUnchanged ? previous.haloRows : toHaloRows(catalog),
     haloRawRows: catalogUnchanged ? previous.haloRawRows : (catalog?.raw_frame ?? null),
+    // Same invalidation as the Subfind catalog above - an alt-finder table
+    // fetched for the old suite/set/realization/snapnum would be stale
+    // (and possibly for a suite that finder doesn't even cover) under the
+    // new ones, so it resets to Subfind rather than carrying over.
+    altFinder: catalogUnchanged ? previous.altFinder : 'Subfind',
+    altRows: catalogUnchanged ? previous.altRows : [],
+    altRawRows: catalogUnchanged ? previous.altRawRows : null,
+    altLoading: false,
     note: first.note,
     loading: false,
   };
@@ -796,6 +973,18 @@ async function loadGalaxyScalingRelationsTile(id: string, params: GalaxyScalingR
 async function loadFieldMap2DGroupTile(id: string, params: FieldMap2DParams): Promise<FieldMap2DTileState> {
   const { rows, cols } = params.groupSize!;
   const start = Number(params.realization);
+  // Real fix (2026-08-06, code-quality audit): `realization` is a plain
+  // number for every set this control is offered for, but a 1P compound
+  // string id (e.g. "p11_2") for 1P - currently only ever reaches here
+  // because FieldMap2DSidebar forces `groupSize: null` for 1P before this
+  // ever gets called, not because this function enforces it itself. Fails
+  // fast with a clear message rather than relying solely on that sidebar-
+  // level guard staying correct forever, or silently firing `rows*cols`
+  // real network requests for `NaN`/`NaN+1`/... realizations before
+  // reaching the same "no data" conclusion.
+  if (Number.isNaN(start)) {
+    throw new Error('Group view needs a numeric Realization - not available for this Set.');
+  }
   const realizations = Array.from({ length: rows * cols }, (_, i) => start + i);
   const fetched = await Promise.all(
     realizations.map((realization) =>
@@ -848,6 +1037,17 @@ async function loadParticleCloud3DTile(id: string, params: ParticleCloud3DParams
   return {
     id, kind: 'particle-cloud-3d', params,
     positions: result.positions, note: result.note, source: result.source, loading: false,
+  };
+}
+
+async function loadCamelsSamTile(id: string, params: CamelsSamParams): Promise<CamelsSamTileState> {
+  const catalog = await fetchSamCatalog(params.realization);
+  if (catalog === null) {
+    throw new Error('No CAMELS-SAM catalog for this realization - try another one (0-999).');
+  }
+  return {
+    id, kind: 'camels-sam', params,
+    rows: catalog.frame, rawRows: catalog.raw_frame, note: catalog.note, loading: false,
   };
 }
 
@@ -1382,6 +1582,26 @@ export function App() {
     </>
     );
   };
+
+  // Real fix (2026-08-06, code-quality audit): every one of the 14
+  // <PlotTile> call sites below used to repeat these exact same 5 props
+  // verbatim - onFocus/focused/onChartClick/annotationOverlay/
+  // readoutsHidden don't vary by tile kind, only by the tile itself, so
+  // there was nothing tile-kind-specific about them worth inlining 14
+  // times. The remaining chart/readoutGroups/halos props still differ
+  // enough per kind that folding this into a full per-kind renderer map
+  // would be a much larger, riskier rewrite for the same 4 lines/site this
+  // already recovers.
+  const commonPlotTileProps = (tile: CanvasTile) => ({
+    onFocus: () => focusTile(tile.id),
+    focused: tile.id === focusedTileId,
+    onChartClick: (annotateMode || arrowMode || noteMode)
+      ? (xFrac: number, yFrac: number) => handleChartAreaClick(tile.id, xFrac, yFrac)
+      : undefined,
+    annotationOverlay: renderAnnotationOverlay(tile),
+    readoutsHidden: readoutsHiddenFor(tile.id),
+  });
+
   const showToast = (title: string, detail?: string) => {
     if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     setToast({ title, detail });
@@ -1422,6 +1642,55 @@ export function App() {
         if (requestSeqRef.current.get(id) !== seq) return;
         setTiles((prev) =>
           prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, loading: false, error: String(err) } : t)),
+        );
+      });
+  };
+
+  /** Real (added 2026-08-07, direct user request: wire in the alternate
+   * halo finders) - backend.py's already-real get_alt_halo_catalog()/
+   * GET /halo-catalog/alt, fetched on demand when a mass-range tile's
+   * `UnderlyingHalos.finderPicker` selects something other than 'Subfind'.
+   * Shares `bumpRequestSeq`'s own per-tile sequence guard with
+   * `refetchMassRangeTile` (not a separate mechanism) - selecting a new
+   * finder correctly invalidates an in-flight fetch for the old one, and a
+   * params change (Snapshot slider, etc.) correctly invalidates this too. */
+  const handleSelectHaloFinder = (id: string, finder: string) => {
+    const tile = tiles.find((t) => t.id === id);
+    if (!tile || tile.kind !== 'mass-range') return;
+    const seq = bumpRequestSeq(id);
+    if (finder === 'Subfind') {
+      setTiles((prev) =>
+        prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, altFinder: 'Subfind', altRows: [], altRawRows: null, altLoading: false } : t)),
+      );
+      return;
+    }
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, altFinder: finder, altLoading: true } : t)),
+    );
+    fetchAltHaloCatalog({
+      finder, suite: tile.params.suite, setName: tile.params.setName,
+      realization: tile.params.realizations[0], snapnum: tile.params.snapnum,
+    })
+      .then((catalog) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        if (!catalog) {
+          showToast(`No ${finder} catalog`, 'for this suite/set/realization - reverted to Subfind.');
+          setTiles((prev) =>
+            prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, altFinder: 'Subfind', altRows: [], altRawRows: null, altLoading: false } : t)),
+          );
+          return;
+        }
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'mass-range'
+            ? { ...t, altRows: catalog.frame, altRawRows: catalog.raw_frame, altLoading: false }
+            : t)),
+        );
+      })
+      .catch((err) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        showToast(`${finder} catalog failed to load`, String(err));
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, altFinder: 'Subfind', altRows: [], altRawRows: null, altLoading: false } : t)),
         );
       });
   };
@@ -1687,6 +1956,24 @@ export function App() {
       });
   };
 
+  const refetchCamelsSamTile = (id: string, params: CamelsSamParams) => {
+    const seq = bumpRequestSeq(id);
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'camels-sam' ? { ...t, params, loading: true } : t)),
+    );
+    loadCamelsSamTile(id, params)
+      .then((updated) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      })
+      .catch((err) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'camels-sam' ? { ...t, loading: false, error: String(err) } : t)),
+        );
+      });
+  };
+
   const refetchCustomTile = (id: string, selection: CustomSelection) => {
     const seq = bumpRequestSeq(id);
     setTiles((prev) =>
@@ -1735,11 +2022,24 @@ export function App() {
       const placeholder: PlotTileState = {
         id, kind: 'mass-range', statistic, params,
         series: [], xLabel: '', yLabel: '', logX: true, logY: config.logY,
-        haloRows: [], haloRawRows: null, note: '', loading: true,
+        haloRows: [], haloRawRows: null,
+        altFinder: 'Subfind', altRows: [], altRawRows: null, altLoading: false,
+        note: '', loading: true,
       };
       replaceTile(placeholder);
       focusTile(id);
       refetchMassRangeTile(id, statistic, params);
+      return;
+    }
+
+    if (selection.statistic === 'CAMELS-SAM') {
+      const params: CamelsSamParams = { realization: Number(selection.realization) || 0 };
+      const placeholder: CamelsSamTileState = {
+        id, kind: 'camels-sam', params, rows: [], rawRows: null, note: '', loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchCamelsSamTile(id, params);
       return;
     }
 
@@ -2061,6 +2361,13 @@ export function App() {
           onRemove={() => removeTile(focusedTile.id)}
         />
       )}
+      {!activePanel && focusedTile?.kind === 'camels-sam' && (
+        <CamelsSamSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchCamelsSamTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
       {!activePanel && focusedTile?.kind === 'custom' && (
         <CustomSidebar
           selection={focusedTile.selection}
@@ -2070,8 +2377,6 @@ export function App() {
       )}
       <div className="app-shell__main">
         <TopNav
-          folderName="Untitled"
-          projectName="Project 1"
           onAddPlot={() => openAddPlotModal(null)}
           // Real evidence (Figma node 1113:1583's header, and 1012:1124's
           // merged header/toolbar): the toolbar isn't present at all in the
@@ -2115,6 +2420,7 @@ export function App() {
                       onCompare={handleCompare}
                       mode={ratioDiffMode}
                       onModeChange={setRatioDiffMode}
+                      onClose={() => setRatioDiffPopoverOpen(false)}
                     />
                   ) : undefined
                 }
@@ -2193,22 +2499,49 @@ export function App() {
                         { label: config.rangeLabel, value: `${tile.params.min.toExponential()} – ${tile.params.max.toExponential()}` },
                         { label: 'Bins', value: String(tile.params.bins) },
                       ]}
-                      halos={{
-                        rows: tile.haloRows,
-                        rawRows: tile.haloRawRows,
-                        // Halo Mass Function/Baryon Fraction are binned by
-                        // FoF group mass, which has no column in this
-                        // per-subhalo table - see UnderlyingHalos.mdx.
-                        massContextNote:
-                          tile.statistic !== 'Stellar Mass Function'
-                            ? `${tile.statistic} bins by each halo's total FoF group mass, a different (and coarser) quantity than any column shown below - this table is the same real per-subhalo Subfind catalog Stellar Mass Function uses, not a halo-level one.`
-                            : undefined,
-                      }}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      halos={(() => {
+                        // Real, established precedent (ChartModeDropdown's
+                        // own "no toggle when nothing to switch to") -
+                        // suites with no real alternate-finder coverage
+                        // (Swift-EAGLE) get no picker at all, not a
+                        // 1-option dropdown with nothing to pick.
+                        const finders = availableHaloFinders(tile.params.suite);
+                        const finderPicker = finders.length > 1
+                          ? {
+                              current: tile.altFinder,
+                              options: finders,
+                              onSelect: (finder: string) => handleSelectHaloFinder(tile.id, finder),
+                              loading: tile.altLoading,
+                            }
+                          : null;
+                        if (tile.altFinder === 'Subfind') {
+                          return {
+                            rows: tile.haloRows,
+                            rawRows: tile.haloRawRows,
+                            // Halo Mass Function/Baryon Fraction are binned by
+                            // FoF group mass, which has no column in this
+                            // per-subhalo table - see UnderlyingHalos.mdx.
+                            massContextNote:
+                              tile.statistic !== 'Stellar Mass Function'
+                                ? `${tile.statistic} bins by each halo's total FoF group mass, a different (and coarser) quantity than any column shown below - this table is the same real per-subhalo Subfind catalog Stellar Mass Function uses, not a halo-level one.`
+                                : undefined,
+                            finderPicker,
+                          };
+                        }
+                        const cfg = HALO_FINDER_CONFIG[tile.altFinder];
+                        return {
+                          rows: tile.altLoading ? [] : tile.altRows,
+                          rawRows: tile.altRawRows,
+                          columns: cfg.columns,
+                          filter: { key: cfg.filterKey, label: 'Minimum stellar mass', format: (v: number) => v.toExponential(2) },
+                          label: `View underlying ${cfg.itemNoun} (${tile.altFinder})`,
+                          itemNoun: cfg.itemNoun,
+                          footerNoun: cfg.itemNoun,
+                          csvFilename: `${tile.params.suite}_${tile.params.setName}_${tile.params.realizations[0]}_${tile.altFinder.replace(/\s+/g, '_')}.csv`,
+                          finderPicker,
+                        };
+                      })()}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2243,11 +2576,7 @@ export function App() {
                         { label: 'Particle type', value: tile.params.ptypeLabel },
                       ]}
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2278,11 +2607,7 @@ export function App() {
                         { label: 'Triangle shape (mu)', value: String(tile.params.muIndex) },
                       ]}
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2315,11 +2640,7 @@ export function App() {
                         { label: 'Bins', value: String(tile.params.bins) },
                       ]}
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2341,11 +2662,7 @@ export function App() {
                         { label: 'Halos', value: String(tile.nHalos) },
                       ]}
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2368,11 +2685,7 @@ export function App() {
                         { label: 'Halos', value: String(tile.nHalos) },
                       ]}
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2395,11 +2708,7 @@ export function App() {
                         { label: 'Galaxies', value: String(tile.nGalaxies) },
                       ]}
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2422,11 +2731,7 @@ export function App() {
                         { label: 'Redshift', value: tile.params.redshift.toFixed(2) },
                       ]}
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2449,11 +2754,7 @@ export function App() {
                         { label: 'Sightline', value: String(tile.params.sightline) },
                       ]}
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2476,11 +2777,7 @@ export function App() {
                         { label: 'Bins', value: String(tile.params.bins) },
                       ]}
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2527,11 +2824,7 @@ export function App() {
                             ]
                       }
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2578,11 +2871,28 @@ export function App() {
                         { label: 'Grid', value: String(tile.params.grid) },
                       ]}
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      catalogTable={
+                        // Matches app.py's own real gate (`if show_voids and
+                        // voids.extra is not None`) - the synthetic-fallback
+                        // void overlay has no `extra` at all, so there's no
+                        // real per-void table to show for it either.
+                        tile.voids && tile.voids.extra
+                          ? {
+                              rows: tile.voids.positions.map((_, i) => ({
+                                radius: tile.voids!.radius[i],
+                                density_contrast: tile.voids!.density_contrast[i],
+                                ...tile.voids!.extra![i],
+                              })),
+                              columns: VOID_COLUMNS,
+                              filter: null,
+                              label: 'View void catalog',
+                              itemNoun: 'voids',
+                              footerNoun: 'voids',
+                              csvFilename: `${tile.params.suite}_${tile.params.setName}_${tile.params.realization}_vide_voids.csv`,
+                            }
+                          : null
+                      }
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2608,11 +2918,34 @@ export function App() {
                         { label: 'Particles', value: tile.positions.length.toLocaleString() },
                       ]}
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      {...commonPlotTileProps(tile)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'camels-sam') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      error={tile.error}
+                      title="CAMELS-SAM"
+                      chart={{ kind: 'plotly-3d', content: <CamelsSamCharts rows={tile.rows} /> }}
+                      readoutGroups={[
+                        { label: 'Set', value: 'LH (Santa Cruz SAM)' },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Galaxies', value: tile.rows.length.toLocaleString() },
+                      ]}
+                      halos={{
+                        rows: tile.rows,
+                        rawRows: tile.rawRows,
+                        columns: SAM_COLUMNS,
+                        filter: { key: 'Stellar Mass [Msun]', label: 'Minimum stellar mass', format: (v) => v.toExponential(2) },
+                        label: 'View underlying galaxies',
+                        itemNoun: 'galaxies',
+                        footerNoun: 'galaxies',
+                        csvFilename: `LH_${tile.params.realization}_camels-sam.csv`,
+                      }}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }
@@ -2672,6 +3005,9 @@ export function App() {
                             kind: 'plotly-3d',
                             content: (
                               <Plotly3DChart
+                                xLabel={result.xLabel}
+                                yLabel={result.yLabel}
+                                zLabel={result.zLabel}
                                 data={[{
                                   type: 'scatter3d',
                                   mode: 'markers',
@@ -2729,11 +3065,7 @@ export function App() {
                         { label: 'Rows matched', value: tile.matchedCount.toLocaleString() },
                       ]}
                       halos={null}
-                      onFocus={() => focusTile(tile.id)}
-                      focused={tile.id === focusedTileId}
-                      onChartClick={(annotateMode || arrowMode || noteMode) ? (xFrac, yFrac) => handleChartAreaClick(tile.id, xFrac, yFrac) : undefined}
-                      annotationOverlay={renderAnnotationOverlay(tile)}
-                      readoutsHidden={readoutsHiddenFor(tile.id)}
+                      {...commonPlotTileProps(tile)}
                     />
                   );
                 }

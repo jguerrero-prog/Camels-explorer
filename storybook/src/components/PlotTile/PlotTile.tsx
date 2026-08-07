@@ -6,7 +6,7 @@ import { StaticImageChart } from '../StaticImageChart/StaticImageChart';
 import { ParamsReadout } from '../ParamsReadout/ParamsReadout';
 import type { ParamsReadoutGroup } from '../ParamsReadout/ParamsReadout';
 import { UnderlyingHalos } from '../UnderlyingHalos/UnderlyingHalos';
-import type { HaloRow } from '../UnderlyingHalos/UnderlyingHalos';
+import type { UnderlyingHalosProps } from '../UnderlyingHalos/UnderlyingHalos';
 import { ChartModeDropdown } from '../ChartModeDropdown/ChartModeDropdown';
 import type { ChartDisplayMode } from '../ChartModeDropdown/ChartModeDropdown';
 import '../Tile/Tile.css';
@@ -56,16 +56,24 @@ export type PlotTileChart =
       content: ReactNode;
     };
 
-export type PlotTileHalos = {
-  rows: HaloRow[];
-  /** backend.py's Catalog.raw_frame - see UnderlyingHalos.mdx's "Show
-   * all available fields" row. */
-  rawRows?: Record<string, number>[] | null;
-  /** Real disclosure shown above the halos table when this statistic's
-   * plotted quantity doesn't correspond to any column in the (always
-   * per-subhalo) catalog below it - see UnderlyingHalos.mdx. */
-  massContextNote?: string;
-};
+/** Real (widened 2026-08-07, direct user request: wire in the alternate-
+ * halo-finder picker `UnderlyingHalos`'s own "+ Add a halo finder" button
+ * was a disabled placeholder for). Was `{ rows: HaloRow[]; rawRows?; ...
+ * massContextNote? }` - now every `UnderlyingHalos` prop, since a real
+ * finder switch (AHF/Rockstar/CAESAR) means `rows`/`columns` change shape
+ * entirely, not just which values populate a fixed `HaloRow`. `HaloRow[]`
+ * still satisfies this structurally, so every existing caller (passing
+ * just `rows`/`rawRows`/`massContextNote`) needed zero changes. */
+export type PlotTileHalos = Omit<UnderlyingHalosProps, 'parentTitle' | 'defaultExpanded'>;
+
+/** Real (added 2026-08-07, direct user request: reuse `UnderlyingHalos`
+ * for the VIDE void catalog "to keep components consistent") - a second,
+ * generic "Table" mode channel alongside `halos` above. Kept as its own
+ * prop rather than repurposing `halos` itself: a prop literally named
+ * `halos` carrying void-catalog rows would read as a bug to a future
+ * reader of 3D Density Field's own tile. Every real caller has one or the
+ * other, never both, so the render below just picks whichever is set. */
+export type PlotTileCatalogTable = Omit<UnderlyingHalosProps, 'parentTitle' | 'defaultExpanded'>;
 
 export type PlotTileProps = {
   title: string;
@@ -78,6 +86,11 @@ export type PlotTileProps = {
    * Fraction are. Omits the "Table" mode entirely rather than showing a
    * confusing empty (0 of 0) table. */
   halos: PlotTileHalos | null;
+  /** `undefined`/`null` for every statistic without a real generic-catalog
+   * concept (i.e. everything except 3D Density Field's VIDE void overlay
+   * today) - see `PlotTileCatalogTable`'s own docs for why this is a
+   * separate prop from `halos` rather than reusing it. */
+  catalogTable?: PlotTileCatalogTable | null;
   /** Fires on any click on the tile - App.tsx uses this to decide which
    * tile's ParamsSidebar shows (its own focusedTileId state, not a prop
    * here). No visual effect on the tile itself - see PlotTile.mdx's
@@ -128,12 +141,12 @@ export type PlotTileProps = {
   readoutsHidden?: boolean;
 };
 
-function availableChartModes(chart: PlotTileChart, hasHalos: boolean): ChartDisplayMode[] {
+function availableChartModes(chart: PlotTileChart, hasTable: boolean): ChartDisplayMode[] {
   const modes: ChartDisplayMode[] = [];
   const hasStatic = chart.kind === 'static-image' || (chart.kind !== 'plotly-3d' && !!chart.imageUrl);
   if (hasStatic) modes.push('static');
   if (chart.kind !== 'static-image') modes.push('interactive');
-  if (hasHalos) modes.push('table');
+  if (hasTable) modes.push('table');
   return modes;
 }
 
@@ -150,9 +163,9 @@ function availableChartModes(chart: PlotTileChart, hasHalos: boolean): ChartDisp
  * the tile's full body height - no competing for space, because only one
  * ever renders. */
 export function PlotTile({
-  title, chart, readoutGroups, halos, onFocus, focused, onChartClick, annotationOverlay, error, readoutsHidden,
+  title, chart, readoutGroups, halos, catalogTable, onFocus, focused, onChartClick, annotationOverlay, error, readoutsHidden,
 }: PlotTileProps) {
-  const modes = availableChartModes(chart, !!halos);
+  const modes = availableChartModes(chart, !!halos || !!catalogTable);
   const [chartMode, setChartMode] = useState<ChartDisplayMode>(modes[0]);
 
   const handleChartAreaClick = (e: MouseEvent<HTMLDivElement>) => {
@@ -168,13 +181,9 @@ export function PlotTile({
         {modes.length > 1 && <ChartModeDropdown mode={chartMode} options={modes} onChange={setChartMode} />}
       </div>
       {chartMode === 'table' && halos ? (
-        <UnderlyingHalos
-          rows={halos.rows}
-          rawRows={halos.rawRows}
-          massContextNote={halos.massContextNote}
-          parentTitle={title}
-          defaultExpanded
-        />
+        <UnderlyingHalos {...halos} parentTitle={title} defaultExpanded />
+      ) : chartMode === 'table' && catalogTable ? (
+        <UnderlyingHalos {...catalogTable} parentTitle={title} defaultExpanded />
       ) : (
         <div className="plot-tile__body">
           <div

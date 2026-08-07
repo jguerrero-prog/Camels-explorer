@@ -95,6 +95,9 @@
 /* Pushed to the far right (aligning with the table's own right edge below
    it) rather than sitting flush against the now-capped 50%-width slider,
    which left an empty gap between the button and the table's edge. */
+/* Real (wired 2026-08-07) - was a permanently `cursor: not-allowed`
+   placeholder; now a real dropdown trigger for backend.py's already-real
+   get_alt_halo_catalog() (see UnderlyingHalos.tsx's `finderPicker` prop). */
 .underlying-halos__add-finder {
   flex-shrink: 0;
   margin-left: auto;
@@ -102,10 +105,19 @@
   border: 1px solid var(--color-border-subtle);
   border-radius: 6px;
   background: none;
-  color: var(--color-text-muted);
+  color: var(--color-text-primary);
   font-family: var(--font-label);
   font-weight: 600;
   font-size: 12px;
+  cursor: pointer;
+}
+
+.underlying-halos__add-finder:hover:not(:disabled) {
+  background: var(--color-surface-toggle-active);
+}
+
+.underlying-halos__add-finder:disabled {
+  color: var(--color-text-muted);
   cursor: not-allowed;
 }
 
