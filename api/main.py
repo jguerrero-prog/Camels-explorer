@@ -7,8 +7,11 @@ Run from the repo root (not from api/) so `import backend` resolves:
     uvicorn api.main:app --reload --port 8000
 """
 
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from api.routers import catalogs, custom, fields, halos, metadata, statistics
 
@@ -39,3 +42,19 @@ app.include_router(custom.router, prefix="/api")
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# Real (added 2026-08-07, first deploy) - serves the built frontend
+# (`npm run build`'s `storybook/dist`) from this same FastAPI process, so
+# a deployed instance is one origin/one URL with no CORS involved at all -
+# the CORS allowlist above is dev-only (two local servers on different
+# ports) and stays unused in this path. Mounted last and conditionally: a
+# local `uvicorn api.main:app --reload` dev run (this repo's own normal
+# workflow) never has `storybook/dist` built, and StaticFiles raises at
+# import time if its directory doesn't exist - guarding on real existence
+# keeps the everyday dev command working unchanged. `html=True` serves
+# `index.html` for `/` and falls back to it for any unmatched path so the
+# client-side app (not server-routed) always loads.
+_frontend_dist = Path(__file__).resolve().parent.parent / "storybook" / "dist"
+if _frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=_frontend_dist, html=True), name="frontend")

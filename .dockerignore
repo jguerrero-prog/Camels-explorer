@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__
+*.pyc
+storybook/node_modules
+storybook/dist
+storybook/.storybook
+storybook/storybook-static
+app.py
+desktop.py
+tests
+.claude
+CLAUDE.md

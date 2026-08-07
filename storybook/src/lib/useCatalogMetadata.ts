@@ -1,7 +1,5 @@
 import { useEffect, useState } from 'react';
-
-// Dev-only, matches AddPlotModal/CuratedTab.tsx's own API_BASE.
-const API_BASE = 'http://localhost:8010/api';
+import { API_BASE } from './api';
 
 // `realizations` is `null` for SB - unlike every other set, its real
 // realization count is per-suite, not one flat number (see
