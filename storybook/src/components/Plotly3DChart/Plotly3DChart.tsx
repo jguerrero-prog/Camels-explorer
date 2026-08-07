@@ -49,14 +49,32 @@ export type Plotly3DChartProps = {
    * with the click-to-pin feature (both are click-driven; only one can
    * own a given click) - ruler mode takes over clicks entirely while on. */
   rulerMode?: boolean;
-  /** Real (2026-08-06, direct user feedback): click-to-pin is genuinely
-   * useful on 3D Density Field, where a click has a real scalar `value`
-   * (the density magnitude) worth reading out - but 3D Particle Cloud's
-   * points carry no such value, so the pin only ever showed x/y/z, and the
-   * user asked to remove it there entirely rather than keep a feature with
-   * nothing real to say. Defaults to `true` so Density Field (the only
-   * other real caller) is unaffected; `ParticleCloudChart` passes `false`. */
+  /** Real (added 2026-08-06, direct user feedback: click-to-pin was
+   * genuinely useful on 3D Density Field, where a click has a real scalar
+   * `value` worth reading out - but 3D Particle Cloud's points carry no
+   * such value, so the pin only ever showed x/y/z there, and the user
+   * asked to remove it entirely for that caller. Removed again, 2026-08-07,
+   * direct user feedback: 3D Density Field no longer wants it either -
+   * `DensityFieldChart` now passes `pinEnabled={false}` explicitly, same
+   * as `ParticleCloudChart`). Defaults to `true` only because `App.tsx`'s
+   * Custom-tab 3D Scatterplot call site (the one remaining real caller
+   * that doesn't pass this prop at all) still relies on that default -
+   * not because any statistic is meant to inherit it silently going
+   * forward. */
   pinEnabled?: boolean;
+  /** Real bug fixed 2026-08-07, direct user report ("the render just shows
+   * x/y/z [Mpc/h] - hardcoded axis labels that do not change even when I
+   * apply a different axis field"): DensityFieldChart/ParticleCloudChart's
+   * axes are always real spatial Mpc/h coordinates, but App.tsx's Custom-tab
+   * 3D Scatterplot lets a user pick *any* field (mass, redshift, whatever)
+   * per axis - this component was labeling every scene axis "x/y/z [Mpc/h]"
+   * regardless, since the strings were hardcoded literals rather than a
+   * prop. Default to the real spatial labels so the two statistic callers
+   * above don't need to pass anything; the Custom-tab caller now passes its
+   * own real field names/units instead. */
+  xLabel?: string;
+  yLabel?: string;
+  zLabel?: string;
 };
 
 /** The shared real Plotly 3D shell for 3D Density Field (go.Volume) and 3D
@@ -65,7 +83,10 @@ export type Plotly3DChartProps = {
  * "cube", zero margin, height 650, no displayModeBar chrome - matching
  * every other Interactive chart in this app, which hides Plotly's default
  * toolbar since Toolbar owns that role instead). See Plotly3DChart.mdx. */
-export function Plotly3DChart({ data, rulerMode, pinEnabled = true }: Plotly3DChartProps) {
+export function Plotly3DChart({
+  data, rulerMode, pinEnabled = true,
+  xLabel = 'x [Mpc/h]', yLabel = 'y [Mpc/h]', zLabel = 'z [Mpc/h]',
+}: Plotly3DChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphDivRef = useRef<HTMLElement | null>(null);
   const [pinned, setPinned] = useState<PinnedPoint | null>(null);
@@ -134,9 +155,9 @@ export function Plotly3DChart({ data, rulerMode, pinEnabled = true }: Plotly3DCh
         data={plotData}
         layout={{
           scene: {
-            xaxis: axisConfig('x [Mpc/h]'),
-            yaxis: axisConfig('y [Mpc/h]'),
-            zaxis: axisConfig('z [Mpc/h]'),
+            xaxis: axisConfig(xLabel),
+            yaxis: axisConfig(yLabel),
+            zaxis: axisConfig(zLabel),
             aspectmode: 'cube',
             bgcolor: 'transparent',
             // A pinned point renders as a real Plotly 3D scene annotation
