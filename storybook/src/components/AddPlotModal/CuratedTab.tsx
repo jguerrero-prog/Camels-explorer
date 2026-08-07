@@ -92,6 +92,12 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
   // restricted the same way `catalog.statistic_suites` restricts every
   // other statistic there, since this one isn't in that map at all.
   const isBlackholeMergers = selection.statistic === 'Black Hole Mergers';
+  // Real (added 2026-08-07, direct user request) - also suite/set-bound
+  // (LH/CV/1P/etc., same sets as every other real Sims product), but
+  // restricted to the 3 hydro suites whose ICs are Gadget Format I
+  // (Swift-EAGLE's use a different native format) - same restriction
+  // pattern as Black Hole Mergers, just a 3-suite list instead of 1.
+  const isInitialConditions = selection.statistic === 'Initial Conditions';
 
   return (
     <>
@@ -100,7 +106,13 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
           catalog={catalog}
           value={{ suite: selection.suite, setName: selection.set, realization: selection.realization }}
           onChange={(v) => onChange({ ...selection, suite: v.suite, set: v.setName, realization: v.realization })}
-          allowedSuites={isBlackholeMergers ? ['IllustrisTNG'] : catalog.statistic_suites[selection.statistic]}
+          allowedSuites={
+            isBlackholeMergers
+              ? ['IllustrisTNG']
+              : isInitialConditions
+                ? ['IllustrisTNG', 'SIMBA', 'Astrid']
+                : catalog.statistic_suites[selection.statistic]
+          }
           allowedSets={catalog.statistic_sets[selection.statistic]}
           hideRealizationValueControls
         />
@@ -108,7 +120,7 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
       <SelectField
         label="Statistic"
         value={selection.statistic}
-        options={[...catalog.statistics, 'CAMELS-SAM', 'Black Hole Mergers']}
+        options={[...catalog.statistics, 'CAMELS-SAM', 'Black Hole Mergers', 'Initial Conditions']}
         onChange={(statistic) => onChange({ ...selection, statistic })}
       />
       {isCamelsSam && (
@@ -119,6 +131,11 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
       {isBlackholeMergers && (
         <p className="curated-tab__loading">
           Black hole merger events are real, but genuinely undocumented by CAMELS itself and only published for IllustrisTNG.
+        </p>
+      )}
+      {isInitialConditions && (
+        <p className="curated-tab__loading">
+          Initial Conditions are real Gadget Format I files at z=127, fetched and appended progressively across all 47 real per-realization files after adding — real for IllustrisTNG/SIMBA/Astrid only.
         </p>
       )}
     </>
