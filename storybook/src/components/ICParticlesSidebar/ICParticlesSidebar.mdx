@@ -1,0 +1,48 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as ICParticlesSidebarStories from './ICParticlesSidebar.stories';
+
+<Meta of={ICParticlesSidebarStories} />
+
+# ICParticlesSidebar
+
+Initial Conditions' real per-tile sidebar, added 2026-08-07 (direct user request) - a genuinely new statistic, not a Streamlit-to-React port (`app.py` never had this).
+
+## Token
+
+Composed entirely from `SingleRealizationFields`/`OptionSlider`/`Button` — no tokens of its own.
+
+## Spec
+
+<Canvas of={ICParticlesSidebarStories.Playground} />
+<Controls />
+
+- Suite restricted to **IllustrisTNG/SIMBA/Astrid** — confirmed real via `camels.readthedocs.io`'s own docs: these hydro suites' IC files are Gadget Format I; Swift-EAGLE's ICs use a different native format, same reason its raw snapshots are excluded elsewhere in this app.
+- **No Snapshot slider**, unlike every other 3D statistic here — Initial Conditions are always z=127 by definition (the redshift 2LPT generates them at), not a function of a snapshot schedule.
+- "Particles to show" caps at 100,000 **total, split evenly across all 47 real per-realization files** (~2,127/file at the cap) — updated 2026-08-07, see Usecase below.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/ic-particles`.
+- **Real-data only, no synthetic fallback.** `backend.py`'s `get_ic_particles()` reads one real Gadget Format I file directly via HTTP Range requests (header first, then just the byte range covering the requested particle count) — no Pylians/`readgadget` dependency, which CAMELS' own docs recommend but which hit a real, unrelated native-toolchain build failure in this environment. Gadget Format I's header/block layout is a stable, decade-old, documented convention, confirmed directly against a real file before trusting it (BoxSize=25 Mpc/h, Omega0=0.309, Redshift=127.0 — all real, known CAMELS values).
+- **Full realization, loaded progressively (2026-08-07, direct user request: "wire in all 47... use lazy loading... so we don't slow down the site").** `App.tsx`'s `loadICParticlesTile` fetches file 0 first for a fast initial render, then `streamRemainingICFiles` fetches the other 46 in the background (6 concurrent requests against Flatiron's public webspace, batched every 4 files so 46 arrivals don't trigger 46 back-to-back chart redraws) and appends their particles as they land. The tile's "Files loaded" readout tracks progress (e.g. `12/47`) rather than blocking the UI until every file has arrived. The same pattern (fast-first-chunk, background-stream-the-rest, batched appends) is applied to CAMELS-SAM's 8 spatial octants — see `CamelsSamSidebar.mdx`. Reuses the exact same `ParticleCloudChart`/`ParticleCloud` shape 3D Particle Cloud itself uses (which already covers the full box via a stride across its one snapshot file — no equivalent multi-file gap to close there).
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { ICParticlesSidebar } from '@/components/ICParticlesSidebar/ICParticlesSidebar';
+import type { ICParticlesParams } from '@/components/ICParticlesSidebar/ICParticlesSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<ICParticlesParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 0, maxParticles: 20_000,
+  });
+  return (
+    <ICParticlesSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

@@ -542,12 +542,50 @@ export async function fetchConsistentTreesHistory(params: {
  * (CAMELS-SAM isn't a hydro-suite product). */
 export type SamCatalog = HaloCatalog;
 
-export async function fetchSamCatalog(realization: number): Promise<SamCatalog> {
-  const qs = new URLSearchParams({ set_name: 'LH', realization: String(realization), fetch_public: 'true' });
+// Real, confirmed via a directory listing of SCSAM/LH/LH_0/sc-sam/
+// (2026-08-07) - all 8 octant-index combinations over {0,1}^3 exist,
+// mirrors backend.py's SAM_OCTANTS exactly.
+export const SAM_OCTANTS = ['0_0_0', '0_0_1', '0_1_0', '0_1_1', '1_0_0', '1_0_1', '1_1_0', '1_1_1'];
+
+export async function fetchSamCatalog(realization: number, octant: string = SAM_OCTANTS[0]): Promise<SamCatalog> {
+  const qs = new URLSearchParams({ set_name: 'LH', realization: String(realization), octant, fetch_public: 'true' });
   const res = await fetch(`${API_BASE}/sam-catalog?${qs}`);
-  if (res.status === 404) return null; // real gap: no SAM catalog for this realization
+  if (res.status === 404) return null; // real gap: no SAM catalog for this realization/octant
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
+}
+
+/** Runs `fetchChunk(i)` for i in [0, count) with at most `concurrency` in
+ * flight at once, calling `onChunk(result, i)` as each settles (arrival
+ * order, not index order) - shared by CAMELS-SAM (8 octants) and Initial
+ * Conditions (47 files) progressive/lazy loading (2026-08-07, direct user
+ * request: "wire in all 47/8... use lazy loading... so we don't slow down
+ * the site"), so a full realization is fetched piece by piece and can be
+ * rendered as pieces arrive, rather than one big blocking request or 47
+ * simultaneous ones hammering the server. One chunk failing (e.g. a
+ * transient network error) doesn't abort the rest. */
+export async function fetchProgressive<T>(
+  count: number,
+  fetchChunk: (index: number) => Promise<T>,
+  onChunk: (result: T, index: number) => void,
+  opts: { concurrency?: number; isCancelled?: () => boolean } = {},
+): Promise<void> {
+  const concurrency = Math.max(1, Math.min(opts.concurrency ?? 6, count));
+  let next = 0;
+  async function worker() {
+    while (next < count) {
+      if (opts.isCancelled?.()) return;
+      const i = next++;
+      try {
+        const result = await fetchChunk(i);
+        if (opts.isCancelled?.()) return;
+        onChunk(result, i);
+      } catch {
+        // swallow - a single failed chunk shouldn't abort the others
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, worker));
 }
 
 /** Real (added 2026-08-07, direct user request: wire in black hole event
@@ -735,6 +773,36 @@ export async function fetchParticleCloud(params: {
   });
   const res = await fetch(`${API_BASE}/particle-cloud?${qs}`);
   if (res.status === 404) return null; // real gap: no data for this suite/set/realization
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+/** Real (added 2026-08-07, direct user request: wire in Initial
+ * Conditions) - backend.py's already-new `get_ic_particles()`/
+ * `GET /ic-particles`. Same real `ParticleCloud` shape 3D Particle Cloud
+ * itself returns (see backend.py's own module comment for why the IC
+ * files' Gadget Format I structure is parsed directly rather than via
+ * Pylians) - reuses the exact same frontend chart, this is the same real
+ * kind of statistic at z=127 instead of an evolved snapshot's redshift. */
+// Real, confirmed via a directory listing (ics.0 .. ics.46) - mirrors
+// backend.py's N_IC_FILES exactly.
+export const N_IC_FILES = 47;
+
+export async function fetchICParticles(params: {
+  suite: string;
+  setName: string;
+  realization: number | string;
+  maxParticles: number;
+  fileIndex?: number;
+}): Promise<ParticleCloud | null> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    max_particles: String(params.maxParticles),
+    file_index: String(params.fileIndex ?? 0),
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/ic-particles?${qs}`);
+  if (res.status === 404) return null; // real gap: no IC file for this suite/set/realization
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
