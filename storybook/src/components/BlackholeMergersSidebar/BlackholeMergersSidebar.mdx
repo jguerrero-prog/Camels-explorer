@@ -1,0 +1,47 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as BlackholeMergersSidebarStories from './BlackholeMergersSidebar.stories';
+
+<Meta of={BlackholeMergersSidebarStories} />
+
+# BlackholeMergersSidebar
+
+Black Hole Mergers' real per-tile sidebar, added 2026-08-07 (direct user request). The simplest real control surface in this app alongside X-ray Halo Profiles' — just Suite/Set/Realization, no other params.
+
+## Token
+
+Composed entirely from `SingleRealizationFields`/`Button` — no tokens of its own.
+
+## Spec
+
+<Canvas of={BlackholeMergersSidebarStories.Playground} />
+<Controls />
+
+- Suite is hardcoded to **IllustrisTNG-only** — confirmed real via a direct directory listing: SIMBA has no `blackhole_mergers/` folder at all (it has a differently-structured `blackhole_details/` instead), Astrid has neither. Mirrors `PowerSpectrumSidebar`'s own `PTYPE_OPTIONS` precedent (a small, stable, real-confirmed set mirrored directly) rather than round-tripping through `GET /api/metadata`, which has no concept of this statistic at all.
+- No other fields — not a placeholder, `app.py` never had this statistic at all (it's genuinely new, not a Streamlit-to-React port).
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/blackhole-mergers`.
+- **Real-data only, no synthetic fallback, and genuinely undocumented by CAMELS itself** — `get_blackhole_mergers()` returns `None` outright when unavailable. The column meaning (`ThisTask, Time, ID_swallower, Mass_swallower, ID_swallowed, Mass_swallowed`) isn't described anywhere in CAMELS' own docs (confirmed directly - the docs explicitly say files like this "are barely used" and aren't described); it's inferred from GIZMO's own well-known black-hole-merger-logging convention and cross-checked directly against the file's own task-number column. Stated plainly in the tile's own note text, not silently presented as officially documented.
+- The tile's own chart shows a real scatter of merger events (redshift vs. combined swallower+swallowed mass); the "Table" `ChartModeDropdown` option shows the same real per-event log via `UnderlyingHalos`.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { BlackholeMergersSidebar } from '@/components/BlackholeMergersSidebar/BlackholeMergersSidebar';
+import type { BlackholeMergersParams } from '@/components/BlackholeMergersSidebar/BlackholeMergersSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<BlackholeMergersParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 0,
+  });
+  return (
+    <BlackholeMergersSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

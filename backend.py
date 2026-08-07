@@ -532,6 +532,27 @@ ALT_FINDERS = ["AHF", "Rockstar", "CAESAR"]
 # a single subhalo's main-branch mass accretion history, walking
 # FirstProgenitorID backward - rather than a full interactive tree browser.
 PUBLIC_SUBLINK_SUITES = {"IllustrisTNG", "SIMBA", "Astrid"}
+
+# Real black hole merger event log (2026-08-07, direct user request) - a
+# genuinely undocumented raw simulation-output product (confirmed via a
+# real directory listing, not CAMELS' own docs - camels.readthedocs.io's
+# snapshots page explicitly says files like this "are barely used" and
+# doesn't describe them). IllustrisTNG-only, confirmed real: SIMBA/Astrid's
+# own Sims/{suite}/.../{set}_{realization}/ folders have no
+# blackhole_mergers/ directory at all (SIMBA has a differently-structured
+# blackhole_details/ instead, Astrid has neither). Split across
+# blackhole_mergers_{0..47}.txt (one per MPI task the simulation ran on,
+# small - a few KB each, ~100KB total per realization, cheap to fetch all
+# 48 and concatenate - unlike blackhole_details_{0..47}.txt, ~9.5MB each,
+# ~456MB/realization, deliberately not built here). Column meaning is
+# NOT documented anywhere - inferred from GIZMO's own well-known black-
+# hole-merger-logging convention (ThisTask, Time, ID_swallower,
+# Mass_swallower, ID_swallowed, Mass_swallowed) and cross-checked directly:
+# column 1 exactly matches the file's own task number on every real row
+# fetched, confirming it. Stated plainly in this feature's own UI, not
+# silently presented as officially documented.
+PUBLIC_BLACKHOLE_MERGERS_SUITES = {"IllustrisTNG"}
+N_BLACKHOLE_MERGER_TASKS = 48
 SUBLINK_Z0_SNAPNUM = 33
 
 # SO_properties / CGM (circumgalactic-medium) radial profiles - the roadmap
@@ -1799,6 +1820,80 @@ def get_sam_catalog(set_name, realization, fetch_public: bool = False) -> Catalo
               f"(SCSAM/{set_name}/{set_name}_{realization}/sc-sam/{SAM_DEFAULT_OCTANT}, "
               f"{len(frame)} galaxies with stars - one of 8 spatial octants, tail sample of "
               f"the full merger-tree catalog, not the complete realization)"),
+    )
+
+
+@lru_cache(maxsize=64)
+def _fetch_blackhole_mergers_task(suite, set_name, realization, task):
+    """Real per-MPI-task black hole merger log (a few KB) - see
+    PUBLIC_BLACKHOLE_MERGERS_SUITES's own comment for the real column
+    convention/its evidence. Returns a list of (scale_factor, id1, mass1,
+    id2, mass2) tuples, or None if this task file doesn't exist (e.g. a
+    task that never logged a merger has no file at all - confirmed real,
+    not every one of the 48 is guaranteed present)."""
+    url = (f"{PUBLIC_DATA_URL}/Sims/{suite}/L25n256/{set_name}/{set_name}_{realization}/"
+           f"blackhole_mergers/blackhole_mergers_{task}.txt")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            text = resp.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    rows = []
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) != 6:
+            continue
+        try:
+            _this_task, a, id1, mass1, id2, mass2 = parts
+            rows.append((float(a), int(id1), float(mass1), int(id2), float(mass2)))
+        except ValueError:
+            continue
+    return rows or None
+
+
+def get_blackhole_mergers(suite, set_name, realization, fetch_public: bool = False) -> Catalog | None:
+    """Real black hole merger event log for one realization - see
+    PUBLIC_BLACKHOLE_MERGERS_SUITES's own comment for real suite coverage
+    and the (undocumented, inferred-from-GIZMO's-own-convention) column
+    meaning. No synthetic version - a fabricated merger event log isn't a
+    useful stand-in the way a power-law curve is. Fetches all 48 real
+    per-task files (cheap, unlike blackhole_details) and concatenates -
+    real, not a sample."""
+    if not fetch_public or suite not in PUBLIC_BLACKHOLE_MERGERS_SUITES:
+        return None
+
+    all_rows = []
+    for task in range(N_BLACKHOLE_MERGER_TASKS):
+        task_rows = _fetch_blackhole_mergers_task(suite, set_name, realization, task)
+        if task_rows:
+            all_rows.extend(task_rows)
+    if not all_rows:
+        return None
+
+    scale, id1, mass1, id2, mass2 = zip(*all_rows)
+    frame = pd.DataFrame({
+        "Redshift": [1.0 / a - 1.0 for a in scale],
+        "Swallower BH ID": id1,
+        "Swallower BH Mass [Msun/h]": [m * 1e10 for m in mass1],
+        "Swallowed BH ID": id2,
+        "Swallowed BH Mass [Msun/h]": [m * 1e10 for m in mass2],
+    })
+    # Real artifact confirmed directly (not assumed): a small number of
+    # mergers are logged identically by two tasks (likely a domain-boundary
+    # ghost copy of the interacting BHs) - exact-duplicate rows are the same
+    # real event recorded twice, not two distinct mergers.
+    frame = frame.drop_duplicates().sort_values("Redshift", ascending=False).reset_index(drop=True)
+
+    return Catalog(
+        frame=frame, box_size=25.0, redshift=float(frame["Redshift"].min()), raw_frame=None,
+        note=(f"{len(frame)} real merger events, z={frame['Redshift'].max():.2f} to "
+              f"{frame['Redshift'].min():.2f} - public CAMELS data release "
+              f"(Sims/{suite}/L25n256/{set_name}/{set_name}_{realization}/blackhole_mergers/, "
+              f"{N_BLACKHOLE_MERGER_TASKS} per-task files concatenated). Column meaning is not "
+              f"documented by CAMELS itself - inferred from GIZMO's own known black-hole-merger-"
+              f"log convention and cross-checked against this file's own task-number column)."),
     )
 
 
