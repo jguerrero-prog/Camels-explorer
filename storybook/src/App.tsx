@@ -64,7 +64,8 @@ import { PlotChart } from './components/PlotChart/PlotChart';
 import { CustomAggregateChart } from './components/CustomAggregateChart/CustomAggregateChart';
 import type { ColumnDef } from './components/UnderlyingHalos/UnderlyingHalos';
 import {
-  fetchMassRangeResult, fetchHaloCatalog, toHaloRows, fetchAltHaloCatalog, massRangeImageUrl,
+  fetchMassRangeResult, fetchHaloCatalog, toHaloRows, fetchAltHaloCatalog,
+  fetchMergerHistory, fetchConsistentTreesHistory, massRangeImageUrl,
   fetchPowerSpectrum, powerSpectrumImageUrl,
   fetchBispectrum, bispectrumImageUrl,
   fetchSFRHistory, sfrHistoryImageUrl,
@@ -252,6 +253,21 @@ type PlotTileState = {
   altRows: Record<string, unknown>[];
   altRawRows: Record<string, number>[] | null;
   altLoading: boolean;
+  /** Real (added 2026-08-07, direct user request: wire in SubLink/
+   * SubLink_gal merger history and Rockstar Consistent Trees) - "Trace a
+   * subhalo's merger history". `mergerTreeVariant` only matters when
+   * `altFinder === 'Subfind'` (SubLink vs SubLink_gal); Rockstar always
+   * uses Consistent Trees, no variant choice. `null` mergerHistoryData
+   * means "not fetched yet or no data returned" - `error` distinguishes
+   * an actual fetch failure from a genuine "no tree entry" 404. Reset to
+   * an unset state whenever altFinder/params change, same reasoning as
+   * altRows above - a stale trace under a newly-selected finder or
+   * snapshot would silently show the wrong subhalo's history. */
+  mergerTreeId: number | null;
+  mergerTreeVariant: 'SubLink' | 'SubLink_gal';
+  mergerTreeData: { redshift: number[]; mass: number[]; note: string } | null;
+  mergerTreeLoading: boolean;
+  mergerTreeError?: string;
   /** Real backend.py Result.note for realizations[0] - added 2026-08-06 for
    * the toolbar's Copy provenance tool (see describeTileProvenance). Same
    * field the other 9 static-image tile kinds already carried; this
@@ -819,6 +835,10 @@ async function loadMassRangeTile(
     altRows: catalogUnchanged ? previous.altRows : [],
     altRawRows: catalogUnchanged ? previous.altRawRows : null,
     altLoading: false,
+    mergerTreeId: catalogUnchanged ? previous.mergerTreeId : null,
+    mergerTreeVariant: catalogUnchanged ? previous.mergerTreeVariant : 'SubLink',
+    mergerTreeData: catalogUnchanged ? previous.mergerTreeData : null,
+    mergerTreeLoading: false,
     note: first.note,
     loading: false,
   };
@@ -1660,12 +1680,14 @@ export function App() {
     const seq = bumpRequestSeq(id);
     if (finder === 'Subfind') {
       setTiles((prev) =>
-        prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, altFinder: 'Subfind', altRows: [], altRawRows: null, altLoading: false } : t)),
+        prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, altFinder: 'Subfind', altRows: [], altRawRows: null, altLoading: false, mergerTreeId: null, mergerTreeData: null, mergerTreeError: undefined } : t)),
       );
       return;
     }
     setTiles((prev) =>
-      prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, altFinder: finder, altLoading: true } : t)),
+      prev.map((t) => (t.id === id && t.kind === 'mass-range'
+        ? { ...t, altFinder: finder, altLoading: true, mergerTreeId: null, mergerTreeData: null, mergerTreeError: undefined }
+        : t)),
     );
     fetchAltHaloCatalog({
       finder, suite: tile.params.suite, setName: tile.params.setName,
@@ -1676,7 +1698,7 @@ export function App() {
         if (!catalog) {
           showToast(`No ${finder} catalog`, 'for this suite/set/realization - reverted to Subfind.');
           setTiles((prev) =>
-            prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, altFinder: 'Subfind', altRows: [], altRawRows: null, altLoading: false } : t)),
+            prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, altFinder: 'Subfind', altRows: [], altRawRows: null, altLoading: false, mergerTreeId: null, mergerTreeData: null, mergerTreeError: undefined } : t)),
           );
           return;
         }
@@ -1690,7 +1712,53 @@ export function App() {
         if (requestSeqRef.current.get(id) !== seq) return;
         showToast(`${finder} catalog failed to load`, String(err));
         setTiles((prev) =>
-          prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, altFinder: 'Subfind', altRows: [], altRawRows: null, altLoading: false } : t)),
+          prev.map((t) => (t.id === id && t.kind === 'mass-range' ? { ...t, altFinder: 'Subfind', altRows: [], altRawRows: null, altLoading: false, mergerTreeId: null, mergerTreeData: null, mergerTreeError: undefined } : t)),
+        );
+      });
+  };
+
+  /** Real (added 2026-08-07, direct user request: wire in SubLink/
+   * SubLink_gal merger history and Rockstar Consistent Trees) - "Trace a
+   * subhalo's merger history". Which real endpoint gets called depends on
+   * `altFinder`: Subfind traces via SubLink (or SubLink_gal, `variant`),
+   * Rockstar via Consistent Trees - both write into the same
+   * `mergerTree*` fields either way, since `UnderlyingHalos` renders them
+   * identically regardless of which tree produced them. */
+  const handleTraceMergerHistory = (id: string, traceId: number, variant?: 'SubLink' | 'SubLink_gal') => {
+    const tile = tiles.find((t) => t.id === id);
+    if (!tile || tile.kind !== 'mass-range') return;
+    const seq = bumpRequestSeq(id);
+    const nextVariant = variant ?? tile.mergerTreeVariant;
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'mass-range'
+        ? { ...t, mergerTreeId: traceId, mergerTreeVariant: nextVariant, mergerTreeLoading: true, mergerTreeError: undefined }
+        : t)),
+    );
+    const request = tile.altFinder === 'Rockstar'
+      ? fetchConsistentTreesHistory({
+          suite: tile.params.suite, setName: tile.params.setName,
+          realization: tile.params.realizations[0], haloId: traceId,
+        })
+      : fetchMergerHistory({
+          suite: tile.params.suite, setName: tile.params.setName,
+          realization: tile.params.realizations[0], subfindId: traceId,
+          rootSnapnum: tile.params.snapnum, variant: nextVariant,
+        });
+    request
+      .then((history) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'mass-range'
+            ? { ...t, mergerTreeData: history, mergerTreeLoading: false }
+            : t)),
+        );
+      })
+      .catch((err) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'mass-range'
+            ? { ...t, mergerTreeLoading: false, mergerTreeError: String(err) }
+            : t)),
         );
       });
   };
@@ -2024,6 +2092,7 @@ export function App() {
         series: [], xLabel: '', yLabel: '', logX: true, logY: config.logY,
         haloRows: [], haloRawRows: null,
         altFinder: 'Subfind', altRows: [], altRawRows: null, altLoading: false,
+        mergerTreeId: null, mergerTreeVariant: 'SubLink', mergerTreeData: null, mergerTreeLoading: false,
         note: '', loading: true,
       };
       replaceTile(placeholder);
@@ -2515,6 +2584,14 @@ export function App() {
                             }
                           : null;
                         if (tile.altFinder === 'Subfind') {
+                          // Real (backend.py's PUBLIC_SUBLINK_SUITES) - SubLink
+                          // covers 3 of Subfind's 4 suites (no Swift-EAGLE) -
+                          // mirrored directly, same small-stable-set precedent
+                          // as HALO_FINDER_CONFIG's own suite sets.
+                          const sublinkSuites = new Set(['IllustrisTNG', 'SIMBA', 'Astrid']);
+                          const defaultSubfindId = tile.haloRows.length
+                            ? tile.haloRows.reduce((best, r) => (r.stellarMass > best.stellarMass ? r : best)).subfindId
+                            : null;
                           return {
                             rows: tile.haloRows,
                             rawRows: tile.haloRawRows,
@@ -2526,9 +2603,33 @@ export function App() {
                                 ? `${tile.statistic} bins by each halo's total FoF group mass, a different (and coarser) quantity than any column shown below - this table is the same real per-subhalo Subfind catalog Stellar Mass Function uses, not a halo-level one.`
                                 : undefined,
                             finderPicker,
+                            mergerHistory: sublinkSuites.has(tile.params.suite) && defaultSubfindId !== null
+                              ? {
+                                  idLabel: 'SubfindID to trace',
+                                  id: tile.mergerTreeId ?? defaultSubfindId,
+                                  onIdChange: (traceId: number) => handleTraceMergerHistory(tile.id, traceId),
+                                  variantOptions: {
+                                    current: tile.mergerTreeVariant,
+                                    options: ['SubLink', 'SubLink_gal'],
+                                    onSelect: (v: string) => handleTraceMergerHistory(tile.id, tile.mergerTreeId ?? defaultSubfindId, v as 'SubLink' | 'SubLink_gal'),
+                                  },
+                                  loading: tile.mergerTreeLoading,
+                                  error: tile.mergerTreeError,
+                                  data: tile.mergerTreeData,
+                                }
+                              : null,
                           };
                         }
                         const cfg = HALO_FINDER_CONFIG[tile.altFinder];
+                        // Real constraint (get_consistent_trees_history's own
+                        // docstring) - Consistent Trees ids are only
+                        // meaningful at the root (z=0) snapshot, the only one
+                        // locations.dat indexes - offering this at any other
+                        // snapshot would trace the wrong halo silently.
+                        const defaultRockstarId = tile.altFinder === 'Rockstar' && tile.altRows.length
+                          ? Number(tile.altRows.reduce((best, r) =>
+                              (Number(r[cfg.filterKey]) > Number(best[cfg.filterKey]) ? r : best)).id)
+                          : null;
                         return {
                           rows: tile.altLoading ? [] : tile.altRows,
                           rawRows: tile.altRawRows,
@@ -2539,6 +2640,16 @@ export function App() {
                           footerNoun: cfg.itemNoun,
                           csvFilename: `${tile.params.suite}_${tile.params.setName}_${tile.params.realizations[0]}_${tile.altFinder.replace(/\s+/g, '_')}.csv`,
                           finderPicker,
+                          mergerHistory: tile.altFinder === 'Rockstar' && tile.params.snapnum === 33 && defaultRockstarId !== null
+                            ? {
+                                idLabel: 'Rockstar halo ID to trace (Consistent Trees, z=0 only)',
+                                id: tile.mergerTreeId ?? defaultRockstarId,
+                                onIdChange: (traceId: number) => handleTraceMergerHistory(tile.id, traceId),
+                                loading: tile.mergerTreeLoading,
+                                error: tile.mergerTreeError,
+                                data: tile.mergerTreeData,
+                              }
+                            : null,
                         };
                       })()}
                       {...commonPlotTileProps(tile)}
