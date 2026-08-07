@@ -30,6 +30,7 @@ function Interactive() {
       onCompare={() => {}}
       mode={mode}
       onModeChange={setMode}
+      onClose={() => {}}
     />
   );
 }
@@ -47,5 +48,6 @@ export const NoOtherTiles: Story = {
     onCompare: () => {},
     mode: 'ratio',
     onModeChange: () => {},
+    onClose: () => {},
   },
 };

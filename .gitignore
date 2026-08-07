@@ -3,6 +3,8 @@ vendor/
 __pycache__/
 *.pyc
 .DS_Store
+.env
+.pytest_cache/
 
 node_modules/
 dist/

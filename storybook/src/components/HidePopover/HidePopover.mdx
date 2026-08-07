@@ -21,6 +21,7 @@ Real (added 2026-08-06, direct user feedback: *"I want us to create a hide featu
 - Same pointer/card shell as `CopyAsCodePopover` (260px wide, narrower — no code block to fit). Header: "Hide" title + `×` close.
 - `Radio` control ("This panel" / "All panels") picks the scope; below it, 4 `Checkbox` rows (Annotations, Arrows, Notes, Param readouts).
 - When scope is "This panel" and no tile is focused, every checkbox disables and a caption explains why — matches `CopyAsCodePopover`'s own honest "click a tile first" gap rather than a click that silently does nothing.
+- **Real fix (2026-08-06, code-quality audit): closes on Escape**, matching `ChartModeDropdown`/`FieldMapGroupControl`/`SelectField` — this popover didn't have that until now, a real inconsistency rather than a deliberate omission (`RatioDiffPopover` had the same gap, fixed the same way — see its own docs).
 
 <Canvas of={HidePopoverStories.SomeHiddenAllPanels} />
 <Canvas of={HidePopoverStories.PanelScopeNoTileFocused} />

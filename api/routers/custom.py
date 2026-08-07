@@ -15,6 +15,7 @@ internal enum-index/boolean encoding, which is an implementation detail
 from __future__ import annotations
 
 import json
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -22,6 +23,18 @@ from fastapi import APIRouter, HTTPException, Query
 import flathub_client as F
 
 router = APIRouter(prefix="/custom", tags=["custom"])
+logger = logging.getLogger(__name__)
+
+# Real fix (2026-08-06, code-quality audit): every FlathubError below used
+# to be re-raised as `HTTPException(502, f"FlatHUB query failed: {e}")` -
+# `str(FlathubError)` wraps the raw underlying exception (urllib/timeout
+# error text, which can include internal detail like hostnames/paths), put
+# directly into the client-facing response body. Now logged server-side
+# (the real detail stays reachable there) and returned to the client as one
+# fixed, generic message - the client never needed more than "the query
+# failed, here's the real row/data endpoint that failed" to react
+# correctly (e.g. show a retry).
+_FLATHUB_ERROR_DETAIL = "FlatHUB query failed - the external FlatHUB API may be unreachable or slow. Try again in a moment."
 
 
 def _encode_filters(filters: dict) -> dict:
@@ -89,7 +102,8 @@ def custom_count(filters: Optional[str] = Query(default=None)):
     try:
         return F.count(_encode_filters(parsed))
     except F.FlathubError as e:
-        raise HTTPException(502, f"FlatHUB query failed: {e}") from e
+        logger.exception("FlatHUB /count query failed for filters=%r", parsed)
+        raise HTTPException(502, _FLATHUB_ERROR_DETAIL) from e
 
 
 @router.get("/data")
@@ -103,10 +117,21 @@ def custom_data(
     raw rows, not pre-binned buckets."""
     parsed = _parse_json_query(filters, "filters") or {}
     field_list = [f.strip() for f in fields.split(",") if f.strip()]
+    # Real fix (2026-08-06, code-quality audit): `fields` used to pass
+    # straight through to FlatHUB unvalidated, unlike `filters` (whose keys
+    # `_encode_filters` already checks against the real schema, 400ing on
+    # an unknown one). Same check here, for the same reason - a typo'd
+    # field name gets a clear 400 from this proxy instead of whatever
+    # FlatHUB's own error shape happens to be for it.
+    known_names = {f["name"] for f in F.real_fields()}
+    unknown = [f for f in field_list if f not in known_names]
+    if unknown:
+        raise HTTPException(400, f"Unknown field(s): {unknown!r}")
     try:
         return F.data(field_list, _encode_filters(parsed), limit=limit)
     except F.FlathubError as e:
-        raise HTTPException(502, f"FlatHUB query failed: {e}") from e
+        logger.exception("FlatHUB /data query failed for fields=%r filters=%r", field_list, parsed)
+        raise HTTPException(502, _FLATHUB_ERROR_DETAIL) from e
 
 
 @router.get("/histogram")
@@ -128,4 +153,5 @@ def custom_histogram(
     try:
         return F.histogram(field_list, _encode_filters(parsed_filters), quartiles=quartiles)
     except F.FlathubError as e:
-        raise HTTPException(502, f"FlatHUB query failed: {e}") from e
+        logger.exception("FlatHUB /histogram query failed for fields=%r filters=%r", field_list, parsed_filters)
+        raise HTTPException(502, _FLATHUB_ERROR_DETAIL) from e

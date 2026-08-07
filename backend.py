@@ -32,6 +32,8 @@ from __future__ import annotations
 import ast
 import hashlib
 import io
+import logging
+import os
 import re
 import tempfile
 import threading
@@ -39,6 +41,31 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from functools import lru_cache
+
+from dotenv import load_dotenv
+
+# Real fix (2026-08-06, code-quality audit): every real-data fetch below
+# wraps a remote HTTP/HDF5 read in a broad `except Exception: return None` -
+# correct, since a missing/absent realization has too many distinct real
+# failure shapes (404, malformed HDF5, missing dataset key, ...) to enumerate,
+# and returning None (not raising) is this file's own established "no real
+# data for this selection" signal. But a *genuine* bug hiding behind one of
+# these (e.g. a typo'd HDF5 key after a refactor) used to be indistinguishable
+# from an expected absence - nothing was ever logged. `logger.exception(...)`
+# inside each doesn't change the None-return/404 behavior, it just makes a
+# real regression visible in server logs instead of silently invisible.
+logger = logging.getLogger(__name__)
+
+# Real fix (2026-08-06, code-quality audit): CMD_DATA_URL/CMD_2D_MAPS_URL
+# below used to be hardcoded with another researcher's private-webspace
+# capability token in plaintext - a real secret, committed to git history.
+# Now read from the environment (a local, gitignored .env file via
+# load_dotenv() - see .env.example for the two real variable names) instead
+# of a source-code constant. Calling this here, before those two module-
+# level assignments, means it works the same way on every import - no
+# separate setup step for uvicorn's --reload (which re-execs this module,
+# re-running load_dotenv()) vs. running app.py/desktop.py directly.
+load_dotenv()
 
 import h5py
 import numpy as np
@@ -55,29 +82,79 @@ from matplotlib.colors import LogNorm
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
-# Real fix (2026-08-06, ticket #12): matplotlib's Agg rendering pipeline
-# (freetype font/glyph rendering, the C-extension canvas) isn't documented
-# as thread-safe even across independent Figure objects - confirmed
-# directly: switching render_field_map_2d_png off pyplot's global state
-# (Figure()/FigureCanvasAgg instead of plt.subplots()/plt.close()) did NOT
-# fix concurrent renders on its own, 9 fired together still mostly 500'd
-# while 9 fired one at a time all succeeded. A lock around the actual
+# Real fix (2026-08-06, ticket #12, later generalized to every render_*_png
+# function in this file - code-quality audit, same date): matplotlib's Agg
+# rendering pipeline (freetype font/glyph rendering, the C-extension canvas)
+# isn't documented as thread-safe even across independent Figure objects -
+# confirmed directly: switching render_field_map_2d_png off pyplot's global
+# state (Figure()/FigureCanvasAgg instead of plt.subplots()/plt.close()) did
+# NOT fix concurrent renders on its own, 9 fired together still mostly
+# 500'd while 9 fired one at a time all succeeded. A lock around the actual
 # render step is matplotlib's own documented mitigation for this in
-# threaded servers. Only field-map rendering is exercised concurrently by
-# any built feature so far (the grouped 2D Field Map view fires one PNG
-# request per mosaic cell) - scoped to that one call site rather than
-# locked globally across every render_*_png function in this file.
+# threaded servers. Originally scoped to just field-map rendering (the only
+# one exercised concurrently by a built feature at the time - the grouped
+# 2D Field Map view fires one PNG request per mosaic cell) - generalized to
+# every render_*_png function below (via `_finish_png`) once the audit
+# confirmed the identical latent `plt.subplots()`/`plt.close()` pattern
+# existed in all of them too, undetected only because nothing had exercised
+# them concurrently yet.
 _PNG_RENDER_LOCK = threading.Lock()
 
+
+def _finish_png(fig) -> bytes:
+    """Shared tail for every render_*_png function - renders `fig` to PNG
+    bytes via FigureCanvasAgg directly (never plt.savefig()/plt.close()).
+    Callers build their own `Figure(dpi=150, facecolor="white")` - the 150
+    DPI and white facecolor were previously each renderer's own
+    `fig.savefig(..., dpi=150, facecolor="white")` call, now centralized
+    here since `FigureCanvasAgg.print_png()` (unlike `Figure.savefig()`)
+    has no dpi/facecolor override kwargs - they have to be set on the
+    Figure itself instead.
+
+    Does NOT itself hold `_PNG_RENDER_LOCK` - real bug caught directly
+    (2026-08-06): locking only this final canvas/print step still let ~8 of
+    9 concurrent field-map renders fail, because the actual thread-unsafe
+    work (ax.imshow/colorbar/tight_layout - font-metric/glyph-layout calls
+    happen there too, not just at print_png time) ran *outside* the lock.
+    Every caller must wrap its ENTIRE render body - from `Figure(...)`
+    through this call - in `with _PNG_RENDER_LOCK:`, not just this tail."""
+    buf = io.BytesIO()
+    FigureCanvasAgg(fig).print_png(buf)
+    return buf.getvalue()
+
+# Real fix (2026-08-06, code-quality audit): these two used to be one
+# combined try/except, so any machine without Pylians/MAS_library installed
+# (a heavy, hard-to-install C-extension) also silently lost fsspec-only
+# features that have nothing to do with it - X-ray Halo Profiles was
+# already fine (no HAVE_CAMELS_LIBRARY check at all), but CAESAR halo/
+# galaxy catalogs, SubLink/SubLink_gal merger history, Halo Gas Profiles,
+# Photometry/Color-Mass Diagram, Field PDF, and Lyman-alpha Spectrum were
+# all gated behind HAVE_CAMELS_LIBRARY even though every one of them only
+# ever calls fsspec.open()/h5py.File() for a lazy remote HDF5 read - none
+# of them reference MASL/MAS_library anywhere (confirmed directly, not
+# assumed). Split so those six features work with just `pip install
+# fsspec` - no Pylians required - while HAVE_CAMELS_LIBRARY (real per-
+# particle gridding, which does stream via fsspec AND grid via MASL.MA())
+# still correctly requires both.
 try:
     import fsspec
+    HAVE_FSSPEC = True
+except ImportError:
+    HAVE_FSSPEC = False
+
+try:
     import MAS_library as MASL
-    HAVE_CAMELS_LIBRARY = True
+    HAVE_CAMELS_LIBRARY = HAVE_FSSPEC
 except ImportError:
     HAVE_CAMELS_LIBRARY = False
 
 PUBLIC_DATA_URL = "https://users.flatironinstitute.org/~camels"
-CMD_DATA_URL = "<ask-the-camels-team-for-this-url>"
+# Real (was hardcoded here before 2026-08-06 - see load_dotenv()'s own
+# comment above) - None when CAMELS_CMD_3D_GRIDS_URL isn't set, same
+# "no real data" honesty every other real-data-only function in this file
+# already uses; every caller below already guards on this before building
+# a URL from it.
+CMD_DATA_URL = os.environ.get("CAMELS_CMD_3D_GRIDS_URL")
 
 
 # ---------------------------------------------------------------------------
@@ -351,7 +428,9 @@ RAW_SNAPSHOT_MASS_FIELDS = {
 # CMD's 2D maps cover more suites than its 3D grids (precomputed, so
 # Swift-EAGLE's different raw-snapshot format doesn't matter here at all) -
 # but folder names differ from this app's suite names for one of them.
-CMD_2D_MAPS_URL = "<ask-the-camels-team-for-this-url>"
+# Real (was hardcoded here before 2026-08-06 - see CMD_DATA_URL's own
+# comment above): None when CAMELS_CMD_2D_MAPS_URL isn't set.
+CMD_2D_MAPS_URL = os.environ.get("CAMELS_CMD_2D_MAPS_URL")
 PUBLIC_CMD_MAP_SUITES = {"IllustrisTNG", "SIMBA", "Astrid", "Swift-EAGLE"}
 CMD_MAP_SUITE_FOLDER = {
     "IllustrisTNG": "IllustrisTNG", "SIMBA": "SIMBA", "Astrid": "Astrid", "Swift-EAGLE": "EAGLE",
@@ -612,7 +691,13 @@ class Result:
     y_label: str
     log_x: bool = True
     log_y: bool = True
-    source: str = "synthetic"   # "synthetic" | "real"
+    # Real fix (2026-08-06, code-quality audit): every construction site
+    # for this dataclass already passes source="real" explicitly (the
+    # synthetic fallback that used to default this was removed app-wide
+    # 2026-08-05 - see this file's own module docstring) - "synthetic" was
+    # dead, unreachable code. Matches the default every dataclass added
+    # after that removal already uses (Catalog, XrayProfiles, etc.).
+    source: str = "real"
     note: str = ""
 
 
@@ -620,7 +705,7 @@ class Result:
 class Field3D:
     density: np.ndarray   # (grid, grid, grid), values ~ rho/mean_rho
     box_size: float        # Mpc/h
-    source: str = "synthetic"
+    source: str = "real"   # see Result's own comment - dead "synthetic" default removed 2026-08-06
     note: str = ""
 
 
@@ -628,7 +713,7 @@ class Field3D:
 class Map2D:
     values: np.ndarray   # (256, 256) for real CMD maps
     box_size: float       # Mpc/h
-    source: str = "synthetic"
+    source: str = "real"   # see Result's own comment - dead "synthetic" default removed 2026-08-06
     note: str = ""
 
 
@@ -651,7 +736,7 @@ class Catalog:
 class ParticleCloud:
     positions: np.ndarray   # (N, 3), Mpc/h
     box_size: float         # Mpc/h
-    source: str = "synthetic"
+    source: str = "real"   # see Result's own comment - dead "synthetic" default removed 2026-08-06
     note: str = ""
 
 
@@ -663,9 +748,8 @@ class VoidCatalog:
     box_size: float                # Mpc/h
     extra: pd.DataFrame | None = None  # the file's other real columns this app didn't
                                         # otherwise curate: vol, vol_norm, void_id, num_part,
-                                        # parent_id, tree_level, n_children, central_density -
-                                        # None for the synthetic fallback (no real analog to fake)
-    source: str = "synthetic"
+                                        # parent_id, tree_level, n_children, central_density
+    source: str = "real"   # see Result's own comment - dead "synthetic" default removed 2026-08-06
     note: str = ""
 
 
@@ -678,11 +762,12 @@ class ScalingRelations:
     vmax: np.ndarray           # km/s, mean per bin
     counts: np.ndarray         # galaxies per bin - bins with 0 count are unpopulated, not zero-valued
     metallicity: np.ndarray | None = None  # mean stellar metallicity per bin - the
-                                            # mass-metallicity relation; None for the
-                                            # synthetic fallback (no illustrative
-                                            # model was built for it, unlike the
-                                            # other four panels)
-    source: str = "synthetic"
+                                            # mass-metallicity relation. get_scaling_relations'
+                                            # one real construction path always populates this
+                                            # today; stays optional because
+                                            # render_scaling_relations_png's own
+                                            # `has_metallicity` check still branches on it.
+    source: str = "real"   # see Result's own comment - dead "synthetic" default removed 2026-08-06
     note: str = ""
 
 
@@ -962,7 +1047,7 @@ def _fetch_public_cmd_grid(suite, set_name, realization, grid_res, redshift, fie
     grids, for any of the 13 fields in CMD_FIELDS. Only 5 redshifts are
     published (0.0/0.5/1.0/1.5/2.0) - snaps to the nearest. Returns
     (grid, actual_redshift), or None if unavailable."""
-    if suite not in PUBLIC_CMD_GRID_SUITES or grid_res not in (128, 256, 512) or field not in CMD_FIELDS:
+    if not CMD_DATA_URL or suite not in PUBLIC_CMD_GRID_SUITES or grid_res not in (128, 256, 512) or field not in CMD_FIELDS:
         return None
     z = min(CMD_GRID_REDSHIFTS, key=lambda cz: abs(cz - redshift))
 
@@ -1006,6 +1091,7 @@ def _fetch_snapshot_positions(suite, set_name, realization, part_type=1, max_par
                 stride = max(1, n_part // max_particles)
                 pos = hf[f"PartType{part_type}/Coordinates"][::stride].astype(np.float32) / 1e3
     except Exception:
+        logger.exception("_fetch_snapshot_positions failed for suite=%s set_name=%s realization=%s", suite, set_name, realization)
         return None
 
     return pos, box_size, redshift
@@ -1059,6 +1145,7 @@ def _fetch_snapshot_field_positions(suite, set_name, realization, field, max_par
                 pos = np.concatenate(pos_parts)
                 weights = np.concatenate(weight_parts)
     except Exception:
+        logger.exception("_fetch_snapshot_field_positions failed for suite=%s set_name=%s realization=%s field=%s", suite, set_name, realization, field)
         return None
 
     return pos, weights, box_size, redshift
@@ -1086,6 +1173,7 @@ def _fetch_and_grid_snapshot(suite, set_name, realization, grid_res, field=DEFAU
             return None
         delta /= mean  # counts -> overdensity (rho/mean_rho), matching the synthetic convention
     except Exception:
+        logger.exception("_fetch_and_grid_snapshot failed for suite=%s set_name=%s realization=%s field=%s", suite, set_name, realization, field)
         return None  # any gridding failure -> caller falls back to synthetic
 
     return delta, box_size, redshift, pos.shape[0]
@@ -1422,32 +1510,38 @@ def _render_result_png(compute, set_name, realizations, overlay=None) -> bytes |
         return None
     first_result = next(iter(results.values()))
 
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    for r, result in results.items():
-        ax.plot(result.x, result.y, lw=2, label=f"{set_name}_{r}")
+    # Real fix (2026-08-06, code-quality audit): built via Figure/
+    # FigureCanvasAgg (_finish_png), whole render body locked via
+    # `_PNG_RENDER_LOCK` - see that lock's own docs for why every
+    # render_*_png function in this file needs this, not just the one
+    # (render_field_map_2d_png) where it was first caught, and why the lock
+    # must wrap the ENTIRE render body (imshow/plot/tight_layout do
+    # thread-unsafe work too, not just the final print_png). dpi=150/
+    # facecolor="white" now live on the Figure itself rather than a
+    # savefig() kwarg - the frontend's white --color-surface-chart card
+    # assumes a white facecolor; matplotlib's own default can drift with
+    # rcParams, so this is asserted, not assumed.
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(8, 4.5), dpi=150, facecolor="white")
+        ax = fig.subplots()
+        for r, result in results.items():
+            ax.plot(result.x, result.y, lw=2, label=f"{set_name}_{r}")
 
-    show_legend = len(results) > 1
-    if overlay is not None and overlay(ax):
-        show_legend = True
+        show_legend = len(results) > 1
+        if overlay is not None and overlay(ax):
+            show_legend = True
 
-    if first_result.log_x:
-        ax.set_xscale("log")
-    if first_result.log_y:
-        ax.set_yscale("log")
-    ax.set_xlabel(first_result.x_label)
-    ax.set_ylabel(first_result.y_label)
-    ax.grid(alpha=0.3, which="both")
-    if show_legend:
-        ax.legend(fontsize=8)
-    fig.tight_layout()
-
-    buf = io.BytesIO()
-    # Explicit white facecolor - the frontend's white --color-surface-chart
-    # card assumes this; matplotlib's own default figure facecolor can drift
-    # with rcParams, so this is asserted rather than assumed.
-    fig.savefig(buf, format="png", dpi=150, facecolor="white")
-    plt.close(fig)
-    return buf.getvalue()
+        if first_result.log_x:
+            ax.set_xscale("log")
+        if first_result.log_y:
+            ax.set_yscale("log")
+        ax.set_xlabel(first_result.x_label)
+        ax.set_ylabel(first_result.y_label)
+        ax.grid(alpha=0.3, which="both")
+        if show_legend:
+            ax.legend(fontsize=8)
+        fig.tight_layout()
+        return _finish_png(fig)
 
 
 def _render_mass_range_png(compute, suite, set_name, realizations, snapnum, mmin, mmax, bins,
@@ -1750,33 +1844,34 @@ def render_scaling_relations_png(suite, set_name, realization, SMmin, SMmax, bin
     ]
 
     has_metallicity = result.metallicity is not None
-    fig = plt.figure(figsize=(9, 7 + (2.8 if has_metallicity else 0)))
-    gs = fig.add_gridspec(3 if has_metallicity else 2, 2)
+    # Real fix (2026-08-06, code-quality audit): Figure/FigureCanvasAgg
+    # (_finish_png), whole render body locked - see _PNG_RENDER_LOCK's own
+    # docs for why the lock must wrap the entire body, not just the tail.
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(9, 7 + (2.8 if has_metallicity else 0)), dpi=150, facecolor="white")
+        gs = fig.add_gridspec(3 if has_metallicity else 2, 2)
 
-    for i, (y, ylabel) in enumerate(panels):
-        ax = fig.add_subplot(gs[i // 2, i % 2])
-        y_plot = np.clip(y[populated], 1e-6, None)  # some bins can average to SFR=0
-        ax.plot(result.stellar_mass[populated], y_plot, "o-", lw=1.5, ms=4)
-        ax.set_xscale("log")
-        ax.set_yscale("log")
-        ax.set_xlabel("Stellar mass [Msun/h]")
-        ax.set_ylabel(ylabel)
-        ax.grid(alpha=0.3, which="both")
+        for i, (y, ylabel) in enumerate(panels):
+            ax = fig.add_subplot(gs[i // 2, i % 2])
+            y_plot = np.clip(y[populated], 1e-6, None)  # some bins can average to SFR=0
+            ax.plot(result.stellar_mass[populated], y_plot, "o-", lw=1.5, ms=4)
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+            ax.set_xlabel("Stellar mass [Msun/h]")
+            ax.set_ylabel(ylabel)
+            ax.grid(alpha=0.3, which="both")
 
-    if has_metallicity:
-        ax2 = fig.add_subplot(gs[2, :])
-        ax2.plot(result.stellar_mass[populated], result.metallicity[populated], "o-",
-                  lw=1.5, ms=4, color="tab:green")
-        ax2.set_xscale("log")
-        ax2.set_xlabel("Stellar mass [Msun/h]")
-        ax2.set_ylabel("Mean stellar metallicity (mass fraction)")
-        ax2.grid(alpha=0.3, which="both")
+        if has_metallicity:
+            ax2 = fig.add_subplot(gs[2, :])
+            ax2.plot(result.stellar_mass[populated], result.metallicity[populated], "o-",
+                      lw=1.5, ms=4, color="tab:green")
+            ax2.set_xscale("log")
+            ax2.set_xlabel("Stellar mass [Msun/h]")
+            ax2.set_ylabel("Mean stellar metallicity (mass fraction)")
+            ax2.grid(alpha=0.3, which="both")
 
-    fig.tight_layout()
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, facecolor="white")
-    plt.close(fig)
-    return buf.getvalue()
+        fig.tight_layout()
+        return _finish_png(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -2064,7 +2159,7 @@ def _fetch_public_cmd_map(suite, set_name, realization, field=DEFAULT_CMD_FIELD)
     """Real 2D field map (256x256) from CMD's public 2D maps. Only z=0.00
     is published for this data source (unlike the 3D grids' 5 redshifts).
     Returns the map array, or None if unavailable."""
-    if suite not in PUBLIC_CMD_MAP_SUITES or field not in CMD_FIELDS:
+    if not CMD_2D_MAPS_URL or suite not in PUBLIC_CMD_MAP_SUITES or field not in CMD_FIELDS:
         return None
     folder = CMD_MAP_SUITE_FOLDER[suite]
     url = f"{CMD_2D_MAPS_URL}/{folder}/Maps_{field}_{folder}_{set_name}_z=0.00.npy"
@@ -2097,29 +2192,20 @@ def render_field_map_2d_png(suite, set_name, realization, field=DEFAULT_CMD_FIEL
     imshow heatmap with a colorbar. Returns None (no synthetic fallback)
     when get_field_map_2d itself does.
 
-    Real fix (2026-08-06, ticket #12 - grouped 2D Field Map view): the
+    Real fix (2026-08-06, ticket #12 - grouped 2D Field Map view, later
+    generalized app-wide via `_finish_png` - see its own docs): the
     grouped view fires several of these requests concurrently (one per
     mosaic cell) - confirmed directly this used to fail under that load
     (9 requests fired one at a time all returned 200; fired together, ~8
-    of 9 came back 500). Two real, separate fixes were needed together,
-    not one: (1) build the Figure via matplotlib's own Figure/
-    FigureCanvasAgg API instead of plt.subplots()/plt.close(), so this call
-    no longer touches pyplot's shared global current-figure state; (2) that
-    alone did NOT fix it - matplotlib's Agg rendering pipeline (freetype
-    glyph rendering, the C-extension canvas) isn't documented thread-safe
-    even across independent Figure objects, so the actual render step below
-    is additionally serialized via `_PNG_RENDER_LOCK`, matplotlib's own
-    documented mitigation for threaded servers. Scoped to just this
-    function - every other render_*_png function in this file has the same
-    latent plt.subplots() pattern, but none of them are called concurrently
-    by any built feature yet, so they're left as-is rather than rewriting
-    all of them speculatively."""
+    of 9 came back 500). Fixed by building the Figure via matplotlib's own
+    Figure/FigureCanvasAgg API instead of plt.subplots()/plt.close(), and
+    serializing the actual render step via `_PNG_RENDER_LOCK`."""
     result = get_field_map_2d(suite, set_name, realization, field=field, fetch_public=fetch_public)
     if result is None:
         return None
 
     with _PNG_RENDER_LOCK:
-        fig = Figure(figsize=(7, 6), facecolor="white")
+        fig = Figure(figsize=(7, 6), dpi=150, facecolor="white")
         ax = fig.add_subplot(111)
         im = ax.imshow(
             result.values.T, origin="lower", cmap="inferno",
@@ -2131,10 +2217,7 @@ def render_field_map_2d_png(suite, set_name, realization, field=DEFAULT_CMD_FIEL
         cbar_label = "overdensity ρ/ρ̄" if field in CMD_MASS_TYPE_FIELDS else field
         fig.colorbar(im, ax=ax, label=cbar_label)
         fig.tight_layout()
-
-        buf = io.BytesIO()
-        FigureCanvasAgg(fig).print_png(buf)
-        return buf.getvalue()
+        return _finish_png(fig)
 
 
 @lru_cache(maxsize=16)
@@ -2165,6 +2248,7 @@ def _fetch_xray_profiles(suite, set_name, realization):
                     lums.append(sa["L_0.5_2.0keV_Dens"][:])
                     masses.append(float(snap_grp[halo_name].attrs["lM200c"]))
     except Exception:
+        logger.exception("_fetch_xray_profiles failed for suite=%s set_name=%s realization=%s", suite, set_name, realization)
         return None
 
     if not lums:
@@ -2200,25 +2284,31 @@ def render_xray_profiles_png(suite, set_name, realization, fetch_public: bool = 
     if profiles is None:
         return None
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    norm = plt.Normalize(profiles.log_mass.min(), profiles.log_mass.max())
-    cmap = plt.get_cmap("viridis")
-    for lum, mass in zip(profiles.luminosities, profiles.log_mass):
-        ax.plot(profiles.r_centers, lum, color=cmap(norm(mass)), alpha=0.6, lw=1.2)
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel("r [kpc/h]")
-    ax.set_ylabel("L (0.5-2.0 keV) [erg/s]")
-    ax.grid(alpha=0.3, which="both")
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
-    fig.colorbar(sm, ax=ax, label="log10 M200c [Msun/h]")
-    fig.tight_layout()
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, facecolor="white")
-    plt.close(fig)
-    return buf.getvalue()
+    # Real fix (2026-08-06, code-quality audit): Figure/FigureCanvasAgg
+    # (_finish_png), whole render body locked - see _PNG_RENDER_LOCK's own
+    # docs. plt.Normalize/plt.get_cmap/plt.cm.ScalarMappable below are
+    # left outside the concern entirely (still fine to call without the
+    # lock in principle) - plain object constructors/a read-only colormap
+    # lookup, not part of pyplot's global figure-state - but they're
+    # cheap and always immediately followed by figure work, so keeping
+    # them inside the same lock scope isn't worth special-casing out.
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(8, 5), dpi=150, facecolor="white")
+        ax = fig.subplots()
+        norm = plt.Normalize(profiles.log_mass.min(), profiles.log_mass.max())
+        cmap = plt.get_cmap("viridis")
+        for lum, mass in zip(profiles.luminosities, profiles.log_mass):
+            ax.plot(profiles.r_centers, lum, color=cmap(norm(mass)), alpha=0.6, lw=1.2)
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel("r [kpc/h]")
+        ax.set_ylabel("L (0.5-2.0 keV) [erg/s]")
+        ax.grid(alpha=0.3, which="both")
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        fig.colorbar(sm, ax=ax, label="log10 M200c [Msun/h]")
+        fig.tight_layout()
+        return _finish_png(fig)
 
 
 def _parse_indexed_header(header_line):
@@ -2378,7 +2468,7 @@ def _fetch_caesar_halos(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1):
     schema, not from docs. Uses SUBFIND_GROUPNUM_FOR_SNAPSHOT - confirmed
     real that CAESAR's own caesar_newsnaps_XXX.hdf5 numbering matches
     FOF_Subfind's exactly (same 34 real numbers, same redshifts)."""
-    if not HAVE_CAMELS_LIBRARY or suite not in PUBLIC_CAESAR_SUITES:
+    if not HAVE_FSSPEC or suite not in PUBLIC_CAESAR_SUITES:
         return None
 
     groupnum = SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]
@@ -2417,6 +2507,7 @@ def _fetch_caesar_halos(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1):
                         raw_cols[name.replace("/", ".")] = obj[:]
                 hd.visititems(collect)
     except Exception:
+        logger.exception("_fetch_caesar_halos failed for suite=%s set_name=%s realization=%s", suite, set_name, realization)
         return None
 
     mask = frame["Halo Mass [Msun]"] > 0
@@ -2448,7 +2539,7 @@ def _fetch_caesar_galaxies(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1
     catalog (_fetch_caesar_halos) - same realization/snapshot, same ordering
     convention CAESAR itself uses, not independently re-verified beyond that
     the row counts and general schema are real."""
-    if not HAVE_CAMELS_LIBRARY or suite not in PUBLIC_CAESAR_SUITES:
+    if not HAVE_FSSPEC or suite not in PUBLIC_CAESAR_SUITES:
         return None
 
     groupnum = SUBFIND_GROUPNUM_FOR_SNAPSHOT[snapnum]
@@ -2491,6 +2582,7 @@ def _fetch_caesar_galaxies(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1
                         raw_cols[name.replace("/", ".")] = obj[:]
                 gd.visititems(collect)
     except Exception:
+        logger.exception("_fetch_caesar_galaxies failed for suite=%s set_name=%s realization=%s", suite, set_name, realization)
         return None
 
     mask = frame["Stellar Mass [Msun]"] > 0
@@ -2556,6 +2648,7 @@ def _fetch_sublink_tree(suite, set_name, realization, variant="SubLink"):
             with h5py.File(fobj, "r") as hf:
                 tree = hf["Tree"][:]
     except Exception:
+        logger.exception("_fetch_sublink_tree failed for suite=%s set_name=%s realization=%s variant=%s", suite, set_name, realization, variant)
         return None
 
     id_to_row = {int(sid): i for i, sid in enumerate(tree["SubhaloID"])}
@@ -2572,7 +2665,7 @@ def get_merger_history(suite, set_name, realization, subfind_id, root_snapnum=SU
     current snapshot) - SubfindID is only meaningful within a single
     snapshot's Subfind catalog, so tracing from the wrong root_snapnum would
     silently look up an unrelated subhalo."""
-    if not fetch_public or not HAVE_CAMELS_LIBRARY:
+    if not fetch_public or not HAVE_FSSPEC:
         return None
     fetched = _fetch_sublink_tree(suite, set_name, realization, variant)
     if fetched is None:
@@ -2758,7 +2851,7 @@ def _fetch_halo_profiles_file(suite, set_name, realization, snapnum):
     alternate mass/radius definitions, gas/star element abundances,
     substructure count, position/velocity, etc.) rather than hardcoding a
     column list, so it stays correct if the file ever adds fields."""
-    if not HAVE_CAMELS_LIBRARY or suite not in PUBLIC_PROFILES_SUITES or set_name not in PUBLIC_PROFILES_SETS:
+    if not HAVE_FSSPEC or suite not in PUBLIC_PROFILES_SUITES or set_name not in PUBLIC_PROFILES_SETS:
         return None
 
     url = (f"{PUBLIC_DATA_URL}/Profiles/{suite}/{set_name}/{set_name}_{realization}/"
@@ -2777,6 +2870,7 @@ def _fetch_halo_profiles_file(suite, set_name, realization, snapnum):
                     and hf[key].shape[0] == n_halos_total
                 }
     except Exception:
+        logger.exception("_fetch_halo_profiles_file failed for suite=%s set_name=%s realization=%s snapnum=%s", suite, set_name, realization, snapnum)
         return None
     return r_raw, profiles, n_counts, m200c_raw, metadata_raw
 
@@ -2853,36 +2947,37 @@ def render_halo_profiles_png(suite, set_name, realization, snapnum, field, highl
     highlight_rank = max(1, min(highlight_rank, len(order)))
     hi = int(order[highlight_rank - 1])
 
-    fig, ax = plt.subplots(figsize=(8, 5))
-    norm = plt.Normalize(hprof.log_mass.min(), hprof.log_mass.max())
-    cmap = plt.get_cmap("viridis")
-    for i, (row, mass) in enumerate(zip(hprof.values, hprof.log_mass)):
-        if i == hi:
-            continue
-        positive = row > 0
-        ax.plot(hprof.r[positive], row[positive], color=cmap(norm(mass)), alpha=0.4, lw=1.0)
+    # Real fix (2026-08-06, code-quality audit): see render_xray_profiles_png's
+    # own comment for why plt.Normalize/plt.get_cmap don't need to change,
+    # and _PNG_RENDER_LOCK's own docs for why the lock wraps the whole body.
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(8, 5), dpi=150, facecolor="white")
+        ax = fig.subplots()
+        norm = plt.Normalize(hprof.log_mass.min(), hprof.log_mass.max())
+        cmap = plt.get_cmap("viridis")
+        for i, (row, mass) in enumerate(zip(hprof.values, hprof.log_mass)):
+            if i == hi:
+                continue
+            positive = row > 0
+            ax.plot(hprof.r[positive], row[positive], color=cmap(norm(mass)), alpha=0.4, lw=1.0)
 
-    hi_row, hi_n = hprof.values[hi], hprof.n_part[hi]
-    hi_mask = (hi_row > 0) & (hi_n > 0)
-    hi_yerr = hi_row[hi_mask] / np.sqrt(hi_n[hi_mask])
-    ax.errorbar(hprof.r[hi_mask], hi_row[hi_mask], yerr=hi_yerr, fmt="o-", ms=4,
-                color="crimson", lw=2, capsize=3, zorder=5,
-                label=f"highlighted (log M200c={hprof.log_mass[hi]:.2f})")
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel("r [kpc]")
-    ax.set_ylabel(f"{hprof.field} [{hprof.units}]")
-    ax.grid(alpha=0.3, which="both")
-    ax.legend(fontsize=8, loc="upper right")
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-    sm.set_array([])
-    fig.colorbar(sm, ax=ax, label="log10 M200c [Msun]")
-    fig.tight_layout()
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, facecolor="white")
-    plt.close(fig)
-    return buf.getvalue()
+        hi_row, hi_n = hprof.values[hi], hprof.n_part[hi]
+        hi_mask = (hi_row > 0) & (hi_n > 0)
+        hi_yerr = hi_row[hi_mask] / np.sqrt(hi_n[hi_mask])
+        ax.errorbar(hprof.r[hi_mask], hi_row[hi_mask], yerr=hi_yerr, fmt="o-", ms=4,
+                    color="crimson", lw=2, capsize=3, zorder=5,
+                    label=f"highlighted (log M200c={hprof.log_mass[hi]:.2f})")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel("r [kpc]")
+        ax.set_ylabel(f"{hprof.field} [{hprof.units}]")
+        ax.grid(alpha=0.3, which="both")
+        ax.legend(fontsize=8, loc="upper right")
+        sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+        sm.set_array([])
+        fig.colorbar(sm, ax=ax, label="log10 M200c [Msun]")
+        fig.tight_layout()
+        return _finish_png(fig)
 
 
 @lru_cache(maxsize=16)
@@ -2896,7 +2991,7 @@ def _fetch_photometry_bands(suite, set_name, realization, snapnum=N_SNAPSHOTS - 
     *color* (a same-source band ratio), flux vs. luminosity cancels out the
     same distance factor in both bands, so exposing it wouldn't change the
     result - not worth the extra control for this feature."""
-    if not HAVE_CAMELS_LIBRARY or suite not in PUBLIC_PHOTOMETRY_SUITES:
+    if not HAVE_FSSPEC or suite not in PUBLIC_PHOTOMETRY_SUITES:
         return None
     if sps_model not in PHOTOMETRY_SPS_MODELS or spectra_type not in PHOTOMETRY_SPECTRA_TYPES:
         return None
@@ -2923,6 +3018,7 @@ def _fetch_photometry_bands(suite, set_name, realization, snapnum=N_SNAPSHOTS - 
                         elif group in base and name in base[group]:
                             bands[name] = base[group][name][:]
     except Exception:
+        logger.exception("_fetch_photometry_bands failed for suite=%s set_name=%s realization=%s", suite, set_name, realization)
         return None
     return sub_idx, bands
 
@@ -2991,17 +3087,18 @@ def render_color_mass_diagram_png(suite, set_name, realization, band1=None, band
     if result is None:
         return None
 
-    fig, ax = plt.subplots(figsize=(7, 5.5))
-    ax.scatter(result.log_mass, result.color, s=14, alpha=0.5, c="#2b5f8a")
-    ax.set_xlabel("log10 Stellar Mass [Msun/h]")
-    ax.set_ylabel(f"{result.color_label} [mag]")
-    ax.grid(alpha=0.3, which="both")
-    fig.tight_layout()
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, facecolor="white")
-    plt.close(fig)
-    return buf.getvalue()
+    # Real fix (2026-08-06, code-quality audit): Figure/FigureCanvasAgg
+    # (_finish_png), whole render body locked - see _PNG_RENDER_LOCK's own
+    # docs for why.
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(7, 5.5), dpi=150, facecolor="white")
+        ax = fig.subplots()
+        ax.scatter(result.log_mass, result.color, s=14, alpha=0.5, c="#2b5f8a")
+        ax.set_xlabel("log10 Stellar Mass [Msun/h]")
+        ax.set_ylabel(f"{result.color_label} [mag]")
+        ax.grid(alpha=0.3, which="both")
+        fig.tight_layout()
+        return _finish_png(fig)
 
 
 @lru_cache(maxsize=32)
@@ -3068,7 +3165,7 @@ def _fetch_pdf_array(suite, field, grid, redshift):
     """Real (1000, 500) histogram-count array - every LH realization's CMD
     grid pixel-value histogram for one field, in a single small (~4MB)
     file. Returns the raw int array or None."""
-    if not HAVE_CAMELS_LIBRARY or suite not in PUBLIC_PDF_SUITES:
+    if not HAVE_FSSPEC or suite not in PUBLIC_PDF_SUITES:
         return None
     if field not in CMD_FIELDS or grid not in PUBLIC_PDF_GRIDS:
         return None
@@ -3078,6 +3175,7 @@ def _fetch_pdf_array(suite, field, grid, redshift):
         with fsspec.open(url, "rb") as fobj:
             data = np.load(fobj)
     except Exception:
+        logger.exception("_fetch_pdf_array failed for suite=%s field=%s grid=%s redshift=%s", suite, field, grid, redshift)
         return None
     return data
 
@@ -3113,22 +3211,23 @@ def render_field_pdf_png(suite, field, grid=128, redshift=0.0, fetch_public: boo
     if pdf is None:
         return None
 
-    fig, ax = plt.subplots(figsize=(8, 4.5))
-    ax.plot(pdf.bin_index, pdf.mean_counts, lw=2, color="#2b5f8a", label="mean")
-    lower = np.clip(pdf.mean_counts - pdf.std_counts, 1e-3, None)
-    ax.fill_between(pdf.bin_index, lower, pdf.mean_counts + pdf.std_counts,
-                     alpha=0.3, color="#2b5f8a", label="±1 std across realizations")
-    ax.set_yscale("log")
-    ax.set_xlabel("bin index (0-499, uncalibrated)")
-    ax.set_ylabel(f"count [{pdf.field}]")
-    ax.grid(alpha=0.3, which="both")
-    ax.legend(fontsize=8)
-    fig.tight_layout()
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, facecolor="white")
-    plt.close(fig)
-    return buf.getvalue()
+    # Real fix (2026-08-06, code-quality audit): Figure/FigureCanvasAgg
+    # (_finish_png), whole render body locked - see _PNG_RENDER_LOCK's own
+    # docs for why.
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(8, 4.5), dpi=150, facecolor="white")
+        ax = fig.subplots()
+        ax.plot(pdf.bin_index, pdf.mean_counts, lw=2, color="#2b5f8a", label="mean")
+        lower = np.clip(pdf.mean_counts - pdf.std_counts, 1e-3, None)
+        ax.fill_between(pdf.bin_index, lower, pdf.mean_counts + pdf.std_counts,
+                         alpha=0.3, color="#2b5f8a", label="±1 std across realizations")
+        ax.set_yscale("log")
+        ax.set_xlabel("bin index (0-499, uncalibrated)")
+        ax.set_ylabel(f"count [{pdf.field}]")
+        ax.grid(alpha=0.3, which="both")
+        ax.legend(fontsize=8)
+        fig.tight_layout()
+        return _finish_png(fig)
 
 
 def get_lya_spectrum(suite, set_name, realization, snapnum, sightline,
@@ -3136,7 +3235,7 @@ def get_lya_spectrum(suite, set_name, realization, snapnum, sightline,
     """Real Lyman-alpha transmission spectrum for one of 5000 sightlines at
     one snapshot. No synthetic version - a fabricated absorption spectrum
     isn't a useful illustrative stand-in the way a power-law curve is."""
-    if not fetch_public or not HAVE_CAMELS_LIBRARY or suite not in PUBLIC_LYA_SUITES:
+    if not fetch_public or not HAVE_FSSPEC or suite not in PUBLIC_LYA_SUITES:
         return None
     if not (0 <= sightline < LYA_N_SIGHTLINES):
         return None
@@ -3153,6 +3252,7 @@ def get_lya_spectrum(suite, set_name, realization, snapnum, sightline,
                 colden = hf["colden/H/1"][sightline, :]
                 z = float(hf["Header"].attrs["redshift"])
     except Exception:
+        logger.exception("get_lya_spectrum failed for suite=%s set_name=%s realization=%s snapnum=%s sightline=%s", suite, set_name, realization, snapnum, sightline)
         return None
 
     flux = np.exp(-tau)
@@ -3177,19 +3277,20 @@ def render_lya_spectrum_png(suite, set_name, realization, snapnum, sightline,
     if lya is None:
         return None
 
-    fig, (ax, ax2) = plt.subplots(2, 1, figsize=(9, 6), sharex=True)
-    ax.plot(lya.pixel, lya.flux, lw=1.2, color="#2b5f8a")
-    ax.set_ylim(0, 1.05)
-    ax.set_ylabel("transmitted flux (e^-tau)")
-    ax.grid(alpha=0.3)
-    ax2.plot(lya.pixel, lya.colden, lw=1.2, color="#8a4a2b")
-    ax2.set_yscale("log")
-    ax2.set_xlabel("spectral pixel (uncalibrated)")
-    ax2.set_ylabel("HI column density")
-    ax2.grid(alpha=0.3, which="both")
-    fig.tight_layout()
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=150, facecolor="white")
-    plt.close(fig)
-    return buf.getvalue()
+    # Real fix (2026-08-06, code-quality audit): Figure/FigureCanvasAgg
+    # (_finish_png), whole render body locked - see _PNG_RENDER_LOCK's own
+    # docs for why.
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(9, 6), dpi=150, facecolor="white")
+        ax, ax2 = fig.subplots(2, 1, sharex=True)
+        ax.plot(lya.pixel, lya.flux, lw=1.2, color="#2b5f8a")
+        ax.set_ylim(0, 1.05)
+        ax.set_ylabel("transmitted flux (e^-tau)")
+        ax.grid(alpha=0.3)
+        ax2.plot(lya.pixel, lya.colden, lw=1.2, color="#8a4a2b")
+        ax2.set_yscale("log")
+        ax2.set_xlabel("spectral pixel (uncalibrated)")
+        ax2.set_ylabel("HI column density")
+        ax2.grid(alpha=0.3, which="both")
+        fig.tight_layout()
+        return _finish_png(fig)
