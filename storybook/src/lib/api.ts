@@ -147,6 +147,9 @@ export async function fetchBispectrum(params: {
   realization: number | string;
   field: string;
   muIndex: number;
+  kRange: 'lowk' | 'highk';
+  rsdAxis: number | null;
+  ell: number;
 }): Promise<Result | null> {
   const qs = new URLSearchParams({
     suite: params.suite,
@@ -154,8 +157,11 @@ export async function fetchBispectrum(params: {
     realization: String(params.realization),
     field: params.field,
     mu_index: String(params.muIndex),
+    k_range: params.kRange,
+    ell: String(params.ell),
     fetch_public: 'true',
   });
+  if (params.rsdAxis !== null) qs.set('rsd_axis', String(params.rsdAxis));
   const res = await fetch(`${API_BASE}/bispectrum?${qs}`);
   if (res.status === 404) return null; // real gap: no data for this suite/set/realization - see api/deps.py's require()
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -168,12 +174,18 @@ export function bispectrumImageUrl(params: {
   realizations: (number | string)[];
   field: string;
   muIndex: number;
+  kRange: 'lowk' | 'highk';
+  rsdAxis: number | null;
+  ell: number;
 }): string {
   const qs = new URLSearchParams();
   qs.set('suite', params.suite);
   qs.set('set_name', params.setName);
   qs.set('field', params.field);
   qs.set('mu_index', String(params.muIndex));
+  qs.set('k_range', params.kRange);
+  qs.set('ell', String(params.ell));
+  if (params.rsdAxis !== null) qs.set('rsd_axis', String(params.rsdAxis));
   for (const realization of params.realizations) qs.append('realizations', String(realization));
   qs.set('fetch_public', 'true');
   return `${API_BASE}/bispectrum/plot.png?${qs}`;
