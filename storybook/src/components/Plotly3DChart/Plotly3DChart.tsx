@@ -54,13 +54,15 @@ export type Plotly3DChartProps = {
    * `value` worth reading out - but 3D Particle Cloud's points carry no
    * such value, so the pin only ever showed x/y/z there, and the user
    * asked to remove it entirely for that caller. Removed again, 2026-08-07,
-   * direct user feedback: 3D Density Field no longer wants it either -
-   * `DensityFieldChart` now passes `pinEnabled={false}` explicitly, same
-   * as `ParticleCloudChart`). Defaults to `true` only because `App.tsx`'s
-   * Custom-tab 3D Scatterplot call site (the one remaining real caller
-   * that doesn't pass this prop at all) still relies on that default -
-   * not because any statistic is meant to inherit it silently going
-   * forward. */
+   * direct user feedback: 3D Density Field no longer wants it either.
+   * Disabled everywhere, 2026-08-07 (direct user report: pinning a mark
+   * on click in any 3D plot was unwanted, "let's hide that feature for
+   * now, we could rebuild it later with stronger guardrails" - the click-
+   * ignored-once-pinned behavior above was itself a guardrail patch for a
+   * real jank bug, evidence this needs a sturdier redesign before it comes
+   * back, not just a toggle). Defaults to `false`; every call site now
+   * passes that explicitly rather than relying on the default, so a future
+   * caller can't silently re-enable it by omission. */
   pinEnabled?: boolean;
   /** Real bug fixed 2026-08-07, direct user report ("the render just shows
    * x/y/z [Mpc/h] - hardcoded axis labels that do not change even when I
@@ -84,7 +86,7 @@ export type Plotly3DChartProps = {
  * every other Interactive chart in this app, which hides Plotly's default
  * toolbar since Toolbar owns that role instead). See Plotly3DChart.mdx. */
 export function Plotly3DChart({
-  data, rulerMode, pinEnabled = true,
+  data, rulerMode, pinEnabled = false,
   xLabel = 'x [Mpc/h]', yLabel = 'y [Mpc/h]', zLabel = 'z [Mpc/h]',
 }: Plotly3DChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);

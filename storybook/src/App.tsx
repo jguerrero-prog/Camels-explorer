@@ -202,6 +202,7 @@ function CamelsSamCharts({ rows }: { rows: HaloCatalogRow[] }) {
           xLabel="x [Mpc]"
           yLabel="y [Mpc]"
           zLabel="z [Mpc]"
+          pinEnabled={false}
           data={[{
             type: 'scatter3d',
             mode: 'markers',
@@ -3451,6 +3452,7 @@ export function App() {
                                 xLabel={result.xLabel}
                                 yLabel={result.yLabel}
                                 zLabel={result.zLabel}
+                                pinEnabled={false}
                                 data={[{
                                   type: 'scatter3d',
                                   mode: 'markers',
