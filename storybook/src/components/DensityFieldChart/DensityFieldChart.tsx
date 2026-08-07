@@ -55,6 +55,25 @@ function percentileOf(sorted: number[], p: number): number {
 // from the installed Python package rather than approximated, spread
 // evenly across [0, 1] - this is the exact palette app.py's own Streamlit
 // 3D Density Field renders.
+//
+// Real root cause found 2026-08-07 (the actual explanation for the
+// "disconnected blobs vs. continuous web" gap the two attempts above were
+// chasing): this trace set `surface_count: isoSurfaces` as a flat key -
+// `surface_count` is a plotly.py-only "magic underscore" convenience that
+// Python expands into `{"surface": {"count": ...}}` at object-construction
+// time, before the figure is ever serialized to JSON. plotly.js has no such
+// expansion (confirmed against its own installed schema and shipped
+// bundle - no `surface_count` key exists anywhere in it, only nested
+// `surface.count`, defaulting to 2). So this trace was silently rendering
+// exactly 2 isosurface shells - one at isomin (near-black on Inferno,
+// invisible at low opacity) and one at isomax (the sparse, mutually
+// disconnected top-0.5%-density halo cores) - regardless of the sidebar's
+// own Iso-surfaces value (12 by default). app.py's identical
+// `surface_count=iso_surfaces` kwarg genuinely produces 12 real nested
+// shells server-side, which is what reads as one continuous, alpha-
+// composited structure. Both prior fix attempts above were trying to
+// compensate for a 2-shell render with color/opacity/scale tricks, not
+// knowing the shell count itself was never actually 12.
 const INFERNO_COLORSCALE: [number, string][] = [
   [0 / 9, '#000004'], [1 / 9, '#1b0c41'], [2 / 9, '#4a0c6b'], [3 / 9, '#781c6d'],
   [4 / 9, '#a52c60'], [5 / 9, '#cf4446'], [6 / 9, '#ed6925'], [7 / 9, '#fb9b06'],
@@ -100,7 +119,7 @@ export function DensityFieldChart({
       isomin: percentileOf(sorted, 0.60),
       isomax: percentileOf(sorted, 0.995),
       opacity,
-      surface_count: isoSurfaces,
+      surface: { count: isoSurfaces },
       colorscale: INFERNO_COLORSCALE,
       showscale: true,
       colorbar: {
@@ -146,5 +165,10 @@ export function DensityFieldChart({
     return traces;
   }, [density, boxSize, colorbarTitle, isoSurfaces, opacity, voids]);
 
-  return <Plotly3DChart data={data} rulerMode={rulerMode} />;
+  // Real fix (2026-08-07, direct user feedback): click-to-pin removed from
+  // this statistic - see Plotly3DChart's own `pinEnabled` docs for why it
+  // was added here in the first place (a click's real scalar `value` was
+  // worth reading out) and why that's no longer wanted. Same `pinEnabled=
+  // {false}` pattern ParticleCloudChart already uses, not a new mechanism.
+  return <Plotly3DChart data={data} rulerMode={rulerMode} pinEnabled={false} />;
 }
