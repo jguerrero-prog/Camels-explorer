@@ -880,6 +880,7 @@ async function loadBispectrumTile(id: string, params: BispectrumParams): Promise
       fetchBispectrum({
         suite: params.suite, setName: params.setName, realization,
         field: params.field, muIndex: params.muIndex,
+        kRange: params.kRange, rsdAxis: rsdAxisFromLabel(params.rsdLabel), ell: params.ell,
       }).then((r) => ({ realization, r })),
     ),
   );
@@ -2134,6 +2135,7 @@ export function App() {
         suite: selection.suite, setName: selection.set, compareMode: false,
         realizations: [selection.realization],
         field: 'Total Matter', muIndex: 7,
+        kRange: 'lowk', rsdLabel: 'Real space (none)', ell: 0,
       };
       const placeholder: BispectrumTileState = {
         id, kind: 'bispectrum', params,
@@ -2709,6 +2711,7 @@ export function App() {
                         imageUrl: bispectrumImageUrl({
                           suite: tile.params.suite, setName: tile.params.setName, realizations,
                           field: tile.params.field, muIndex: tile.params.muIndex,
+                          kRange: tile.params.kRange, rsdAxis: rsdAxisFromLabel(tile.params.rsdLabel), ell: tile.params.ell,
                         }),
                       }}
                       readoutGroups={[

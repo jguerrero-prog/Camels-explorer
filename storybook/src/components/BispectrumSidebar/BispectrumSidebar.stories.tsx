@@ -21,6 +21,9 @@ function Interactive() {
     realizations: [42],
     field: 'Total Matter',
     muIndex: 7,
+    kRange: 'lowk',
+    rsdLabel: 'Real space (none)',
+    ell: 0,
   });
   return <BispectrumSidebar params={params} onChange={setParams} onRemove={() => {}} />;
 }

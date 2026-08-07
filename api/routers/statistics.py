@@ -221,11 +221,14 @@ def scaling_relations_plot(
 def bispectrum(
     suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, field: str,
     mu_index: int = 7,
+    k_range: str = "lowk",
+    rsd_axis: Optional[int] = None,
+    ell: int = 0,
     fetch_public: bool = False,
 ):
     result = require(B.get_bispectrum(
         suite, set_name, realization, field,
-        mu_index=mu_index, fetch_public=fetch_public,
+        mu_index=mu_index, k_range=k_range, rsd_axis=rsd_axis, ell=ell, fetch_public=fetch_public,
     ))
     return to_jsonable(result)
 
@@ -234,6 +237,9 @@ def bispectrum(
 def bispectrum_plot(
     suite: str, set_name: Annotated[str, Depends(resolved_set_name)], field: str,
     mu_index: int = 7,
+    k_range: str = "lowk",
+    rsd_axis: Optional[int] = None,
+    ell: int = 0,
     realizations: list[int] = Query(...),
     fetch_public: bool = False,
 ):
@@ -241,7 +247,8 @@ def bispectrum_plot(
     docstring (same shared rendering path, backend.py's
     _render_result_png). No synthetic fallback (matches the JSON endpoint)."""
     png = require(B.render_bispectrum_png(
-        suite, set_name, realizations, field, mu_index=mu_index, fetch_public=fetch_public,
+        suite, set_name, realizations, field, mu_index=mu_index,
+        k_range=k_range, rsd_axis=rsd_axis, ell=ell, fetch_public=fetch_public,
     ))
     return Response(content=png, media_type="image/png")
 
