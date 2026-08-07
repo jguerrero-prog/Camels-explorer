@@ -638,6 +638,20 @@ BK_TYPES = {"Total Matter": "m", "Gas": "g", "Dark Matter": "c"}
 BK_MU_VALUES = [-0.9, -0.7, -0.5, -0.3, -0.1, 0.1, 0.3, 0.5, 0.7, 0.9]  # real header values
 BK_EQUILATERAL_MU_INDEX = 7  # mu_arr[7] == 0.5, kept as the default
 
+# Real high-k HIPSTER-based Bispectrum multipoles (2026-08-07, direct user
+# request) - a genuinely separate product from the low-k FFT estimator
+# above (confirmed via a real directory listing: Bk_{type}_highk[_RS{axis}]_
+# z=0.00.txt sits alongside the lowk files). Reports Legendre multipoles
+# B_ell(k1,k2) instead of mu bins - confirmed via a real raw fetch of both a
+# real-space and a redshift-space file (not a summarized/truncated one - an
+# earlier pass here trusted a truncated quote and wrongly assumed real-space
+# only had 3 columns; a direct fetch of the actual file showed 6, same as
+# RSD): both real-space and RSD files have exactly 6 numeric columns after
+# k1/k2, ell=0..5 (l_max=5) either way - the real-space/RSD distinction is
+# physical (odd multipoles are expected to be small/noise in real-space,
+# not structurally absent), not a difference in column count.
+BK_HIGHK_ELLS = [0, 1, 2, 3, 4, 5]
+
 # PDF - real per-field histograms of CMD 3D grid pixel values, but for the
 # *entire* 1000-realization LH ensemble in one file (not per-realization
 # like everything else in this app) - confirmed via a real fetch: each row's
@@ -1607,9 +1621,13 @@ def render_power_spectrum_png(suite, set_name, realizations, snapnum, grid, MAS,
 
 
 def render_bispectrum_png(suite, set_name, realizations, field, mu_index=BK_EQUILATERAL_MU_INDEX,
+                           k_range: str = "lowk", rsd_axis: int | None = None, ell: int = 0,
                            fetch_public: bool = False) -> bytes | None:
     return _render_result_png(
-        lambda r: get_bispectrum(suite, set_name, r, field, mu_index=mu_index, fetch_public=fetch_public),
+        lambda r: get_bispectrum(
+            suite, set_name, r, field, mu_index=mu_index,
+            k_range=k_range, rsd_axis=rsd_axis, ell=ell, fetch_public=fetch_public,
+        ),
         set_name, realizations,
     )
 
@@ -3109,6 +3127,53 @@ def render_color_mass_diagram_png(suite, set_name, realization, band1=None, band
 
 
 @lru_cache(maxsize=32)
+def _fetch_bispectrum_highk(suite, set_name, realization, bk_type, rsd_axis=None):
+    """Real high-k (HIPSTER pair-counting) k1=k2 bispectrum Legendre
+    multipoles - see BK_HIGHK_ELLS's own comment for the real column
+    convention (same 6 ells whether real-space or RSD). Small file, fetched
+    whole. Returns (k [h/Mpc], {ell: Bk array}) sorted by k, or None."""
+    if suite not in PUBLIC_BK_SUITES or set_name != "LH":
+        return None
+
+    rs_part = f"_RS{rsd_axis}" if rsd_axis is not None else ""
+    url = (f"{PUBLIC_DATA_URL}/Bk/{suite}/{set_name}/{set_name}_{realization}/"
+           f"Bk_{bk_type}_highk{rs_part}_z=0.00.txt")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            text = resp.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    lines = [ln for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
+    if not lines:
+        return None
+    try:
+        data = np.loadtxt(lines)
+    except ValueError:
+        return None
+    if data.ndim != 2 or data.shape[1] < 3:
+        return None
+
+    k1, k2 = data[:, 0], data[:, 1]
+    equal = np.isclose(k1, k2)
+    if equal.sum() == 0:
+        return None
+
+    n_ell_cols = data.shape[1] - 2
+    if n_ell_cols != len(BK_HIGHK_ELLS):
+        # Real schema mismatch (e.g. a future file with a different column
+        # count) - refuse to silently misattribute columns to ell values
+        # rather than guess.
+        return None
+
+    order = np.argsort(k1[equal])
+    k = k1[equal][order]
+    bk_by_ell = {ell: data[equal, 2 + i][order] for i, ell in enumerate(BK_HIGHK_ELLS)}
+    return k, bk_by_ell
+
+
+@lru_cache(maxsize=32)
 def _fetch_bispectrum(suite, set_name, realization, bk_type, mu_index=BK_EQUILATERAL_MU_INDEX):
     """Real low-k (FFT-based) k1=k2 bispectrum at one mu bin, real-space,
     z=0.00. Small file (~37KB), fetched whole. Returns (k [h/Mpc], Bk
@@ -3143,14 +3208,39 @@ def _fetch_bispectrum(suite, set_name, realization, bk_type, mu_index=BK_EQUILAT
 
 
 def get_bispectrum(suite, set_name, realization, field, mu_index=BK_EQUILATERAL_MU_INDEX,
+                    k_range: str = "lowk", rsd_axis: int | None = None, ell: int = 0,
                     fetch_public: bool = False) -> Result | None:
-    """Real k1=k2 matter/gas/dark-matter bispectrum at one mu (triangle-shape)
-    bin - mu_index=7 (mu=0.5) is the equilateral configuration; other values
-    are real, distinct triangle shapes at the same k1=k2. No synthetic
-    version - a fabricated bispectrum shape isn't a useful illustrative
-    stand-in the way a power-law Pk/HMF curve is, so this returns None
-    outright when real data isn't available."""
-    if not fetch_public or field not in BK_TYPES or not (0 <= mu_index < len(BK_MU_VALUES)):
+    """Real k1=k2 matter/gas/dark-matter bispectrum. `k_range="lowk"`
+    (default) is the original FFT-based estimator at one mu (triangle-shape)
+    bin - mu_index=7 (mu=0.5) is the equilateral configuration. `k_range=
+    "highk"` is the separate HIPSTER-based estimator (see
+    _fetch_bispectrum_highk) - real-space or redshift-space (`rsd_axis` in
+    {0,1,2}), reporting Legendre multipoles B_ell instead of mu bins. No
+    synthetic version either way - a fabricated bispectrum shape isn't a
+    useful illustrative stand-in the way a power-law Pk/HMF curve is."""
+    if not fetch_public or field not in BK_TYPES:
+        return None
+
+    if k_range == "highk":
+        fetched = _fetch_bispectrum_highk(suite, set_name, realization, BK_TYPES[field], rsd_axis)
+        if fetched is None:
+            return None
+        k, bk_by_ell = fetched
+        if ell not in bk_by_ell:
+            return None
+        bk = bk_by_ell[ell]
+        rs_label = "real-space" if rsd_axis is None else f"redshift-space, axis {rsd_axis}"
+        rs_part = f"_RS{rsd_axis}" if rsd_axis is not None else ""
+        return Result(
+            x=k, y=bk, x_label="k [h/Mpc]", y_label=f"B_{ell}(k,k) [(Mpc/h)^6]",
+            source="real",
+            note=(f"z = 0.00, {rs_label}, k1=k2, Legendre multipole ell={ell} - public CAMELS "
+                  f"data release (Bk/{suite}/{set_name}/{set_name}_{realization}/"
+                  f"Bk_{BK_TYPES[field]}_highk{rs_part}_z=0.00.txt, HIPSTER pair-counting "
+                  f"estimator, {field})"),
+        )
+
+    if not (0 <= mu_index < len(BK_MU_VALUES)):
         return None
     fetched = _fetch_bispectrum(suite, set_name, realization, BK_TYPES[field], mu_index)
     if fetched is None:
