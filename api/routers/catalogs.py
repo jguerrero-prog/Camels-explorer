@@ -88,6 +88,15 @@ def consistent_trees_history(
     return to_jsonable(result)
 
 
+@router.get("/blackhole-mergers")
+def blackhole_mergers(
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int,
+    fetch_public: bool = False,
+):
+    result = require(B.get_blackhole_mergers(suite, set_name, realization, fetch_public=fetch_public))
+    return to_jsonable(result)
+
+
 @router.get("/onep-param-value")
 def onep_param_value(
     suite: str, param_index: int, variation: int,

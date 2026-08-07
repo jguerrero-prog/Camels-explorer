@@ -83,6 +83,15 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
   // already applies elsewhere, just extended to Suite/Set too since there's
   // nothing suite/set-shaped to select for this statistic.
   const isCamelsSam = selection.statistic === 'CAMELS-SAM';
+  // Real (added 2026-08-07, direct user request) - a genuinely new
+  // statistic (app.py never had this), also appended client-side since
+  // GET /api/metadata has no concept of it either. Unlike CAMELS-SAM, this
+  // one IS suite/set-bound - just to exactly one real suite (confirmed via
+  // a direct directory listing: SIMBA/Astrid have no blackhole_mergers/
+  // folder at all) - so SingleRealizationFields stays shown, just suite-
+  // restricted the same way `catalog.statistic_suites` restricts every
+  // other statistic there, since this one isn't in that map at all.
+  const isBlackholeMergers = selection.statistic === 'Black Hole Mergers';
 
   return (
     <>
@@ -91,7 +100,7 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
           catalog={catalog}
           value={{ suite: selection.suite, setName: selection.set, realization: selection.realization }}
           onChange={(v) => onChange({ ...selection, suite: v.suite, set: v.setName, realization: v.realization })}
-          allowedSuites={catalog.statistic_suites[selection.statistic]}
+          allowedSuites={isBlackholeMergers ? ['IllustrisTNG'] : catalog.statistic_suites[selection.statistic]}
           allowedSets={catalog.statistic_sets[selection.statistic]}
           hideRealizationValueControls
         />
@@ -99,12 +108,17 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
       <SelectField
         label="Statistic"
         value={selection.statistic}
-        options={[...catalog.statistics, 'CAMELS-SAM']}
+        options={[...catalog.statistics, 'CAMELS-SAM', 'Black Hole Mergers']}
         onChange={(statistic) => onChange({ ...selection, statistic })}
       />
       {isCamelsSam && (
         <p className="curated-tab__loading">
           CAMELS-SAM is a separate dataset (Santa Cruz Semi-Analytic Model), not tied to a suite/set — real for the LH set only. Realization defaults to 0, adjustable in the tile's own sidebar after adding.
+        </p>
+      )}
+      {isBlackholeMergers && (
+        <p className="curated-tab__loading">
+          Black hole merger events are real, but genuinely undocumented by CAMELS itself and only published for IllustrisTNG.
         </p>
       )}
     </>
