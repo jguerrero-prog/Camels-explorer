@@ -91,6 +91,16 @@ export type PlotTileProps = {
    * today) - see `PlotTileCatalogTable`'s own docs for why this is a
    * separate prop from `halos` rather than reusing it. */
   catalogTable?: PlotTileCatalogTable | null;
+  /** Real (added 2026-08-07, direct user request: Black Hole Mergers
+   * wanted a 3D Scatter option alongside Interactive/Table). A peer of
+   * `chart`, not a variant of it - `chart` keeps driving Static/Interactive
+   * as before, this drives the new `scatter3d` mode when present. Kept
+   * separate rather than widening `PlotTileChart`'s union: a tile with
+   * this set still has an ordinary 2D `chart` too (unlike Density Field/
+   * Particle Cloud, whose `chart.kind` IS `'plotly-3d'` because they have
+   * no 2D alternative at all). `null`/omitted hides the mode entirely,
+   * same convention as `halos`. */
+  chart3d?: ReactNode | null;
   /** Fires on any click on the tile - App.tsx uses this to decide which
    * tile's ParamsSidebar shows (its own focusedTileId state, not a prop
    * here). No visual effect on the tile itself - see PlotTile.mdx's
@@ -141,11 +151,12 @@ export type PlotTileProps = {
   readoutsHidden?: boolean;
 };
 
-function availableChartModes(chart: PlotTileChart, hasTable: boolean): ChartDisplayMode[] {
+function availableChartModes(chart: PlotTileChart, hasTable: boolean, has3d: boolean): ChartDisplayMode[] {
   const modes: ChartDisplayMode[] = [];
   const hasStatic = chart.kind === 'static-image' || (chart.kind !== 'plotly-3d' && !!chart.imageUrl);
   if (hasStatic) modes.push('static');
   if (chart.kind !== 'static-image') modes.push('interactive');
+  if (has3d) modes.push('scatter3d');
   if (hasTable) modes.push('table');
   return modes;
 }
@@ -163,9 +174,9 @@ function availableChartModes(chart: PlotTileChart, hasTable: boolean): ChartDisp
  * the tile's full body height - no competing for space, because only one
  * ever renders. */
 export function PlotTile({
-  title, chart, readoutGroups, halos, catalogTable, onFocus, focused, onChartClick, annotationOverlay, error, readoutsHidden,
+  title, chart, readoutGroups, halos, catalogTable, chart3d, onFocus, focused, onChartClick, annotationOverlay, error, readoutsHidden,
 }: PlotTileProps) {
-  const modes = availableChartModes(chart, !!halos || !!catalogTable);
+  const modes = availableChartModes(chart, !!halos || !!catalogTable, !!chart3d);
   const [chartMode, setChartMode] = useState<ChartDisplayMode>(modes[0]);
 
   const handleChartAreaClick = (e: MouseEvent<HTMLDivElement>) => {
@@ -194,6 +205,8 @@ export function PlotTile({
               <div className="plot-chart">
                 <p className="plot-chart__error">{error}</p>
               </div>
+            ) : chartMode === 'scatter3d' && chart3d ? (
+              chart3d
             ) : chart.kind === 'static-image' ? (
               <StaticImageChart imageUrl={chart.imageUrl} alt={chart.alt} />
             ) : chart.kind === 'plotly-3d' ? (
