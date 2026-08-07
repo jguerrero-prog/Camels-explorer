@@ -3,11 +3,12 @@ import { createPortal } from 'react-dom';
 import chevron from '../SelectField/assets/chevron.svg';
 import './ChartModeDropdown.css';
 
-export type ChartDisplayMode = 'static' | 'interactive' | 'table';
+export type ChartDisplayMode = 'static' | 'interactive' | 'scatter3d' | 'table';
 
 const MODE_LABEL: Record<ChartDisplayMode, string> = {
   static: 'Static',
   interactive: 'Interactive',
+  scatter3d: '3D Scatter',
   table: 'Table',
 };
 
