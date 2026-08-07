@@ -39,7 +39,9 @@ Grid mode auto-tiles by how many tiles are present, per `STUDIO_PLAN.md`'s "Inte
 
 <Controls />
 
-All states share the same real measurements: 16px outer padding, 16px gap between tiles (measured from both real frames' child positions — e.g. stacked's Panel 2 sits at y=866 with Panel 1 ending at y=850, a 16px gap; grid's two 661px columns plus a 16px gap sum to the real 1338px row width).
+All states share the same outer padding and inter-tile gap. Originally 16px, matching both real frames' own child positions (e.g. stacked's Panel 2 sits at y=866 with Panel 1 ending at y=850, a 16px gap; grid's two 661px columns plus a 16px gap sum to the real 1338px row width).
+
+**Real fix (2026-08-07, direct user feedback): 16px → 8px**, a deliberate deviation from those Figma-measured values — tiles sit tighter together and closer to the canvas edge.
 
 **Still open:** 5+ tile arrangements beyond these five named states aren't specified anywhere yet — the grid will keep wrapping 2-per-row, which is a reasonable default but hasn't been confirmed as the intended behavior past 4 tiles.
 

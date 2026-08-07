@@ -21,6 +21,8 @@ Real fix (2026-08-06, direct user feedback: "the static/interactive toggle is be
 
 A small trigger button (current mode + chevron) opens a portal-rendered menu listing every option in `options`, with a checkmark on the current selection — same portal/fixed-position pattern as `SelectField`'s own dropdown, scaled down for 2-3 short options instead of a long field list.
 
+**Real fix (2026-08-07, direct user feedback: "the labels are bleeding out of the dropdown modal and the checkmark is overlapping with the text"):** the menu used to be forced to exactly the trigger's own width (`width: menuRect.width`) - fine for `SelectField`, whose trigger is always `width: 100%` of a full sidebar field, but this trigger is a small content-sized pill that only fits whichever label is *currently selected*. With "Static" selected, the trigger (and thus the menu) was too narrow for "Interactive" - a real option, not a hypothetical one - to fit on one line, so it wrapped/overflowed and collided with the checkmark. Fixed by using `min-width` instead of a hard `width`, so the menu can grow past the trigger's own width to fit its longest real option, plus `white-space: nowrap` on each option so a long label never wraps onto a second line in the first place.
+
 **Real, deliberate constraint: `options` never contains a disabled entry.** Every option passed in is always genuinely real for this tile - "Table" only appears when `halos` exists, "Static" only when a server-rendered PNG exists. `PlotTile`'s own `availableChartModes` computes this list; this component has no opinion about *why* an option is or isn't present, only about rendering whichever list it's given.
 
 <Canvas of={ChartModeDropdownStories.NoTableOption} />

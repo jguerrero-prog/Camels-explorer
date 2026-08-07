@@ -4,41 +4,27 @@
 .top-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   height: 48px;
   padding: 0 28px;
   background: var(--color-surface-chrome);
   border-bottom: 1px solid var(--color-border);
 }
 
-.top-nav__path {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.top-nav__path-segment {
-  font-weight: 500;
-  color: var(--color-text-muted);
-}
-
-.top-nav__path-separator {
-  font-weight: 400;
-  color: var(--color-text-faint);
-}
-
-.top-nav__path-segment--current {
-  font-weight: 600;
-  color: var(--color-text-emphasis);
-}
-
+/* Real fix (2026-08-07, direct user feedback): the folder/project
+   breadcrumb label ("Untitled / Project 1") this row used to open with is
+   removed entirely - see TopNav.tsx/.mdx. That label used to be what
+   `.top-nav`'s own `justify-content: space-between` pushed `toolbar`/
+   `.top-nav__actions` away from; with it gone, `space-between` across a
+   *variable* number of remaining children (`toolbar` is conditionally
+   rendered) would left-align `.top-nav__actions` whenever `toolbar` is
+   absent (a real layout bug, not cosmetic - the Add Plot button would
+   jump to the left edge on the zero-tiles screen). `margin-left: auto`
+   here keeps it pinned to the row's trailing edge regardless. */
 .top-nav__actions {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-left: auto;
 }
 
 /* Real fix (2026-08-06, direct user feedback): flipped from the purple/

@@ -86,7 +86,7 @@ export function ChartModeDropdown({ mode, options, onChange }: ChartModeDropdown
           <ul
             className="chart-mode-dropdown__menu"
             role="listbox"
-            style={{ position: 'fixed', top: menuRect.top, left: menuRect.left, width: menuRect.width }}
+            style={{ position: 'fixed', top: menuRect.top, left: menuRect.left, minWidth: menuRect.width }}
           >
             {options.map((option) => (
               <li key={option}>
