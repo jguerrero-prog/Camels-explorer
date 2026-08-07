@@ -1,8 +1,11 @@
+/* Real fix (2026-08-07, direct user feedback): 16px → 8px, a deliberate
+   deviation from the real Figma-measured 16px (see Viewer.mdx) - tiles sit
+   tighter together and closer to the canvas edge. */
 .viewer {
   width: 100%;
   height: 100%;
-  padding: 16px;
-  gap: 16px;
+  padding: 8px;
+  gap: 8px;
   box-sizing: border-box;
   overflow-y: auto;
 }

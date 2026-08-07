@@ -10,8 +10,6 @@ const meta: Meta<typeof TopNav> = {
   component: TopNav,
   parameters: { layout: 'fullscreen' },
   args: {
-    folderName: 'Untitled',
-    projectName: 'Project 1',
     onAddPlot: () => {},
   },
 };
@@ -28,8 +26,6 @@ function WithToolbarDemo() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   return (
     <TopNav
-      folderName="Untitled"
-      projectName="Project 1"
       onAddPlot={() => {}}
       toolbar={<Toolbar viewMode={viewMode} onViewModeChange={setViewMode} />}
     />

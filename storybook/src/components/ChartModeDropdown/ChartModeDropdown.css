@@ -27,7 +27,21 @@
 
 /* Same portal/menu shell as SelectField's own dropdown (SelectField.css) -
    fixed-position, escapes the tile's own overflow/z-index context. Smaller
-   than SelectField's menu since this only ever holds 2-3 short options. */
+   than SelectField's menu since this only ever holds 2-3 short options.
+
+   Real fix (2026-08-07, direct user feedback: "the labels are bleeding out
+   of the dropdown modal and the checkmark is overlapping with the text"):
+   the trigger's own width (set as this menu's `min-width` inline style, see
+   ChartModeDropdown.tsx) only fits whichever label is *currently selected*
+   - "Static"/"Table" are short, but "Interactive" is a real option too and
+   noticeably longer. SelectField's identical width-from-trigger pattern
+   never hits this because that trigger is always `width: 100%` of a full
+   sidebar field, wide enough for anything; this trigger is a small,
+   content-sized pill, so it can be narrower than the menu's own longest
+   option. Switched from a hard `width` to `min-width` so the menu can grow
+   past the trigger's width to fit its real content instead of clipping it -
+   `white-space: nowrap` below keeps a long label from wrapping onto a
+   second line and colliding with the checkmark instead. */
 .chart-mode-dropdown__menu {
   position: fixed;
   z-index: 1000;
@@ -51,10 +65,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   font-family: var(--font-ui);
   font-size: 13px;
   color: var(--color-text-primary);
   text-align: left;
+  white-space: nowrap;
   cursor: pointer;
 }
 
