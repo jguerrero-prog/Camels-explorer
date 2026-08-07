@@ -83,6 +83,22 @@
   gap: 16px;
 }
 
+/* Real (wired 2026-08-07) - "Trace a subhalo's merger history", app.py's
+   own expander below the table. Reuses .underlying-halos__controls for its
+   own id-input/tree-variant row, then a real Plotly mass-vs-redshift chart
+   underneath once a real tree entry is found. */
+.underlying-halos__merger-history {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.underlying-halos__merger-history .plot-chart {
+  height: 280px;
+}
+
 /* Capped rather than flex:1 (full table width) - direct user feedback that
    a full-width range slider for a single threshold value reads as
    oversized; half the table's width is plenty for a slider whose only job

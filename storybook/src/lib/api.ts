@@ -465,6 +465,63 @@ export async function fetchAltHaloCatalog(params: {
   return res.json();
 }
 
+/** Real (added 2026-08-07, direct user request: wire in SubLink/SubLink_gal
+ * merger history and Rockstar Consistent Trees) - backend.py's already-real
+ * `get_merger_history()`/`get_consistent_trees_history()`, previously only
+ * reachable from app.py's own "Trace a subhalo's merger history" expander.
+ * Same real `MergerHistory` dataclass shape either way - one real per-
+ * snapshot mass/particle-count history along the main branch, root first. */
+export type MergerHistory = {
+  redshift: number[];
+  mass: number[];
+  subfind_id: number;
+  num_particles: number[] | null;
+  source: string;
+  note: string;
+} | null;
+
+export async function fetchMergerHistory(params: {
+  suite: string;
+  setName: string;
+  realization: number | string;
+  subfindId: number;
+  rootSnapnum: number;
+  variant: 'SubLink' | 'SubLink_gal';
+}): Promise<MergerHistory> {
+  const qs = new URLSearchParams({
+    suite: params.suite,
+    set_name: params.setName,
+    realization: String(params.realization),
+    subfind_id: String(params.subfindId),
+    root_snapnum: String(params.rootSnapnum),
+    variant: params.variant,
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/merger-history?${qs}`);
+  if (res.status === 404) return null; // real gap: no tree entry for this SubfindID/root_snapnum
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function fetchConsistentTreesHistory(params: {
+  suite: string;
+  setName: string;
+  realization: number | string;
+  haloId: number;
+}): Promise<MergerHistory> {
+  const qs = new URLSearchParams({
+    suite: params.suite,
+    set_name: params.setName,
+    realization: String(params.realization),
+    halo_id: String(params.haloId),
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/consistent-trees-history?${qs}`);
+  if (res.status === 404) return null; // real gap: no tree entry for this halo id at the root snapshot
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 /** Real (added 2026-08-07, direct user request: wire in CAMELS-SAM) -
  * backend.py's already-real `get_sam_catalog()`/`GET /sam-catalog`,
  * previously only reachable from app.py's own "CAMELS-SAM" tab. Same real

@@ -12,6 +12,14 @@ numpy==2.0.2
 pandas==2.3.3
 h5py==3.14.0
 fsspec==2025.10.0
+# Real fix (2026-08-07, found while wiring SubLink merger-history):
+# fsspec's own HTTP backend (used by every fsspec.open("https://...") call
+# in backend.py - CAESAR, SubLink, Halo Gas Profiles, Photometry, Field
+# PDF, Lyman-alpha, X-ray profiles) raises ImportError at call time without
+# these two - "needs only fsspec" (this file's own prior comment below)
+# was incomplete, not just under-specified for Pylians.
+aiohttp==3.13.5
+requests==2.32.5
 matplotlib==3.9.4
 plotly==6.9.0
 streamlit==1.50.0
