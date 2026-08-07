@@ -2,8 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Slider } from '../Slider/Slider';
 import { Checkbox } from '../Checkbox/Checkbox';
+import { NumberStepper } from '../NumberStepper/NumberStepper';
+import { PlotChart } from '../PlotChart/PlotChart';
 import chevronIcon from './assets/chevron.svg';
 import './UnderlyingHalos.css';
+import '../NumberStepper/NumberStepper.css';
 
 export type HaloRow = {
   subfindId: number;
@@ -81,6 +84,23 @@ export type UnderlyingHalosProps = {
     options: string[];
     onSelect: (finder: string) => void;
     loading?: boolean;
+  } | null;
+  /** Real (wired 2026-08-07, direct user request) - `app.py`'s own "Trace a
+   * subhalo's merger history" expander (SubLink/SubLink_gal for Subfind,
+   * Rockstar's own Consistent Trees for Rockstar). Only meaningful for
+   * catalogs with a real merger-tree product - AHF/CAESAR/CAMELS-SAM/VIDE
+   * void callers omit this entirely. Fully controlled, same pattern as
+   * `finderPicker` - the actual fetch is the caller's job (`App.tsx`'s
+   * `handleTraceMergerHistory`), this only renders whatever state it's
+   * given and calls back on input changes. */
+  mergerHistory?: {
+    idLabel: string;
+    id: number;
+    onIdChange: (id: number) => void;
+    variantOptions?: { current: string; options: string[]; onSelect: (variant: string) => void };
+    loading?: boolean;
+    error?: string;
+    data?: { redshift: number[]; mass: number[]; note: string } | null;
   } | null;
   defaultExpanded?: boolean;
   /** Real fix (2026-08-06, direct user feedback): the fullscreen table
@@ -189,7 +209,7 @@ const DEFAULT_FILTER = { key: 'stellarMass', label: 'Minimum stellar mass', form
 export function UnderlyingHalos({
   rows, rawRows, columns = HALO_COLUMNS, massContextNote,
   filter = DEFAULT_FILTER, label = 'View underlying halos', itemNoun = 'halos', footerNoun = 'halos/subhalos',
-  csvFilename = 'halos.csv', finderPicker = null,
+  csvFilename = 'halos.csv', finderPicker = null, mergerHistory = null,
   defaultExpanded = false, parentTitle,
 }: UnderlyingHalosProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -200,6 +220,7 @@ export function UnderlyingHalos({
   const [filterValue, setFilterValue] = useState(0);
   const [showAllFields, setShowAllFields] = useState(false);
   const [finderMenu, setFinderMenu] = useState<{ top: number; left: number } | null>(null);
+  const [variantMenu, setVariantMenu] = useState<{ top: number; left: number } | null>(null);
   const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(new Set());
   const [pinnedKeys, setPinnedKeys] = useState<string[]>([]);
   const [columnMenu, setColumnMenu] = useState<{ key: string; top: number; left: number } | null>(null);
@@ -418,6 +439,48 @@ export function UnderlyingHalos({
 
           {renderTable()}
 
+          {mergerHistory && (
+            <div className="underlying-halos__merger-history">
+              <div className="underlying-halos__controls">
+                <NumberStepper
+                  label={mergerHistory.idLabel}
+                  value={mergerHistory.id}
+                  onChange={mergerHistory.onIdChange}
+                />
+                {mergerHistory.variantOptions && (
+                  <button
+                    type="button"
+                    className="underlying-halos__add-finder"
+                    onClick={(e) => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setVariantMenu({ top: rect.bottom + 4, left: rect.left });
+                    }}
+                  >
+                    Tree: {mergerHistory.variantOptions.current}
+                  </button>
+                )}
+              </div>
+              {mergerHistory.loading ? (
+                <p className="underlying-halos__context-note">Loading merger history…</p>
+              ) : mergerHistory.error ? (
+                <p className="underlying-halos__context-note">{mergerHistory.error}</p>
+              ) : mergerHistory.data ? (
+                <>
+                  <PlotChart
+                    series={[{ label: 'main branch', x: mergerHistory.data.redshift, y: mergerHistory.data.mass }]}
+                    xLabel="Redshift"
+                    yLabel="Mass [Msun/h]"
+                    logY
+                    displayMode="interactive"
+                  />
+                  <p className="underlying-halos__context-note">{mergerHistory.data.note}</p>
+                </>
+              ) : (
+                <p className="underlying-halos__context-note">No merger tree entry found for this ID at the current snapshot.</p>
+              )}
+            </div>
+          )}
+
           <div className="underlying-halos__footer">
             <span className="underlying-halos__remaining">
               Showing {activeRows.length.toLocaleString()} of {rows.length.toLocaleString()} {footerNoun}
@@ -496,6 +559,24 @@ export function UnderlyingHalos({
               }}
             >
               {option === finderPicker.current ? `✓ ${option}` : option}
+            </button>
+          ))}
+        </Dropdown>
+      )}
+
+      {variantMenu && mergerHistory?.variantOptions && (
+        <Dropdown top={variantMenu.top} left={variantMenu.left} onClose={() => setVariantMenu(null)}>
+          {mergerHistory.variantOptions.options.map((option) => (
+            <button
+              key={option}
+              type="button"
+              className="underlying-halos__dropdown-item"
+              onClick={() => {
+                mergerHistory.variantOptions!.onSelect(option);
+                setVariantMenu(null);
+              }}
+            >
+              {option === mergerHistory.variantOptions!.current ? `✓ ${option}` : option}
             </button>
           ))}
         </Dropdown>
