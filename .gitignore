@@ -13,3 +13,8 @@ dist/
 *storybook.log
 storybook-static
 *.tsbuildinfo
+
+# Local-only workflow guide for Claude Code (git branching/rebase/issue/PR
+# conventions) - not something contributors need to see, same reasoning as
+# the other personal planning docs already kept out of this repo.
+CLAUDE.md
