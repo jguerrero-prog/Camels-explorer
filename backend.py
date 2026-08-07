@@ -955,6 +955,13 @@ def _fetch_public_subfind(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1)
             # datasets are split into indexed columns rather than skipped.
             already = {"SubhaloMassType", "SubhaloHalfmassRad", "SubhaloHalfmassRadType",
                        "SubhaloSFR", "SubhaloVmax", "SubhaloStarMetallicity"}
+            # Real fix (camels.readthedocs.io/subfind.html#suite-differences,
+            # confirmed directly): SIMBA's own docs state SubhaloStellarPhotometrics
+            # and SubhaloWindMass hold "irrelevant numbers as those quantities are
+            # not calculated within the SIMBA simulations" - excluded here rather
+            # than surfaced as real data in the raw escape hatch with no warning.
+            if suite == "SIMBA":
+                already |= {"SubhaloStellarPhotometrics", "SubhaloWindMass"}
             raw_extra = {}
 
             def collect(name, obj):
