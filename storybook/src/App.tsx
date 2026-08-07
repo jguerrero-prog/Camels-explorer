@@ -247,6 +247,49 @@ const BLACKHOLE_MERGERS_COLUMNS: ColumnDef[] = [
   massCol('Swallowed BH Mass [Msun/h]'),
 ];
 
+/** Real (added 2026-08-07, direct user request: "can black hole mergers
+ * have a 3D scatter plot option? Interactive, 3D Scatter, Table") - feeds
+ * `PlotTile`'s new `chart3d` slot. The real merger event log has no
+ * spatial x/y/z at all (see backend.py's own get_blackhole_mergers docs) -
+ * every axis here is one of the 3 genuinely continuous real columns
+ * (Redshift, Swallower/Swallowed BH mass), same non-spatial-3D-scatter
+ * approach the Custom tab's own 3D Scatterplot chart type already uses
+ * for arbitrary fields. Masses log10'd (real BH masses span several
+ * orders of magnitude, same reasoning CamelsSamCharts already log10s its
+ * own mass color scale) - axis labels say so explicitly rather than
+ * showing a log value under a linear-sounding label. */
+function BlackholeMergers3DScatter({ rows }: { rows: HaloCatalogRow[] }) {
+  const redshift = rows.map((r) => r.Redshift);
+  const swallowerMass = rows.map((r) => r['Swallower BH Mass [Msun/h]']);
+  const swallowedMass = rows.map((r) => r['Swallowed BH Mass [Msun/h]']);
+  const combinedLogMass = rows.map((_, i) => Math.log10(swallowerMass[i] + swallowedMass[i]));
+  return (
+    <Plotly3DChart
+      xLabel="Redshift"
+      yLabel="log10(Swallower BH Mass [Msun/h])"
+      zLabel="log10(Swallowed BH Mass [Msun/h])"
+      pinEnabled={false}
+      data={[{
+        type: 'scatter3d',
+        mode: 'markers',
+        x: redshift,
+        y: swallowerMass.map(Math.log10),
+        z: swallowedMass.map(Math.log10),
+        marker: {
+          size: 4,
+          color: combinedLogMass,
+          colorscale: 'Inferno',
+          showscale: true,
+          colorbar: { title: { text: 'log10 combined mass', font: { color: '#e5e7eb' } }, tickfont: { color: '#e5e7eb' } },
+        },
+        text: rows.map((_, i) =>
+          `z = ${redshift[i].toFixed(2)}<br>Swallower M = ${swallowerMass[i].toExponential(2)} Msun/h<br>Swallowed M = ${swallowedMass[i].toExponential(2)} Msun/h`),
+        hoverinfo: 'text',
+      }]}
+    />
+  );
+}
+
 type PlotTileState = {
   id: string;
   kind: 'mass-range';
@@ -3413,6 +3456,7 @@ export function App() {
                         { label: 'Realization', value: String(tile.params.realization) },
                         { label: 'Merger events', value: tile.rows.length.toLocaleString() },
                       ]}
+                      chart3d={tile.rows.length > 0 ? <BlackholeMergers3DScatter rows={tile.rows} /> : null}
                       halos={{
                         rows: tile.rows,
                         columns: BLACKHOLE_MERGERS_COLUMNS,

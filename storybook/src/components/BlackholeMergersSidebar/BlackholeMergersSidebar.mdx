@@ -24,6 +24,7 @@ Composed entirely from `SingleRealizationFields`/`Button` — no tokens of its o
 - Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/blackhole-mergers`.
 - **Real-data only, no synthetic fallback, and genuinely undocumented by CAMELS itself** — `get_blackhole_mergers()` returns `None` outright when unavailable. The column meaning (`ThisTask, Time, ID_swallower, Mass_swallower, ID_swallowed, Mass_swallowed`) isn't described anywhere in CAMELS' own docs (confirmed directly - the docs explicitly say files like this "are barely used" and aren't described); it's inferred from GIZMO's own well-known black-hole-merger-logging convention and cross-checked directly against the file's own task-number column. Stated plainly in the tile's own note text, not silently presented as officially documented.
 - The tile's own chart shows a real scatter of merger events (redshift vs. combined swallower+swallowed mass); the "Table" `ChartModeDropdown` option shows the same real per-event log via `UnderlyingHalos`.
+- **"3D Scatter" `ChartModeDropdown` option, added 2026-08-07 (direct user request)** — `PlotTile`'s new `chart3d` slot (see `PlotTile.mdx`), plotting Redshift × log10(Swallower BH Mass) × log10(Swallowed BH Mass) for every real merger event, colored by combined log mass. Not a spatial 3D view - the real merger log has no position fields at all, so every axis here is one of the 3 genuinely continuous real columns already shown in the 2D scatter and the table, just all three at once instead of two.
 
 ## Code
 

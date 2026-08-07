@@ -30,6 +30,8 @@ A small trigger button (current mode + chevron) opens a portal-rendered menu lis
 
 **Single-option case, handled by the caller, not here:** if a tile only ever has exactly one real mode (e.g. 3D Density Field: Interactive only, no Static, no halos), `PlotTile` doesn't render this component at all - matching the original toggle's own "no toggle when nothing to switch to" behavior. This component itself doesn't special-case a 1-item `options` array; it would render a dropdown with one option and nothing to compare it against, which is real but pointless chrome `PlotTile` avoids by not mounting it in the first place.
 
+**4th mode added 2026-08-07, direct user request: `'scatter3d'` / "3D Scatter"** - Black Hole Mergers wanted a 3D scatter alongside Interactive/Table, so `ChartDisplayMode` grew a 4th value rather than special-casing a single tile. `PlotTile`'s `availableChartModes` only includes it when a new `chart3d` prop is set (see `PlotTile.mdx`) - same "never a disabled/hypothetical option" constraint above applies to this one too.
+
 ## Usecase
 
 - Rendered by `PlotTile` in its own header row, next to the tile's title - see `PlotTile.mdx`'s "Real fix (2026-08-06)" note for the full plot/table view-split this enabled.
