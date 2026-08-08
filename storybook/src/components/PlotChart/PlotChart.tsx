@@ -1,10 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import Plotly from 'plotly.js-dist-min';
-import createPlotlyComponent from 'react-plotly.js/factory';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { LazyPlot, LazyPlotFallback, resizePlotlyGraph } from '../LazyPlot/LazyPlot';
 import type { ChartDisplayMode } from '../ChartModeDropdown/ChartModeDropdown';
 import './PlotChart.css';
-
-const Plot = createPlotlyComponent(Plotly);
 
 export type PlotSeries = {
   label: string;
@@ -141,7 +138,7 @@ export function PlotChart({
   useEffect(() => {
     if (displayMode !== 'interactive' || !containerRef.current) return;
     const observer = new ResizeObserver(() => {
-      if (graphDivRef.current) Plotly.Plots.resize(graphDivRef.current);
+      if (graphDivRef.current) resizePlotlyGraph(graphDivRef.current);
     });
     observer.observe(containerRef.current);
     return () => observer.disconnect();
@@ -166,19 +163,21 @@ export function PlotChart({
           />
         )
       ) : (
-        <Plot
-          data={data}
-          layout={layout}
-          config={{ displayModeBar: false, responsive: true }}
-          style={{ width: '100%', height: '100%' }}
-          useResizeHandler
-          onInitialized={(_figure, graphDiv) => {
-            graphDivRef.current = graphDiv;
-          }}
-          onUpdate={(_figure, graphDiv) => {
-            graphDivRef.current = graphDiv;
-          }}
-        />
+        <Suspense fallback={<LazyPlotFallback />}>
+          <LazyPlot
+            data={data}
+            layout={layout}
+            config={{ displayModeBar: false, responsive: true }}
+            style={{ width: '100%', height: '100%' }}
+            useResizeHandler
+            onInitialized={(_figure, graphDiv) => {
+              graphDivRef.current = graphDiv;
+            }}
+            onUpdate={(_figure, graphDiv) => {
+              graphDivRef.current = graphDiv;
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );
