@@ -69,6 +69,15 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 import h5py
+# Real fix (2026-08-07, issue #15) - the "_DM" (dark-matter-only) suites'
+# raw snapshot files use an HDF5 compression filter this environment's
+# native h5py/libhdf5 doesn't ship a plugin for (confirmed directly: every
+# _DM suite's snapshot read failed identically with "Can't open directory
+# (/usr/local/hdf5/lib/plugin)" until this import was added - hydro
+# suites' snapshots use a filter h5py already handles natively, so this
+# never surfaced before now). Importing registers the filter plugins
+# globally - no further code needed at each read site.
+import hdf5plugin  # noqa: F401
 import numpy as np
 import pandas as pd
 
@@ -350,7 +359,20 @@ SNAPSHOT_REDSHIFTS = [
 # users.flatironinstitute.org/~camels/Pk/. Suites not listed here are either
 # access-gated (Magneticum, Ramses, CROCODILE, Obsidian, Enzo) or don't have
 # their own Pk folder (N-body) - real fetch is simply not attempted for them.
-PUBLIC_PK_SUITES = {"IllustrisTNG", "SIMBA", "Astrid", "Swift-EAGLE"}
+#
+# The 4 "_DM" suites (added 2026-08-07, issue #15) are each hydro suite's
+# real DM-only N-body companion - confirmed real via a direct fetch of
+# Pk/{suite}_DM/L25n256/LH/LH_0/Pk_m_z=0.00.txt for all 4, same path
+# convention as the hydro suites (just the suite name itself differs).
+# These are NOT the generic "N-body" suite label in SUITES/B.SUITES - that
+# label is never added to PUBLIC_PK_SUITES, so _PRIMARY_SUITES (the
+# default Suite dropdown every statistic without its own restriction
+# falls back to) never grows - the frontend only offers _DM suites
+# wherever a sidebar explicitly opts in.
+PUBLIC_PK_SUITES = {
+    "IllustrisTNG", "SIMBA", "Astrid", "Swift-EAGLE",
+    "IllustrisTNG_DM", "SIMBA_DM", "Astrid_DM", "Swift-EAGLE_DM",
+}
 
 # Real public Pk files are one-per-species (Pk_c/Pk_m/Pk_g/Pk_s/Pk_bh), not
 # arbitrary particle-type combinations - map our UI's ptype selections onto
@@ -368,7 +390,17 @@ PK_SUFFIX_FOR_PTYPE = {
 }
 
 # Suites with public FOF/Subfind catalogs in the first-generation box.
-PUBLIC_SUBFIND_SUITES = {"IllustrisTNG", "SIMBA", "Astrid", "Swift-EAGLE"}
+# The 4 "_DM" companions (added 2026-08-07, issue #15) confirmed real via
+# a direct Range fetch of groups_090.hdf5 for all 4 - same real schema as
+# the hydro catalogs (SubhaloMassType etc. all present), just every
+# baryonic-mass column is genuinely zero (no gas/star/BH particles exist
+# in a DM-only run) - see get_baryon_fraction/get_stellar_mass_function/
+# get_scaling_relations's own guards for the statistics that stay
+# excluded because of that, not because the catalog itself is unavailable.
+PUBLIC_SUBFIND_SUITES = {
+    "IllustrisTNG", "SIMBA", "Astrid", "Swift-EAGLE",
+    "IllustrisTNG_DM", "SIMBA_DM", "Astrid_DM", "Swift-EAGLE_DM",
+}
 
 # FOF/Subfind catalogs are numbered on their own ~0-90 output schedule, NOT
 # the same integers as the 34-snapshot Pk/SFRH schedule - but verified
@@ -401,8 +433,18 @@ PUBLIC_SUBFIND_GROUPNUM = SUBFIND_GROUPNUM_FOR_SNAPSHOT[-1]  # 90, kept for any 
 # it's SWIFT's own native format (BoxSize is a 3-vector, entirely different
 # top-level groups: DMParticles/GasParticles/Cosmology/Units/...) and would
 # need dedicated reading code, not a Gadget-format bug fix. Excluded here
-# until that's built, rather than silently mishandled.
-PUBLIC_SIMS_SUITES = {"IllustrisTNG", "SIMBA", "Astrid"}
+# until that's built, rather than silently mishandled (see issue #16).
+#
+# The 3 "_DM" companions (added 2026-08-07, issue #15) confirmed real via
+# a direct lazy HDF5 read of snapshot_090.hdf5 for all 3 - same Gadget-
+# style layout as the hydro suites (scalar BoxSize), just a single real
+# `PartType1` group (no PartType0/4/5 - no gas/star/BH particles exist in
+# a DM-only run) - `_fetch_snapshot_positions` already defaults to
+# `part_type=1` and reads BoxSize/Redshift the same scalar way, so this
+# needed zero reader changes, just the suite gate. Swift-EAGLE_DM is real
+# too (confirmed in Sims/) but excluded here for the same SWIFT-format
+# reason Swift-EAGLE itself is - fixing issue #16 unlocks both at once.
+PUBLIC_SIMS_SUITES = {"IllustrisTNG", "SIMBA", "Astrid", "IllustrisTNG_DM", "SIMBA_DM", "Astrid_DM"}
 
 # CMD's public 3D grids - confirmed suites (its data/ folder has no
 # Swift-EAGLE, unlike Pk/Subfind) and its 5 published redshifts. Unlike Pk's
@@ -529,11 +571,20 @@ AHF_SNAPNUM = N_SNAPSHOTS - 1  # 33 - AHF's own filenames encode redshift to
                                 # is discovered via a real directory-listing
                                 # fetch + regex, never guessed/constructed.
 
-PUBLIC_ROCKSTAR_SUITES = {"IllustrisTNG", "SIMBA", "Astrid"}  # confirmed real;
-                                # *_DM (dark-matter-only) variants and the
-                                # separate CAMELS-SAM/ Rockstar run exist too
-                                # but are out of scope here (not this app's
-                                # hydro suite selector)
+PUBLIC_ROCKSTAR_SUITES = {
+    "IllustrisTNG", "SIMBA", "Astrid",
+    # *_DM (dark-matter-only) variants brought into scope 2026-08-07
+    # (issue #15) - confirmed real via a direct Range fetch of
+    # .../hlists/hlist_1.00000.list for all 3 (no code changes needed:
+    # _fetch_rockstar_halos already discovers the real filename via a
+    # directory listing rather than constructing it, so it works
+    # identically for any suite name). No Swift-EAGLE_DM - confirmed
+    # absent from Rockstar/'s own top-level listing, unlike Sims/Pk/
+    # FOF_Subfind/SubLink which all do have it.
+    "IllustrisTNG_DM", "SIMBA_DM", "Astrid_DM",
+}  # the separate CAMELS-SAM/ Rockstar run is still out of scope here (not
+   # this app's hydro/DM suite selector - CAMELS-SAM has its own dedicated
+   # statistic)
 ROCKSTAR_HLIST_Z0 = "hlist_1.00000.list"  # scale factor a=1.0 is exact by
                                 # definition at z=0, unlike AHF's computed
                                 # redshift string - safe to construct directly
@@ -928,7 +979,14 @@ def _fetch_public_pk(suite, set_name, realization, redshift, ptype):
     doesn't re-download."""
     if suite not in PUBLIC_PK_SUITES:
         return None
-    suffix = PK_SUFFIX_FOR_PTYPE.get(ptype)
+    # Real, confirmed (2026-08-07, issue #15): a _DM suite's real Pk/
+    # folder only ever has Pk_m_z=*.txt - no per-species Pk_c/Pk_g/Pk_s/
+    # Pk_bh files exist, since a DM-only run has exactly one real particle
+    # species (there's nothing else to split by). "m" (total matter) IS
+    # the real DM power spectrum for these suites - any ptype selection
+    # resolves to it rather than 404ing on a species file that was never
+    # going to exist.
+    suffix = "m" if suite.endswith("_DM") else PK_SUFFIX_FOR_PTYPE.get(ptype)
     if suffix is None:
         return None
 
@@ -1060,9 +1118,20 @@ def _fetch_public_subfind(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1)
                 "subhalo_bh_mass": subhalo_mass_type[:, 5],
                 "subhalo_halfmass_rad": f["Subhalo/SubhaloHalfmassRad"][:] / 1e3,  # Mpc/h
                 "subhalo_stellar_halfmass_rad": f["Subhalo/SubhaloHalfmassRadType"][:, 4],  # kpc/h
-                "subhalo_sfr": f["Subhalo/SubhaloSFR"][:],           # Msun/yr
+                # Real, confirmed absent (not just zero) in the _DM suites'
+                # own Subfind schema (2026-08-07, issue #15) - SubhaloSFR/
+                # SubhaloStarMetallicity are baryonic quantities a DM-only
+                # run's HDF5 file genuinely never writes, unlike e.g.
+                # SubhaloHalfmassRadType above (present, just zero in the
+                # stellar column). Zero-filled here so this dict's shape
+                # stays uniform for every caller - the Halo Catalog browser
+                # (not excluded for _DM suites) still needs these keys to
+                # exist, just correctly showing 0 rather than crashing.
+                "subhalo_sfr": (f["Subhalo/SubhaloSFR"][:] if "SubhaloSFR" in f["Subhalo"]
+                                 else np.zeros(n_subhalo)),           # Msun/yr
                 "subhalo_vmax": f["Subhalo/SubhaloVmax"][:],         # km/s
-                "subhalo_metallicity": f["Subhalo/SubhaloStarMetallicity"][:],
+                "subhalo_metallicity": (f["Subhalo/SubhaloStarMetallicity"][:] if "SubhaloStarMetallicity" in f["Subhalo"]
+                                         else np.zeros(n_subhalo)),
                 "subhalo_raw_extra": raw_extra,
                 "raw_params": raw_params,
             }
@@ -1475,7 +1544,13 @@ def get_cross_finder_hmf(suite, set_name, realization, snapnum, mass_min, mass_m
 
 def get_baryon_fraction(suite, set_name, realization, snapnum, RMmin, RMmax, bins,
                          subfind_path: str | None = None, fetch_public: bool = False) -> Result | None:
-    if fetch_public:
+    # Real, deliberate exclusion (2026-08-07, wiring the _DM suites into
+    # PUBLIC_SUBFIND_SUITES) - baryon fraction is physically undefined for
+    # a DM-only run (there's no baryonic mass to divide by anything), not
+    # a partial implementation. _fetch_public_subfind() itself stays
+    # generic (the raw Halo Catalog/HMF need it for DM suites too) - this
+    # guard is specific to this one baryon-dependent statistic.
+    if fetch_public and not suite.endswith("_DM"):
         catalog = _fetch_public_subfind(suite, set_name, realization, snapnum)
         if catalog is not None:
             # >50 CDM particles per halo, matching the upstream cut.
@@ -1514,7 +1589,10 @@ def get_baryon_fraction(suite, set_name, realization, snapnum, RMmin, RMmax, bin
 
 def get_stellar_mass_function(suite, set_name, realization, snapnum, SMmin, SMmax, bins,
                                subfind_path: str | None = None, fetch_public: bool = False) -> Result | None:
-    if fetch_public:
+    # Real, deliberate exclusion - see get_baryon_fraction's own comment.
+    # Every subhalo's real stellar mass is exactly zero in a DM-only run,
+    # so an SMF here would just be an empty histogram, not a partial result.
+    if fetch_public and not suite.endswith("_DM"):
         catalog = _fetch_public_subfind(suite, set_name, realization, snapnum)
         if catalog is not None:
             SM = catalog["subhalo_stellar_mass"]
@@ -1756,7 +1834,14 @@ def get_halo_catalog(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1,
     # Starless subhalos (dark, DM-only) are real and correctly included in
     # stellar_mass_function()'s histogram upstream, but aren't useful rows in
     # a browsable table - this filter is a display choice, not a science one.
-    mask = frame["Stellar Mass [Msun/h]"] > 0
+    # Real, deliberate exception (2026-08-07, issue #15): for a _DM suite,
+    # EVERY subhalo has exactly zero stellar mass (there are no stars in a
+    # DM-only run) - applying this filter there would silently empty the
+    # entire table instead of hiding a genuine minority of dark subhalos.
+    if suite.endswith("_DM"):
+        mask = pd.Series(True, index=frame.index)
+    else:
+        mask = frame["Stellar Mass [Msun/h]"] > 0
     frame = frame[mask.to_numpy()].reset_index(drop=True)
 
     raw_extra = catalog.get("subhalo_raw_extra", {})
@@ -2037,7 +2122,11 @@ def _mean_per_bin(values, weights, bins_SM, counts):
 
 def get_scaling_relations(suite, set_name, realization, SMmin, SMmax, bins, snapnum=N_SNAPSHOTS - 1,
                            fetch_public: bool = False) -> ScalingRelations | None:
-    if fetch_public:
+    # Real, deliberate exclusion - see get_baryon_fraction's own comment.
+    # Every real scaling relation here (radius/BH-mass/SFR/Vmax vs stellar
+    # mass) is anchored on stellar mass, which is exactly zero for every
+    # subhalo in a DM-only run.
+    if fetch_public and not suite.endswith("_DM"):
         catalog = _fetch_public_subfind(suite, set_name, realization, snapnum)
         if catalog is not None:
             SM = catalog["subhalo_stellar_mass"]
@@ -2797,17 +2886,25 @@ def _fetch_rockstar_halos(suite, set_name, realization, snapnum=N_SNAPSHOTS - 1)
         return None
     df = pd.DataFrame(rows, columns=columns).apply(pd.to_numeric, errors="coerce")
 
+    # Real, confirmed absent (not just zero) in the _DM suites' own Rockstar
+    # schema (2026-08-07, issue #15) - a real fetch shows the DM-only hlist
+    # header stops at column 81 (Future_merger_MMP_ID); SM/Gas/BH_Mass/Type
+    # are hydro-only additions past that a DM-only run's file never writes.
+    # Zero-filled (Type: -1, an obviously-not-a-real-value sentinel rather
+    # than a fabricated 0=central guess) so this frame's shape stays
+    # uniform for every caller.
+    zeros = pd.Series(0.0, index=df.index)
     frame = pd.DataFrame({
         "id": df["id"],  # real Rockstar halo id at this snapshot - only meaningful here
                          # (like Subfind's SubfindID), kept so a row can be picked and
                          # traced via Consistent Trees at the root snapshot.
         "Halo Mass [Msun/h]": df["Mvir"],
-        "Stellar Mass [Msun/h]": df["SM"],
-        "Gas Mass [Msun/h]": df["Gas"],
-        "BH Mass [Msun/h]": df["BH_Mass"],
+        "Stellar Mass [Msun/h]": df["SM"] if "SM" in df else zeros,
+        "Gas Mass [Msun/h]": df["Gas"] if "Gas" in df else zeros,
+        "BH Mass [Msun/h]": df["BH_Mass"] if "BH_Mass" in df else zeros,
         "Vmax [km/s]": df["vmax"],
         "x [Mpc/h]": df["x"], "y [Mpc/h]": df["y"], "z [Mpc/h]": df["z"],
-        "Type": df["Type"],  # 0 = central, 1 = satellite (consistent-trees convention)
+        "Type": df["Type"] if "Type" in df else pd.Series(-1, index=df.index),  # 0 = central, 1 = satellite (consistent-trees convention)
     })
     mask = df["Mvir"] > 0
     frame = frame[mask.to_numpy()].reset_index(drop=True)

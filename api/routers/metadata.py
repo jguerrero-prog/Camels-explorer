@@ -46,20 +46,37 @@ _SET_LABELS = {
 # a combination that can only ever show "No data available" (removing
 # synthetic fallback made that outcome common enough to be worth
 # preventing, not just disclosing). A statistic missing here means every
-# suite in `suites` is real for it (Power Spectrum, Halo/Stellar Mass
-# Function, Baryon Fraction, Galaxy Scaling Relations, 2D Field Map, and
-# Color-Mass Diagram all happen to cover all 4) - absent, not a guessed
-# "all suites" list, so this can never silently drift if a 5th suite is
-# ever added to _PRIMARY_SUITES.
+# suite in `suites` is real for it (Stellar Mass Function, Baryon Fraction,
+# Galaxy Scaling Relations, 2D Field Map, and Color-Mass Diagram all happen
+# to cover all 4 - deliberately NOT widened to the _DM suites added
+# 2026-08-07, since baryonic quantities are physically undefined for a
+# DM-only run, see backend.py's own guards in those 3 functions) - absent,
+# not a guessed "all suites" list, so this can never silently drift if a
+# 5th suite is ever added to _PRIMARY_SUITES.
+#
+# Power Spectrum and Halo Mass Function are explicitly widened past
+# _PRIMARY_SUITES here (2026-08-07, issue #15) - both are real and
+# physically meaningful for a DM-only run (there's still a real matter
+# power spectrum / halo mass function with no baryons), unlike the 3
+# statistics above that stay at the default 4. Note this is genuinely
+# wider than `suites`, not narrower - `SingleRealizationFields`'s own
+# suiteOptions filter is `catalog.suites ∩ allowedSuites`, so widening
+# _PRIMARY_SUITES itself would have been the wrong lever (it would have
+# silently offered _DM suites to every *other* unrestricted statistic
+# too) - this list is deliberately its own literal, not derived from
+# _PRIMARY_SUITES, precisely so it can include suites the default doesn't.
 _STATISTIC_SUITES = {
     "SFR History": B.PUBLIC_SFRH_SUITES,
-    "3D Density Field": B.PUBLIC_CMD_GRID_SUITES,  # == PUBLIC_SIMS_SUITES, its raw-snapshot fallback
+    "3D Density Field": B.PUBLIC_CMD_GRID_SUITES,  # == PUBLIC_SIMS_SUITES pre-2026-08-07 - now
+                                                    # a deliberately separate literal, see its own comment
     "3D Particle Cloud": B.PUBLIC_SIMS_SUITES,
     "X-ray Halo Profiles": B.PUBLIC_XRAY_SUITES,
     "Halo Gas Profiles": B.PUBLIC_PROFILES_SUITES,
     "Bispectrum": B.PUBLIC_BK_SUITES,
     "Field PDF": B.PUBLIC_PDF_SUITES,
     "Lyman-alpha Spectrum": B.PUBLIC_LYA_SUITES,
+    "Power Spectrum": B.PUBLIC_PK_SUITES,
+    "Halo Mass Function": B.PUBLIC_SUBFIND_SUITES,
 }
 
 # Per-statistic real SET coverage, for the two statistics whose real gate
@@ -144,8 +161,22 @@ def metadata():
             str(index): sorted(variations)
             for index, variations in B.ONEP_TNG_MISSING_VARIATIONS.items()
         },
+        # Real fix (2026-08-07, issue #15): this used to filter each
+        # statistic's allowed suites through B.SUITES, which was always a
+        # no-op for every pre-existing entry here (their PUBLIC_*_SUITES
+        # were already correct, real subsets of the 4 hydro suites, all of
+        # which are in B.SUITES) - but it silently capped every entry at
+        # _PRIMARY_SUITES's own 4, which broke the moment Power Spectrum/
+        # Halo Mass Function needed to offer the 4 new "_DM" suites too
+        # (never added to B.SUITES, precisely so _PRIMARY_SUITES itself -
+        # the *default* Suite dropdown every other statistic falls back to -
+        # doesn't grow just because PUBLIC_PK_SUITES did). Each
+        # `_STATISTIC_SUITES` entry is already the real, authoritative
+        # suite list for that statistic; serializing it directly (sorted
+        # for a deterministic order) is correct for both the narrowing
+        # entries (SFR History, Bispectrum, etc.) and the new widening ones.
         "statistic_suites": {
-            statistic: [s for s in B.SUITES if s in allowed]
+            statistic: sorted(allowed)
             for statistic, allowed in _STATISTIC_SUITES.items()
         },
         "statistic_sets": _STATISTIC_SETS,
