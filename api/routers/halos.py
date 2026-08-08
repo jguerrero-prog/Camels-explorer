@@ -115,6 +115,33 @@ def halo_profiles_plot(
     return Response(content=png, media_type="image/png")
 
 
+@router.get("/ahf-halo-profile")
+def ahf_halo_profile(
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, snapnum: int = B.AHF_SNAPNUM,
+    halo_rank: int = 1,
+    fetch_public: bool = False,
+):
+    result = require(B.get_ahf_halo_profile(
+        suite, set_name, realization, snapnum=snapnum, halo_rank=halo_rank, fetch_public=fetch_public,
+    ))
+    return to_jsonable(result)
+
+
+@router.get("/ahf-halo-profile/plot.png")
+def ahf_halo_profile_plot(
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, snapnum: int = B.AHF_SNAPNUM,
+    halo_rank: int = 1,
+    fetch_public: bool = False,
+):
+    """Static matplotlib render (density vs. radius, log-log) - real-data
+    only, no Plotly equivalent (a genuinely new statistic, app.py has no
+    precedent for it either way)."""
+    png = require(B.render_ahf_halo_profile_png(
+        suite, set_name, realization, snapnum=snapnum, halo_rank=halo_rank, fetch_public=fetch_public,
+    ))
+    return Response(content=png, media_type="image/png")
+
+
 @router.get("/color-mass-diagram")
 def color_mass_diagram(
     suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str,
