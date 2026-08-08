@@ -1,10 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import Plotly from 'plotly.js-dist-min';
-import createPlotlyComponent from 'react-plotly.js/factory';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { LazyPlot, LazyPlotFallback, resizePlotlyGraph } from '../LazyPlot/LazyPlot';
 import '../PlotChart/PlotChart.css';
 import './Plotly3DChart.css';
-
-const Plot = createPlotlyComponent(Plotly);
 
 // Matches this app's own dark tokens (--color-text-primary/#e5e7eb) - Plotly
 // can't consume CSS custom properties directly in its layout object, so
@@ -128,7 +125,7 @@ export function Plotly3DChart({
   useEffect(() => {
     if (!containerRef.current) return;
     const observer = new ResizeObserver(() => {
-      if (graphDivRef.current) Plotly.Plots.resize(graphDivRef.current);
+      if (graphDivRef.current) resizePlotlyGraph(graphDivRef.current);
     });
     observer.observe(containerRef.current);
     return () => observer.disconnect();
@@ -153,7 +150,8 @@ export function Plotly3DChart({
           Clear ruler
         </button>
       )}
-      <Plot
+      <Suspense fallback={<LazyPlotFallback />}>
+      <LazyPlot
         data={plotData}
         layout={{
           scene: {
@@ -246,6 +244,7 @@ export function Plotly3DChart({
           setPinned({ x: point.x, y: point.y, z: point.z, text: lines.join('<br>') });
         }}
       />
+      </Suspense>
     </div>
   );
 }
