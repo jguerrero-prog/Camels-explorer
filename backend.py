@@ -427,24 +427,29 @@ PUBLIC_SUBFIND_GROUPNUM = SUBFIND_GROUPNUM_FOR_SNAPSHOT[-1]  # 90, kept for any 
 # instead, same spirit as AHF's discovery (see _fetch_rockstar_halos).
 
 # Raw snapshots use the same ~0-90 output schedule as FOF/Subfind (written at
-# the same steps). Verified directly: IllustrisTNG, SIMBA, and Astrid all use
-# the Gadget-style HDF5 layout (scalar or length-1 BoxSize, PartTypeN groups)
-# that _fetch_and_grid_snapshot()/readgadget assume. Swift-EAGLE does NOT -
-# it's SWIFT's own native format (BoxSize is a 3-vector, entirely different
-# top-level groups: DMParticles/GasParticles/Cosmology/Units/...) and would
-# need dedicated reading code, not a Gadget-format bug fix. Excluded here
-# until that's built, rather than silently mishandled (see issue #16).
+# the same steps). IllustrisTNG/SIMBA/Astrid all use the Gadget-style HDF5
+# layout (scalar BoxSize, PartTypeN groups) that _fetch_and_grid_snapshot()/
+# readgadget assume.
 #
-# The 3 "_DM" companions (added 2026-08-07, issue #15) confirmed real via
-# a direct lazy HDF5 read of snapshot_090.hdf5 for all 3 - same Gadget-
-# style layout as the hydro suites (scalar BoxSize), just a single real
-# `PartType1` group (no PartType0/4/5 - no gas/star/BH particles exist in
-# a DM-only run) - `_fetch_snapshot_positions` already defaults to
-# `part_type=1` and reads BoxSize/Redshift the same scalar way, so this
-# needed zero reader changes, just the suite gate. Swift-EAGLE_DM is real
-# too (confirmed in Sims/) but excluded here for the same SWIFT-format
-# reason Swift-EAGLE itself is - fixing issue #16 unlocks both at once.
-PUBLIC_SIMS_SUITES = {"IllustrisTNG", "SIMBA", "Astrid", "IllustrisTNG_DM", "SIMBA_DM", "Astrid_DM"}
+# Swift-EAGLE was excluded here (issue #16) on a real crash, but the actual
+# root cause was narrower than first thought - confirmed directly against
+# SWIFT's own source (single_io.c): BoxSize genuinely is a 3-element array
+# (not the "length-1" this code used to assume), which made float() raise
+# TypeError, silently caught by _fetch_snapshot_positions's own broad
+# except. Redshift and the /PartTypeN/Coordinates group naming are
+# unchanged from Gadget (confirmed in the same source read) - fixed with
+# np.atleast_1d(...)[0] rather than a new reader, see
+# _fetch_snapshot_positions's own comment.
+#
+# The 4 "_DM" companions (added 2026-08-07, issue #15/#16) confirmed real
+# via a direct lazy HDF5 read of snapshot_090.hdf5 for all 4 - a single
+# real `PartType1` group (no PartType0/4/5 - no gas/star/BH particles
+# exist in a DM-only run); Swift-EAGLE_DM needed the same BoxSize fix as
+# hydro Swift-EAGLE, the other 3 needed no reader changes at all.
+PUBLIC_SIMS_SUITES = {
+    "IllustrisTNG", "SIMBA", "Astrid", "Swift-EAGLE",
+    "IllustrisTNG_DM", "SIMBA_DM", "Astrid_DM", "Swift-EAGLE_DM",
+}
 
 # CMD's public 3D grids - confirmed suites (its data/ folder has no
 # Swift-EAGLE, unlike Pk/Subfind) and its 5 published redshifts. Unlike Pk's
@@ -1193,6 +1198,34 @@ def _fetch_public_cmd_grid(suite, set_name, realization, grid_res, redshift, fie
     return grid, z
 
 
+def _read_snapshot_length_factor_mpc_h(hf) -> float:
+    """Real factor to multiply *any* raw length value in this snapshot
+    (BoxSize, Coordinates - both are in the same file-wide unit system) by,
+    to get this app's universal Mpc/h convention - shared by
+    _fetch_snapshot_positions/_fetch_snapshot_field_positions (2026-08-07,
+    issue #16). Two real, confirmed-via-source conventions exist:
+
+    - Arepo/Gadget/GIZMO/MP-Gadget (every suite except hydro Swift-EAGLE,
+      including the "_DM" N-body companions - confirmed real: N-body runs
+      are always Gadget-III regardless of which hydro code they're paired
+      with) write raw lengths in kpc/h - factor is 1/1000.
+    - SWIFT (hydro Swift-EAGLE only) writes a 3-element BoxSize - confirmed
+      directly against SWIFT's own source (single_io.c) - and both BoxSize
+      and Coordinates are in physical Mpc (h-free, not kpc/h): its own
+      Units group's real "Unit length in cgs (U_L)" is exactly 1 Mpc in
+      cgs. Converting to Mpc/h means multiplying by the real h from the
+      same file's own Cosmology group - verified directly on both BoxSize
+      (raw 37.2523 Mpc * real h 0.6711 = 25.0000 Mpc/h, matching every
+      other suite's known real 25 Mpc/h box) and on real particle
+      Coordinates (raw max ~0.0372 * h lands in the real [0, 25] Mpc/h
+      range - confirmed the same ratio as BoxSize's own error before this
+      fix, not a coincidence)."""
+    box_size_raw = np.atleast_1d(hf["Header"].attrs["BoxSize"])
+    if box_size_raw.shape[0] > 1:
+        return float(np.atleast_1d(hf["Cosmology"].attrs["h"])[0])
+    return 1e-3
+
+
 @lru_cache(maxsize=8)
 def _fetch_snapshot_positions(suite, set_name, realization, part_type=1, max_particles=2_000_000,
                                snapnum=N_SNAPSHOTS - 1):
@@ -1216,15 +1249,21 @@ def _fetch_snapshot_positions(suite, set_name, realization, part_type=1, max_par
     try:
         with fsspec.open(url, "rb") as fobj:
             with h5py.File(fobj, "r") as hf:
-                # BoxSize/Redshift come back as length-1 arrays for some codes
-                # (e.g. Swift-EAGLE) and plain scalars for others (Arepo/Gadget) -
-                # float() coerces either case; MAS_library.MA() needs a real
-                # Python float, not a numpy array, or it fails.
-                box_size = float(hf["Header"].attrs["BoxSize"]) / 1e3       # Mpc/h
+                # Real fix (2026-08-07, issue #16) - see
+                # _read_snapshot_length_factor_mpc_h's own docstring for the
+                # confirmed-via-SWIFT-source root cause (this used to crash
+                # for hydro Swift-EAGLE, silently caught by this function's
+                # own broad except below). The same factor applies to
+                # BoxSize and Coordinates alike (same file-wide unit
+                # system) - Redshift is unchanged from Gadget's convention
+                # for every real code checked, SWIFT included (confirmed
+                # directly in its source).
+                length_factor = _read_snapshot_length_factor_mpc_h(hf)
+                box_size = float(np.atleast_1d(hf["Header"].attrs["BoxSize"])[0]) * length_factor
                 redshift = float(hf["Header"].attrs["Redshift"])
                 n_part = hf[f"PartType{part_type}/Coordinates"].shape[0]
                 stride = max(1, n_part // max_particles)
-                pos = hf[f"PartType{part_type}/Coordinates"][::stride].astype(np.float32) / 1e3
+                pos = hf[f"PartType{part_type}/Coordinates"][::stride].astype(np.float32) * length_factor
     except Exception:
         logger.exception("_fetch_snapshot_positions failed for suite=%s set_name=%s realization=%s", suite, set_name, realization)
         return None
@@ -1255,7 +1294,10 @@ def _fetch_snapshot_field_positions(suite, set_name, realization, field, max_par
     try:
         with fsspec.open(url, "rb") as fobj:
             with h5py.File(fobj, "r") as hf:
-                box_size = float(hf["Header"].attrs["BoxSize"]) / 1e3
+                # Same shared helper _fetch_snapshot_positions uses - see
+                # _read_snapshot_length_factor_mpc_h's own docstring.
+                length_factor = _read_snapshot_length_factor_mpc_h(hf)
+                box_size = float(np.atleast_1d(hf["Header"].attrs["BoxSize"])[0]) * length_factor
                 redshift = float(hf["Header"].attrs["Redshift"])
                 mass_table = hf["Header"].attrs["MassTable"]
 
@@ -1266,7 +1308,19 @@ def _fetch_snapshot_field_positions(suite, set_name, realization, field, max_par
                         continue  # e.g. a box with zero star/BH particles
                     n = hf[f"{group}/Coordinates"].shape[0]
                     stride = max(1, n // max_particles)
-                    p = hf[f"{group}/Coordinates"][::stride].astype(np.float32) / 1e3
+                    p = hf[f"{group}/Coordinates"][::stride].astype(np.float32) * length_factor
+                    # Real, NOT independently verified for hydro Swift-EAGLE
+                    # (2026-08-07) - the * 1e10 mass conversion below is
+                    # Gadget's own convention (masses stored in 1e10 Msun/h
+                    # units); SWIFT's own mass unit (Units/"Unit mass in cgs
+                    # (U_M)") looks numerically close to the same 1e10 Msun
+                    # scale but this hasn't been checked as carefully as the
+                    # length conversion above. Low-risk to leave as-is for
+                    # now: this whole function only feeds the Pylians-
+                    # dependent CMD raw-snapshot gridding fallback, which is
+                    # dormant without Pylians installed (see
+                    # HAVE_CAMELS_LIBRARY) and CMD's own precomputed grids
+                    # are preferred whenever available regardless of suite.
                     if f"{group}/Masses" in hf:
                         w = hf[f"{group}/Masses"][::stride].astype(np.float32) * 1e10
                     else:
