@@ -16,13 +16,23 @@ router = APIRouter(tags=["halos"])
 
 
 @router.get("/xray-profiles")
-def xray_profiles(suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, fetch_public: bool = False):
+def xray_profiles(
+    # str, not int (2026-08-08, issue #51) - 1P's real realization id is
+    # compound ("4_n5", the legacy scheme's own folder suffix), same real
+    # reason Halo Gas Profiles/Color-Mass Diagram/Spread Metric's own
+    # realization param is already `str` for their own 1P scheme.
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str,
+    fetch_public: bool = False,
+):
     result = require(B.get_xray_profiles(suite, set_name, realization, fetch_public=fetch_public))
     return to_jsonable(result)
 
 
 @router.get("/xray-profiles/plot.png")
-def xray_profiles_plot(suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, fetch_public: bool = False):
+def xray_profiles_plot(
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str,
+    fetch_public: bool = False,
+):
     """Static matplotlib render (viridis-by-mass multi-line + colorbar) -
     real-data only, no Plotly equivalent (matches app.py's own st.pyplot-
     only rendering for this statistic)."""

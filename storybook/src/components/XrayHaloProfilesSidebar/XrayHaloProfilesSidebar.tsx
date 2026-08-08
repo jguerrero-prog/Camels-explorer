@@ -22,10 +22,14 @@ export type XrayHaloProfilesSidebarProps = {
  * 1P and EX joined LH/CV 2026-08-08 (issue #51) - the real collated file
  * backing this product has its own flat "1P_0".."1P_65"/"EX_0".."EX_3"
  * keys (confirmed via a direct listing), a different real convention from
- * every other 1P-aware statistic's param+variation folder naming, and
- * with no independently-confirmed mapping back to a specific parameter or
- * variation - `onepScheme="flat"` shows the real flat index as a plain
- * Realization number instead of guessing a param+variation split.
+ * every other 1P-aware statistic's param+variation folder naming.
+ * `onepScheme="legacy"` - a follow-up investigation confirmed this file's
+ * own flat index uses the EXACT SAME (param, variation) -> index formula
+ * as Halo Gas Profiles' own legacy scheme (by comparing real per-index
+ * halo-mass data between both products, both suites), and even identified
+ * the 6 parameters' real names (Omega_m, sigma_8, then 4 suite-prefixed
+ * feedback knobs) via a real max-halo-mass spread test - see backend.py's
+ * own LEGACY_ONEP_PARAM_NAMES comment for the full evidence.
  * `allowedSetsForSuite` reflects a real, suite-specific asymmetry: SIMBA's
  * own file has zero real EX entries (not a fetch gap - see backend.py's
  * own PUBLIC_XRAY_PROFILES_SETS comment). */
@@ -40,7 +44,7 @@ export function XrayHaloProfilesSidebar({ params, onChange, onRemove }: XrayHalo
         onChange={onChange}
         allowedSuites={catalog?.statistic_suites['X-ray Halo Profiles']}
         allowedSetsForSuite={catalog?.statistic_sets_for_suite['X-ray Halo Profiles']}
-        onepScheme="flat"
+        onepScheme="legacy"
       />
     </ParamsSidebar>
   );

@@ -193,6 +193,12 @@ def metadata():
             str(index): sorted(variations)
             for index, variations in B.ONEP_TNG_MISSING_VARIATIONS.items()
         },
+        # Real parameter NAMES for the *legacy* 1P scheme (issue #51's own
+        # follow-up investigation - see backend.py's own
+        # LEGACY_ONEP_PARAM_NAMES comment for the evidence) - suite-keyed
+        # since the 4 astrophysical params' own letter prefix differs by
+        # suite (A_/B_/C_).
+        "legacy_onep_param_names": B.LEGACY_ONEP_PARAM_NAMES,
         # Real fix (2026-08-07, issue #15): this used to filter each
         # statistic's allowed suites through B.SUITES, which was always a
         # no-op for every pre-existing entry here (their PUBLIC_*_SUITES
