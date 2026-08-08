@@ -14,7 +14,7 @@ export default meta;
 type Story = StoryObj<typeof CamelsSamSidebar>;
 
 function Interactive() {
-  const [params, setParams] = useState<CamelsSamParams>({ realization: 0 });
+  const [params, setParams] = useState<CamelsSamParams>({ setName: 'LH', realization: 0 });
   return <CamelsSamSidebar params={params} onChange={setParams} onRemove={() => {}} />;
 }
 

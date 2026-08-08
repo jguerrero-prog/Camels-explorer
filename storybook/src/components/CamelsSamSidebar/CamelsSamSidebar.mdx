@@ -5,18 +5,19 @@ import * as CamelsSamSidebarStories from './CamelsSamSidebar.stories';
 
 # CamelsSamSidebar
 
-CAMELS-SAM's real per-tile sidebar, wired 2026-08-07 (direct user request) from `app.py`'s own "CAMELS-SAM" tab. The simplest sidebar in this app, and deliberately not built from `SingleRealizationFields` — this statistic has no Suite/Set concept at all. `backend.py`'s `get_sam_catalog(set_name, realization)` is hardcoded to `PUBLIC_SAM_SETS = {"LH"}` (CV's real folder structure is irregular per-realization and deliberately excluded, per `backend.py`'s own comment); there is no suite parameter because CAMELS-SAM isn't a hydro-suite product at all — the Santa Cruz Semi-Analytic Model runs on N-body-only sims, a wholly separate dataset.
+CAMELS-SAM's real per-tile sidebar, wired 2026-08-07 (direct user request) from `app.py`'s own "CAMELS-SAM" tab; Set control added 2026-08-08 (issue #24). Deliberately not built from `SingleRealizationFields` — this statistic has no Suite concept at all (`backend.py`'s `get_sam_catalog` has no suite parameter, since the Santa Cruz Semi-Analytic Model runs on N-body-only sims, a wholly separate dataset from the 4 hydro suites). Set is a plain `Radio` instead — `backend.py`'s `PUBLIC_SAM_SETS = {"LH", "CV"}` has only 2 real options (1P stays unsupported — a real 403 on a plain fetch, not yet resolved).
 
 ## Token
 
-Composed entirely from `NumberStepper`/`Button` — no tokens of its own.
+Composed from `Radio`/`NumberStepper`/`Button` — no tokens of its own.
 
 ## Spec
 
 <Canvas of={CamelsSamSidebarStories.Playground} />
 <Controls />
 
-- **Just one control: Realization (0–999)** — matches `app.py`'s own `st.slider("SAM realization (LH)", 0, 999, 0)` exactly.
+- **Set (LH/CV)** — real, `backend.py`'s `PUBLIC_SAM_SETS`. CV's real per-realization folder name (`fid-sc-sam`) and count (5, not 1000 — CV_5 confirmed empty) differ from LH's, both resolved server-side.
+- **Realization**, bound clamped to the selected set's real count (`SAM_SET_REALIZATIONS`) — matches `app.py`'s own `st.slider("SAM realization (LH)", 0, 999, 0)` for LH; CV's real range is 0–4.
 - **Real, deliberate simplification vs. `app.py`**: Streamlit's tab also has a "Minimum stellar mass" slider and a "Show all available fields (raw)" checkbox in the tab body itself, filtering *both* the table *and* the two charts below it. Here, that same real filter/raw-toggle lives inside `UnderlyingHalos`'s own `filter`/`rawRows` props (via `PlotTile`'s "Table" mode) instead of this sidebar — consistent with every other statistic in this app, where the table's own mass filter is independent of the chart above it (Stellar Mass Function's histogram doesn't shrink when its table's mass slider moves, either). The charts always show every real galaxy in the realization; only the table is ever filtered.
 
 ## Usecase
@@ -35,7 +36,7 @@ import { CamelsSamSidebar } from '@/components/CamelsSamSidebar/CamelsSamSidebar
 import type { CamelsSamParams } from '@/components/CamelsSamSidebar/CamelsSamSidebar';
 
 function FocusedTileSidebar() {
-  const [params, setParams] = useState<CamelsSamParams>({ realization: 0 });
+  const [params, setParams] = useState<CamelsSamParams>({ setName: 'LH', realization: 0 });
   return (
     <CamelsSamSidebar
       params={params}

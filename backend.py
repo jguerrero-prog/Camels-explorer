@@ -534,19 +534,30 @@ VIDE_SUITE_PREFIX = {"IllustrisTNG": "Illustris"}
 
 # CAMELS-SAM (Santa Cruz Semi-Analytic Model on N-body sims) - a separate
 # dataset entirely, not tied to any hydro suite. 1P is empty in the public
-# release (0 bytes). LH is uniform (1000 realizations, each a plain
-# .../sc-sam/{octant}/ folder) and is the only set wired up. CV is
-# deliberately excluded despite existing: it only has 6 slots (CV_0-CV_5,
-# CV_5 empty) and an irregular structure - CV_0/CV_1 nest *several* SAM
-# parameter-variation reruns per realization (folders like fid-sc-sam/,
-# Asn1x4p0-sc-sam/, ...), while CV_2-4 don't - a real follow-up, not a
-# quick extension of the LH path pattern. Each LH realization is split
-# across 8 spatial octants (~500MB-1.5GB each) - the frontend fetches and
-# appends all 8 progressively (2026-08-07) for the complete realization,
-# each read as only a byte-range tail of its octant file (the file is
-# ordered by redshift, high-z first - confirmed directly that the last
-# bytes are z=0, not assumed), never a whole octant downloaded.
-PUBLIC_SAM_SETS = {"LH"}
+# release (0 bytes), and real 1P coverage per the DR1 paper (Sec 3.9, 12
+# real sims) needs a different access method than a plain fetch (confirmed
+# directly - a real 403, not a 404, unlike every other path checked in
+# this project) - not resolved here, see issue #24's own investigation
+# note. LH is uniform (1000 realizations, each a plain .../sc-sam/{octant}/
+# folder). CV (added 2026-08-08, issue #24) is real but was originally
+# excluded for reacting to its own irregular top-level structure rather
+# than its real usable data: CV_0/CV_1 additionally nest *several* SAM
+# parameter-variation reruns alongside their own real fiducial run (extra
+# folders like Asn1x4p0-sc-sam/), while CV_2-4 don't - but every CV
+# realization's own real ".../fid-sc-sam/{octant}/" folder (a different
+# folder name than LH's plain "sc-sam/", confirmed via a direct fetch) is
+# clean and uniform across all of CV_0-CV_4 (all 8 octants, same 41-column
+# schema) - only CV_5 is genuinely absent (confirmed via a real directory
+# listing: the folder exists but lists zero entries, 0 bytes, matching the
+# paper's own "5 simulations"). Each LH/CV realization is split across 8
+# spatial octants (~500MB-1.5GB each) - the frontend fetches and appends
+# all 8 progressively for the complete realization, each read as only a
+# byte-range tail of its octant file (the file is ordered by redshift,
+# high-z first - confirmed directly that the last bytes are z=0, not
+# assumed), never a whole octant downloaded.
+PUBLIC_SAM_SETS = {"LH", "CV"}
+SAM_SET_FOLDER = {"LH": "sc-sam", "CV": "fid-sc-sam"}
+SAM_SET_REALIZATIONS = {"LH": 1000, "CV": 5}  # CV_0-CV_4 real, CV_5 confirmed empty
 CAMELS_SAM_BOX_SIZE = 100.0  # Mpc/h, per docs/source/SAM.rst
 SAM_DEFAULT_OCTANT = "0_0_0"
 # Real, confirmed via a directory listing of SCSAM/LH/LH_0/sc-sam/ - all 8
@@ -2004,9 +2015,10 @@ def _fetch_sam_galprop_tail(set_name, realization, octant=SAM_DEFAULT_OCTANT, ma
     spatial octants (a real 1/8-volume sample) and a byte-range sample of a
     500MB-1.5GB file, not the complete realization. Returns a pandas
     DataFrame filtered to the final (z~0) snapshot, or None."""
-    if set_name not in PUBLIC_SAM_SETS:
+    if set_name not in PUBLIC_SAM_SETS or realization >= SAM_SET_REALIZATIONS[set_name]:
         return None
-    url = f"{PUBLIC_DATA_URL}/SCSAM/{set_name}/{set_name}_{realization}/sc-sam/{octant}/galprop_0-99.dat"
+    folder = SAM_SET_FOLDER[set_name]
+    url = f"{PUBLIC_DATA_URL}/SCSAM/{set_name}/{set_name}_{realization}/{folder}/{octant}/galprop_0-99.dat"
     try:
         req = urllib.request.Request(url, headers={"Range": f"bytes=-{max_bytes}"})
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -2065,7 +2077,7 @@ def get_sam_catalog(set_name, realization, octant=SAM_DEFAULT_OCTANT, fetch_publ
     return Catalog(
         frame=frame, box_size=CAMELS_SAM_BOX_SIZE, redshift=float(df["redshift"].iloc[0]), raw_frame=raw_frame,
         note=(f"z ~ {df['redshift'].iloc[0]:.2f} - public CAMELS data release "
-              f"(SCSAM/{set_name}/{set_name}_{realization}/sc-sam/{octant}, "
+              f"(SCSAM/{set_name}/{set_name}_{realization}/{SAM_SET_FOLDER[set_name]}/{octant}, "
               f"{len(frame)} galaxies with stars - octant {octant} of {len(SAM_OCTANTS)}, tail "
               f"sample of that octant's merger-tree catalog; the frontend fetches and appends "
               f"all {len(SAM_OCTANTS)} octants progressively for the complete realization)"),

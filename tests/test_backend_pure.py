@@ -164,6 +164,16 @@ class TestRealDataLookupTables:
         assert B.CMD_MASS_TYPE_FIELDS == {"Mtot", "Mgas", "Mcdm", "Mstar", "Mtot_Nbody"}
         assert "Temperature" not in B.CMD_MASS_TYPE_FIELDS
 
+    def test_sam_set_folder_and_realizations_cover_every_public_sam_set(self):
+        # Real, confirmed via direct fetches (issue #24): LH uses folder
+        # "sc-sam" (1000 realizations), CV uses "fid-sc-sam" (5 - CV_5 is
+        # a real, confirmed-empty folder). A set missing from either dict
+        # would silently 404 or misconstruct a URL, not fail loudly.
+        assert set(B.SAM_SET_FOLDER) == B.PUBLIC_SAM_SETS
+        assert set(B.SAM_SET_REALIZATIONS) == B.PUBLIC_SAM_SETS
+        assert B.SAM_SET_FOLDER["LH"] == "sc-sam" and B.SAM_SET_FOLDER["CV"] == "fid-sc-sam"
+        assert B.SAM_SET_REALIZATIONS["LH"] == 1000 and B.SAM_SET_REALIZATIONS["CV"] == 5
+
 
 class TestPngRenderConcurrency:
     """Real regression test for the matplotlib thread-safety bug found and
