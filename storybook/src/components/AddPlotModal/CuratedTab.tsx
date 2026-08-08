@@ -117,7 +117,7 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
       <SelectField
         label="Statistic"
         value={selection.statistic}
-        options={[...catalog.statistics, 'CAMELS-SAM', 'Black Hole Mergers', 'Initial Conditions']}
+        options={[...catalog.statistics, 'CAMELS-SAM', 'Black Hole Mergers', 'Initial Conditions', 'Simulation Parameters']}
         onChange={(statistic) => onChange({ ...selection, statistic })}
       />
       {isCamelsSam && (
@@ -133,6 +133,11 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
       {isInitialConditions && (
         <p className="curated-tab__loading">
           Initial Conditions are real Gadget Format I files at z=127, fetched and appended progressively across all 47 real per-realization files after adding — real for IllustrisTNG/SIMBA/Astrid only.
+        </p>
+      )}
+      {selection.statistic === 'Simulation Parameters' && (
+        <p className="curated-tab__loading">
+          One real file covers every realization of the selected suite/set at once — Realization above is ignored (matches Field PDF's own "no per-realization control" behavior).
         </p>
       )}
     </>

@@ -564,6 +564,21 @@ export async function fetchSamCatalog(realization: number, octant: string = SAM_
   return res.json();
 }
 
+/** Real (added 2026-08-07, direct user request, issue #14) -
+ * backend.py's `get_simulation_parameters()`/`GET /api/parameters`. Same
+ * real `Catalog` shape as `fetchHaloCatalog` - one file covers every
+ * realization of a suite/set at once, so there's no `realization` param
+ * at all, unlike every other catalog fetcher here. */
+export type SimulationParameters = HaloCatalog;
+
+export async function fetchSimulationParameters(suite: string, setName: string): Promise<SimulationParameters> {
+  const qs = new URLSearchParams({ suite, set_name: setName, fetch_public: 'true' });
+  const res = await fetch(`${API_BASE}/parameters?${qs}`);
+  if (res.status === 404) return null; // real gap: no Parameters file for this suite/set
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
 /** Runs `fetchChunk(i)` for i in [0, count) with at most `concurrency` in
  * flight at once, calling `onChunk(result, i)` as each settles (arrival
  * order, not index order) - shared by CAMELS-SAM (8 octants) and Initial

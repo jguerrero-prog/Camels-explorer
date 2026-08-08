@@ -1929,6 +1929,99 @@ def get_blackhole_mergers(suite, set_name, realization, fetch_public: bool = Fal
 
 
 # ---------------------------------------------------------------------------
+# Simulation Parameters  (real product, undocumented by camels.readthedocs.io -
+# added 2026-08-07, direct user request, issue #14)
+# ---------------------------------------------------------------------------
+
+# Real, confirmed via direct fetches of all 4 hydro suites: `Parameters/{suite}/
+# CosmoAstroSeed_{suite}_L25n256_{set_name}.txt` is one file per suite/set that
+# covers every real realization at once (e.g. 1000 rows for LH, 27 for CV/BE, 4
+# for EX). The real column schema is SET-dependent, not suite-dependent - LH/CV/
+# EX (and Swift-EAGLE's own LH) use a simple 8-column format (Name, Omega_m,
+# sigma_8, A_SN1, A_AGN1, A_SN2, A_AGN2, seed - the same normalized amplitude
+# knobs the DR1 paper's eq. 3-6 describe); 1P/BE instead use a much richer real
+# 30-column format (the actual raw GADGET/AREPO simulation-config values this
+# suite/set's runs were configured with - e.g. WindEnergyIn1e51erg,
+# RadioFeedbackFactor - not a renamed copy of the same 4 knobs). Detected from
+# the real header line at fetch time, not assumed by set name, in case a future
+# set/suite combination surprises this again.
+PUBLIC_PARAMETERS_SUITES = {"IllustrisTNG", "SIMBA", "Astrid", "Swift-EAGLE"}
+
+# Real column-name aliases between the two schemas above, for the 3 quantities
+# every real schema has in common (just spelled differently) - Omega_m/Omega0
+# and sigma_8/sigma8 are the same physical parameters, confirmed by comparing
+# real fiducial values (Omega_m=0.3, sigma_8=0.8) across both a simple-schema
+# CV_0 row and a rich-schema BE_0 row for the same suite. The 4 astrophysics
+# knobs are NOT aliased the same way - the rich schema's raw config values
+# aren't a 1:1 rename of A_SN1/A_AGN1/A_SN2/A_AGN2, so those stay in raw_frame
+# only for 1P/BE rather than being force-mapped into the curated columns.
+_PARAMETERS_COLUMN_ALIASES = {"Omega0": "Omega_m", "sigma8": "sigma_8"}
+_PARAMETERS_CURATED_COLUMNS = ["Omega_m", "sigma_8", "seed"]
+
+
+@lru_cache(maxsize=32)
+def _fetch_parameters_table(suite, set_name):
+    """Real per-suite/set parameter table (one file covers every real
+    realization) - see this section's own module comment for the two real
+    column schemas. Returns a DataFrame indexed by the real `Name` column
+    (e.g. "LH_0"), or None."""
+    if suite not in PUBLIC_PARAMETERS_SUITES:
+        return None
+    url = f"{PUBLIC_DATA_URL}/Parameters/{suite}/CosmoAstroSeed_{suite}_L25n256_{set_name}.txt"
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            lines = resp.read().decode().splitlines()
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+    if not lines:
+        return None
+
+    columns = lines[0].lstrip("#").split()
+    rows = [line.split() for line in lines[1:] if line.strip()]
+    rows = [r for r in rows if len(r) == len(columns)]
+    if not rows:
+        return None
+
+    df = pd.DataFrame(rows, columns=columns)
+    df = df.set_index("Name")
+    for col in df.columns:
+        df[col] = pd.to_numeric(df[col])
+    return df.rename(columns=_PARAMETERS_COLUMN_ALIASES)
+
+
+def get_simulation_parameters(suite, set_name, fetch_public: bool = False) -> Catalog | None:
+    """Real cosmological + astrophysical parameter values for every
+    realization of one suite/set at once - the actual latin-hypercube/
+    parameter-sweep configuration behind every other statistic in this
+    app, not previously exposed as its own browsable product. No
+    synthetic version - a fabricated parameter table isn't a useful
+    stand-in the way a power-law curve is. `box_size`/`redshift` don't
+    really apply to a parameter table (it's the same for every real
+    snapshot of a given realization) - box_size is the real, constant
+    25 Mpc/h every L25n256 run shares; redshift is a placeholder 0.0,
+    called out in the note rather than silently implying meaning."""
+    if not fetch_public:
+        return None
+    df = _fetch_parameters_table(suite, set_name)
+    if df is None or len(df) == 0:
+        return None
+
+    curated_cols = [c for c in _PARAMETERS_CURATED_COLUMNS if c in df.columns]
+    frame = df[curated_cols].reset_index()
+    frame = frame.rename(columns={"Name": "Realization"})
+
+    return Catalog(
+        frame=frame, box_size=25.0, redshift=0.0, raw_frame=df.reset_index().rename(columns={"Name": "Realization"}),
+        note=(f"{len(frame)} real realizations - public CAMELS data release "
+              f"(Parameters/{suite}/CosmoAstroSeed_{suite}_L25n256_{set_name}.txt). "
+              f"box_size/redshift don't apply to a parameter table - box_size shown "
+              f"is the real constant 25 Mpc/h every L25n256 run shares, redshift is "
+              f"a placeholder (parameters aren't a function of redshift)."),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Galaxy scaling relations  (mirrors camels_library.properties_vs_SM)
 # ---------------------------------------------------------------------------
 
