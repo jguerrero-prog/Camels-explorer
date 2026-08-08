@@ -28,7 +28,7 @@ Real fix (2026-08-06, direct user feedback: *"the filter settings on the side me
 
 ## Usecase
 
-- **`CustomTab`** (Add Plot modal, tile creation) and **`CustomSidebar`** (`ParamsSidebar`, post-creation editing) both render `CustomFilterSettings` — a thin trigger button showing "Filter settings…" plus a live count of active filter fields — which owns this modal's `open`/`close` state and passes `tree`/`treeError`/`selection`/`onChange` straight through. Neither caller talks to `CustomFilterSettingsModal` directly.
+- **`CustomTab`** (Add Plot modal, tile creation) and **`CustomSidebar`** (`ParamsSidebar`, post-creation editing) both render `CustomFilterSettings` — a thin trigger button showing "Filter settings" plus a live count of active filter fields — which owns this modal's `open`/`close` state and passes `tree`/`treeError`/`selection`/`onChange` straight through. Neither caller talks to `CustomFilterSettingsModal` directly.
 - The tree shown is filtered to the current `selection.type` via `filterTreeForType` (`params` + whichever of `Group`/`Subhalo` matches) — the same filtering `CustomFieldsForm`'s old inline tree used, just called from here now.
 - Toggling a leaf's "+ Add"/"Remove" calls `toggleCustomFilterField`, which also drops any already-set range for a removed field — shared logic, not duplicated between the modal and any other tree consumer.
 - **Real, deliberate scope**: this modal only ever picks *which* fields are active filters, never *what value* they're filtered to — range/value editing stays in `CustomFilterValues` (sidebar-only, post-creation), since fixing a range blind inside a modal you have to close to see the effect of was the exact interaction bug a user caught in an earlier pass of this tab.
