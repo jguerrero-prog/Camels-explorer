@@ -121,7 +121,13 @@
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 22px 24px;
+  /* Real fix (direct user feedback): bottom padding taller than
+     .add-plot-modal__fields-fade's own 48px, so scrolling to the last
+     real control (e.g. Custom tab's "Filter settings" trigger) clears
+     the fade zone entirely instead of leaving it dissolved into the
+     gradient - only blank padding sits inside the fade, never a control
+     someone needs to see/click. */
+  padding: 22px 24px 56px;
   overflow-y: auto;
   height: 260px;
   min-height: 0;
