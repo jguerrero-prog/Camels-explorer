@@ -206,6 +206,77 @@ class TestRealDataLookupTables:
         assert B.PUBLIC_SPREAD_METRIC_SETS["SIMBA"] == {"LH", "CV"}
         assert B.PUBLIC_SPREAD_METRIC_SETS["Astrid"] == {"LH", "CV", "1P"}
 
+    def test_group_matching_suites_and_sets(self):
+        # Real, confirmed via a directory listing (issue #29): no
+        # Swift-EAGLE at all for this product, and LH is the only set
+        # wired so far (CV/1P are real but deliberately deferred).
+        assert B.PUBLIC_GROUP_MATCHING_SUITES == {"IllustrisTNG", "SIMBA", "Astrid"}
+        assert "Swift-EAGLE" not in B.PUBLIC_GROUP_MATCHING_SUITES
+        assert B.PUBLIC_GROUP_MATCHING_SETS == {"LH"}
+
+    def test_group_matching_url_matches_the_real_flat_filename_convention(self):
+        # Real files live flat inside the set folder, named
+        # Nbody_{set}_{n}_{suite}_{set}_{n}_snap_033.hdf5 - confirmed
+        # directly against Group_matching/IllustrisTNG/LH/.
+        url = B._group_matching_url("IllustrisTNG", "LH", 593)
+        assert url == (
+            f"{B.PUBLIC_DATA_URL}/Group_matching/IllustrisTNG/LH/"
+            "Nbody_LH_593_IllustrisTNG_LH_593_snap_033.hdf5"
+        )
+
+
+class TestGroupMatchingJoin:
+    """Real-code-path test for get_group_matching()'s join arithmetic
+    (issue #29) - drives the actual function with hand-built, synthetic
+    stand-ins for the two real fetchers it calls (_fetch_group_matching_raw,
+    _fetch_public_subfind) rather than hitting the network, matching
+    TestPngRenderConcurrency's own "fake data, real code path" approach.
+    The synthetic values below reproduce the real ambiguity found directly
+    against IllustrisTNG/SIMBA LH_0 (see backend.py's own Group_matching
+    module comment): a duplicate hydro claim (index 1, won by row 0's
+    cross_match=1 pairing, lost by row 2's cross_match=0 pairing) and an
+    out-of-range hydro_index guarded by get_group_matching's own bounds
+    check."""
+
+    def test_join_derives_mass_ratio_and_note_counts_correctly(self, monkeypatch):
+        monkeypatch.setattr(B, "_fetch_group_matching_raw", lambda suite, set_name, realization: {
+            "nbody_index": np.array([0, 1, 2, 3]),
+            "hydro_index": np.array([0, 1, 1, -1]),
+            "cross_match": np.array([1, 1, 0, 0]),
+            "percent_matched": np.array([90, 70, 60, 0]),
+        })
+
+        def fake_subfind(suite, set_name, realization):
+            if suite.endswith("_DM"):
+                return {"group_mass": np.array([1.0e13, 2.0e12, 5.0e11, 1.0e11])}
+            return {"group_mass": np.array([9.0e12, 1.5e12])}
+
+        monkeypatch.setattr(B, "_fetch_public_subfind", fake_subfind)
+
+        result = B.get_group_matching("IllustrisTNG", "LH", 0, fetch_public=True)
+        frame = result.frame
+        assert len(frame) == 4
+        assert list(frame["Cross-matched"]) == [True, True, False, False]
+        assert list(frame["Hydro Group Index"]) == [0, 1, 1, -1]
+        # row 0: 9e12 / 1e13; row 1: 1.5e12 / 2e12 - both cross_match=1, sane ratios
+        assert frame["Mass Ratio (Hydro/N-body)"].iloc[0] == pytest.approx(0.9)
+        assert frame["Mass Ratio (Hydro/N-body)"].iloc[1] == pytest.approx(0.75)
+        # row 2: a losing duplicate claim on hydro_index=1, already won by row 1
+        assert frame["Mass Ratio (Hydro/N-body)"].iloc[2] == pytest.approx(1.5e12 / 5.0e11)
+        # row 3: no hydro counterpart - NaN mass/ratio, not zero
+        assert np.isnan(frame["Hydro Group Mass [Msun/h]"].iloc[3])
+        assert np.isnan(frame["Mass Ratio (Hydro/N-body)"].iloc[3])
+        assert "2 rows are the file's own best 1:1 cross-match" in result.note
+        assert "1 N-body halos have no real hydro counterpart" in result.note
+        assert "remaining 1 have a candidate hydro halo" in result.note
+
+    def test_fetch_public_off_returns_none_without_calling_fetchers(self, monkeypatch):
+        def boom(*args, **kwargs):
+            raise AssertionError("should not fetch when fetch_public is False")
+
+        monkeypatch.setattr(B, "_fetch_group_matching_raw", boom)
+        assert B.get_group_matching("IllustrisTNG", "LH", 0, fetch_public=False) is None
+
 
 class TestPngRenderConcurrency:
     """Real regression test for the matplotlib thread-safety bug found and

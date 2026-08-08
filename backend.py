@@ -902,7 +902,8 @@ LYA_N_SIGHTLINES = 5000
 STATISTICS = ["Power Spectrum", "Halo Mass Function", "Stellar Mass Function", "SFR History",
               "Galaxy Scaling Relations", "Baryon Fraction", "3D Density Field", "3D Particle Cloud",
               "2D Field Map", "X-ray Halo Profiles", "X-ray Photon Spectrum", "Halo Gas Profiles",
-              "Color-Mass Diagram", "Bispectrum", "Field PDF", "Lyman-alpha Spectrum", "Spread Metric"]
+              "Color-Mass Diagram", "Bispectrum", "Field PDF", "Lyman-alpha Spectrum", "Spread Metric",
+              "Group Matching"]
 
 
 @dataclass
@@ -2288,6 +2289,198 @@ def get_simulation_parameters(suite, set_name, fetch_public: bool = False) -> Ca
               f"is the real constant 25 Mpc/h every L25n256 run shares, redshift is "
               f"a placeholder (parameters aren't a function of redshift)."),
     )
+
+
+# ---------------------------------------------------------------------------
+# Group_matching  (real product, undocumented by camels.readthedocs.io -
+# added 2026-08-08, direct user request, issue #29)
+# ---------------------------------------------------------------------------
+
+# Real, confirmed via a full HDF5 parse plus a cross-suite mass-correlation
+# check (not assumed from the folder name alone): Group_matching/{suite}/
+# {set}/Nbody_{set}_{n}_{suite}_{set}_{n}_snap_033.hdf5 holds 4 flat int64
+# arrays - nbody_index, hydro_index, cross_match, percent_matched - joining
+# the suite's own N-body-only ({suite}_DM) FOF/Subfind Group catalog against
+# its full-physics hydro counterpart, both at snap_033 (z=0, groupnum 090 -
+# SUBFIND_GROUPNUM_FOR_SNAPSHOT[-1]).
+#
+# `nbody_index`/`hydro_index` are plain row indices into each catalog's own
+# `Group/GroupMass` (not Subhalo - confirmed directly: group-level mass at
+# these indices tracks 1:1 between N-body and hydro to within roughly a
+# factor of 2; subhalo-level mass at the same indices does not, off by
+# 10-1000x). The N-body side is real but restricted to groups with >100
+# particles: IllustrisTNG LH_0 has exactly 4399 real rows, and its DM
+# catalog's Group/GroupLen (already sorted descending - the standard FoF
+# convention) has exactly 4399 groups with length >=101; SIMBA LH_0
+# reproduces the same pattern at a different count (5555 rows, 5555 groups
+# with length >=101). `hydro_index == -1` is a real sentinel for "no hydro
+# counterpart found" - confirmed every such row also has cross_match == 0.
+#
+# `cross_match` (0/1) is the file's own real match-quality flag - NOT a
+# simple function of `percent_matched` alone (their real ranges overlap:
+# 29-135 for cross_match=1 rows, 34-90 for cross_match=0 rows that still
+# have a valid hydro_index). Two lines of direct evidence explain it
+# instead: (1) hydro_index is not unique - multiple N-body groups can name
+# the same hydro group as their best candidate, but cross_match=1's own
+# hydro_index values ARE all unique (confirmed both suites); (2)
+# cross_match=1 rows have a tight, physically sane group-mass ratio
+# (hydro/N-body, median ~0.7-0.9, range ~0.3-2x - feedback removes some
+# mass but stays the same order), while cross_match=0-but-valid rows do not
+# (median ~8-16x, up to 8000x+) - most of them (roughly 70-80% in both
+# suites checked) are simply a losing duplicate claim on a hydro group some
+# other row already won with cross_match=1. The exact internal tie-breaking
+# rule isn't published; cross_match is surfaced as the file's own real
+# flag, not re-derived here.
+#
+# Real per-set/per-suite coverage (confirmed via a directory listing):
+# IllustrisTNG has SB28/LH/BE/1P/L25n256/CV; SIMBA has LH/1P/L25n256/CV;
+# Astrid has LH/1P/L25n256/CV/SB7 - no Swift-EAGLE at all. Scope here is LH
+# only, all 3 suites (the issue's own lead: "N-body-vs-hydro on LH... as a
+# new 'what did baryonic feedback do to this halo' comparison view") - CV
+# (cross-suite, same ICs at a fixed realization) and 1P (needs its own
+# folder-naming shim, same as several other statistics this session) are
+# real but deliberately deferred, not silently unsupported.
+PUBLIC_GROUP_MATCHING_SUITES = {"IllustrisTNG", "SIMBA", "Astrid"}
+PUBLIC_GROUP_MATCHING_SETS = {"LH"}
+GROUP_MATCHING_SNAP_TAG = "033"  # the file's own literal "snap_033" - always z=0
+
+
+def _group_matching_url(suite, set_name, realization):
+    return (f"{PUBLIC_DATA_URL}/Group_matching/{suite}/{set_name}/"
+            f"Nbody_{set_name}_{realization}_{suite}_{set_name}_{realization}_"
+            f"snap_{GROUP_MATCHING_SNAP_TAG}.hdf5")
+
+
+@lru_cache(maxsize=32)
+def _fetch_group_matching_raw(suite, set_name, realization):
+    """Real cross-match index table - small (4 flat int64 arrays), fetched
+    whole. Returns a dict of numpy arrays, or None."""
+    if suite not in PUBLIC_GROUP_MATCHING_SUITES or set_name not in PUBLIC_GROUP_MATCHING_SETS:
+        return None
+    url = _group_matching_url(suite, set_name, realization)
+    try:
+        with urllib.request.urlopen(url, timeout=30) as response:
+            raw = response.read()
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    with tempfile.NamedTemporaryFile(suffix=".hdf5") as tmp:
+        tmp.write(raw)
+        tmp.flush()
+        with h5py.File(tmp.name, "r") as f:
+            return {
+                "nbody_index": f["nbody_index"][:],
+                "hydro_index": f["hydro_index"][:],
+                "cross_match": f["cross_match"][:],
+                "percent_matched": f["percent_matched"][:],
+            }
+
+
+def get_group_matching(suite, set_name, realization, fetch_public: bool = False) -> Catalog | None:
+    """Real per-halo N-body-vs-hydro cross-match table for one realization -
+    "what did baryonic feedback do to this specific halo" (issue #29). No
+    synthetic version - a fabricated cross-match table isn't a useful
+    stand-in the way a power-law curve is. See this section's own module
+    comment for real index/flag semantics."""
+    if not fetch_public:
+        return None
+    matches = _fetch_group_matching_raw(suite, set_name, realization)
+    if matches is None:
+        return None
+
+    nbody_dm = _fetch_public_subfind(f"{suite}_DM", set_name, realization)
+    hydro = _fetch_public_subfind(suite, set_name, realization)
+    if nbody_dm is None or hydro is None:
+        return None
+    dm_group_mass = nbody_dm["group_mass"]
+    hydro_group_mass = hydro["group_mass"]
+
+    nbody_index = matches["nbody_index"]
+    hydro_index = matches["hydro_index"]
+    cross_match = matches["cross_match"]
+    percent_matched = matches["percent_matched"]
+    # Defensive, not expected to ever trigger for real data (see module
+    # comment) - guards the join the same way get_color_mass_diagram's own
+    # `in_range` does, rather than assuming the two real files always agree.
+    in_range = nbody_index < len(dm_group_mass)
+    if not np.all(in_range):
+        nbody_index, hydro_index = nbody_index[in_range], hydro_index[in_range]
+        cross_match, percent_matched = cross_match[in_range], percent_matched[in_range]
+
+    has_match = hydro_index != -1
+    hydro_mass = np.full(len(hydro_index), np.nan)
+    valid_hydro_idx = has_match & (hydro_index < len(hydro_group_mass))
+    hydro_mass[valid_hydro_idx] = hydro_group_mass[hydro_index[valid_hydro_idx]]
+    dm_mass = dm_group_mass[nbody_index]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        mass_ratio = hydro_mass / dm_mass
+
+    frame = pd.DataFrame({
+        "N-body Group Index": nbody_index,
+        "Hydro Group Index": hydro_index,
+        "Cross-matched": cross_match.astype(bool),
+        "Percent Matched": percent_matched,
+        "N-body Group Mass [Msun/h]": dm_mass,
+        "Hydro Group Mass [Msun/h]": hydro_mass,
+        "Mass Ratio (Hydro/N-body)": mass_ratio,
+    })
+
+    n_matched = int(cross_match.sum())
+    n_unmatched = int((~has_match).sum())
+    n_candidate = len(frame) - n_matched - n_unmatched
+    return Catalog(
+        frame=frame, box_size=25.0, redshift=0.0, raw_frame=None,
+        note=(f"{len(frame)} N-body (>100-particle) halos, z=0 - public CAMELS data "
+              f"release (Group_matching/{suite}/{set_name}/Nbody_{set_name}_{realization}_"
+              f"{suite}_{set_name}_{realization}_snap_033.hdf5, joined against both the "
+              f"N-body ({suite}_DM) and hydro ({suite}) FOF/Subfind Group catalogs at "
+              f"groupnum 090). {n_matched} rows are the file's own best 1:1 cross-match "
+              f"(Cross-matched=True); {n_unmatched} N-body halos have no real hydro "
+              f"counterpart at all (Hydro Group Index=-1); the remaining {n_candidate} "
+              f"have a candidate hydro halo that either lost to a better-matching N-body "
+              f"halo or disagrees in mass - kept visible, not dropped, since that "
+              f"disagreement is itself real information about this suite's baryonic "
+              f"feedback. Percent Matched is the file's own real, uncapped match-quality "
+              f"score (observed range 29-135) - its exact definition isn't published by "
+              f"CAMELS."),
+    )
+
+
+def render_group_matching_png(suite, set_name, realization, fetch_public: bool = False) -> bytes | None:
+    """N-body vs. hydro group mass, log-log - the file's own best 1:1
+    matches in one color, its losing/inconsistent candidates in another.
+    Unmatched (no hydro counterpart) halos have no y-value and are omitted
+    from the scatter, not zero-plotted. Mirrors render_color_mass_diagram_png's
+    own shape (a plain real scatter), not a new chart convention."""
+    result = get_group_matching(suite, set_name, realization, fetch_public=fetch_public)
+    if result is None:
+        return None
+    frame = result.frame
+    matched = frame[frame["Cross-matched"]]
+    candidate = frame[~frame["Cross-matched"] & frame["Hydro Group Mass [Msun/h]"].notna()]
+    if len(matched) == 0 and len(candidate) == 0:
+        return None
+
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(7, 6), dpi=150, facecolor="white")
+        ax = fig.subplots()
+        if len(matched):
+            ax.scatter(matched["N-body Group Mass [Msun/h]"], matched["Hydro Group Mass [Msun/h]"],
+                       s=14, alpha=0.6, c="#2b5f8a", label=f"best match ({len(matched)})")
+        if len(candidate):
+            ax.scatter(candidate["N-body Group Mass [Msun/h]"], candidate["Hydro Group Mass [Msun/h]"],
+                       s=10, alpha=0.5, c="#c0743c", label=f"losing/inconsistent candidate ({len(candidate)})")
+        lo = frame["N-body Group Mass [Msun/h]"].min()
+        hi = frame["N-body Group Mass [Msun/h]"].max()
+        ax.plot([lo, hi], [lo, hi], ls="--", lw=1, c="#888888", label="1:1")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel("N-body Group Mass [Msun/h]")
+        ax.set_ylabel("Hydro Group Mass [Msun/h]")
+        ax.legend(fontsize=8)
+        ax.grid(alpha=0.3, which="both")
+        fig.tight_layout()
+        return _finish_png(fig)
 
 
 # ---------------------------------------------------------------------------
