@@ -26,6 +26,7 @@ _SET_DESCRIPTIONS = {
     "CV": "Cosmic Variance: fixed params, varied initial phases",
     "1P": "One-parameter-at-a-time",
     "EX": "Extreme",
+    "BE": "Butterfly Effect: fixed ICs/cosmology/astrophysics, varied evolution seed",
 }
 # Middle dot, not an em dash - matches the app's own existing separator
 # convention (ParamsSidebar's "PANEL 1 · FOCUSED"), and per direct user
@@ -35,6 +36,7 @@ _SET_LABELS = {
     "CV": "CV · Cosmic Variance",
     "1P": "1P · One-Parameter",
     "EX": "EX · Extreme",
+    "BE": "BE · Butterfly Effect",
 }
 
 # Per-statistic real suite coverage, read directly from backend.py's own
