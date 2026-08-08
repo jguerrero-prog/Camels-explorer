@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { IconRail } from './components/IconRail/IconRail';
 import type { IconRailPanel } from './components/IconRail/IconRail';
@@ -843,6 +843,34 @@ type CanvasTile =
   | SimulationParametersTileState
   | CustomTileState
   | EmptyTileState;
+
+// Real localStorage key for canvas persistence (added 2026-08-08, issue
+// #21) - versioned so a future incompatible schema change can bump this
+// rather than silently misparse old saved state.
+const CANVAS_STORAGE_KEY = 'camels-explorer-canvas-v1';
+
+/** What actually gets written to localStorage for one tile - deliberately
+ * NOT the full `CanvasTile` (which for e.g. GroupMatchingTileState is 4399
+ * fetched rows, or CamelsSamTileState's 8-octant catalog): just enough to
+ * recreate the tile's own EXACT original creation - `params` (or
+ * `selection`/`title` for the two kinds that don't have one) - then replay
+ * it through the same refetch path a fresh `handleSubmitCurated` call
+ * already uses. Keeps the persisted payload at a few hundred bytes total
+ * regardless of how much real data any given tile has fetched, and means a
+ * restored tile always shows FRESH data, not a stale snapshot from
+ * whenever the tab was last open. */
+type SavedTile =
+  | { id: string; kind: 'empty'; title: string }
+  | { id: string; kind: 'custom'; selection: CustomSelection }
+  | { id: string; kind: 'mass-range'; statistic: MassRangeStatistic; params: MassRangeParams }
+  | { id: string; kind: Exclude<CanvasTile['kind'], 'empty' | 'custom' | 'mass-range'>; params: unknown };
+
+function toSavedTile(tile: CanvasTile): SavedTile {
+  if (tile.kind === 'empty') return { id: tile.id, kind: 'empty', title: tile.title };
+  if (tile.kind === 'custom') return { id: tile.id, kind: 'custom', selection: tile.selection };
+  if (tile.kind === 'mass-range') return { id: tile.id, kind: 'mass-range', statistic: tile.statistic, params: tile.params };
+  return { id: tile.id, kind: tile.kind, params: (tile as { params: unknown }).params };
+}
 
 /** Mirrors the literal `title=` string each tile kind's own PlotTile
  * render call already uses - kept as one lookup rather than threading a
@@ -2721,7 +2749,18 @@ export function App() {
 
   const handleSubmitCurated = (selection: CuratedSelection) => {
     setIsModalOpen(false);
-    const id = pendingTileId ?? `tile-${tiles.length + 1}`;
+    // Real bug fixed (direct QA report): `tile-${tiles.length + 1}` isn't
+    // actually unique - removeTile just filters the array with no id-
+    // recycling guard, so removing a tile then adding a new one can
+    // reproduce an id still held by a surviving tile (e.g. [tile-1,
+    // tile-2, tile-3] minus tile-2 -> length 2 -> next id is tile-3
+    // again). Two tiles sharing an id meant focusedTile/refetch's own
+    // `.then()` handlers (both keyed by id, no kind check) could resolve
+    // to the WRONG tile - the actual cause of a reported "3D Density
+    // Field shows a 2D Field Map error" bug, not a wrong fetch route.
+    // crypto.randomUUID() can't collide, including with ids restored from
+    // localStorage (issue #21) - no counter-seeding needed either.
+    const id = pendingTileId ?? `tile-${crypto.randomUUID()}`;
 
     if (isMassRangeStatistic(selection.statistic)) {
       const statistic = selection.statistic;
@@ -3036,7 +3075,9 @@ export function App() {
 
   const handleSubmitCustom = (selection: CustomSelection) => {
     setIsModalOpen(false);
-    const id = pendingTileId ?? `tile-${tiles.length + 1}`;
+    // See handleSubmitCurated's own comment on this same expression - a
+    // real tile-id collision bug, not just cosmetic here either.
+    const id = pendingTileId ?? `tile-${crypto.randomUUID()}`;
     const placeholder: CustomTileState = {
       id, kind: 'custom', selection, result: null, matchedCount: 0, loading: true,
     };
@@ -3044,6 +3085,203 @@ export function App() {
     focusTile(id);
     refetchCustomTile(id, selection);
   };
+
+  /** Recreates one persisted tile (issue #21) - same placeholder-then-
+   * refetch shape `handleSubmitCurated`'s own branches use, just keyed by
+   * `saved.kind` (already known) instead of `selection.statistic` (which
+   * would have to be reverse-mapped). Every `refetch*Tile` function
+   * already re-runs its own full fetch (including CAMELS-SAM/Initial
+   * Conditions' own progressive multi-file loads - see
+   * streamRemainingSamOctants/streamRemainingICFiles, both called
+   * internally by their own refetch function), so a restored tile always
+   * shows freshly-fetched data, never a stale one. Deliberately doesn't
+   * call `focusTile` - restoring N tiles shouldn't fight over the one
+   * focus slot the way N sequential user clicks naturally wouldn't either. */
+  const restoreSavedTile = (saved: SavedTile) => {
+    const { id } = saved;
+    if (saved.kind === 'empty') {
+      replaceTile({ id, kind: 'empty', title: saved.title });
+      return;
+    }
+    if (saved.kind === 'custom') {
+      replaceTile({ id, kind: 'custom', selection: saved.selection, result: null, matchedCount: 0, loading: true });
+      refetchCustomTile(id, saved.selection);
+      return;
+    }
+    if (saved.kind === 'mass-range') {
+      const config = MASS_RANGE_CONFIGS[saved.statistic];
+      replaceTile({
+        id, kind: 'mass-range', statistic: saved.statistic, params: saved.params,
+        series: [], xLabel: '', yLabel: '', logX: true, logY: config.logY,
+        haloRows: [], haloRawRows: null,
+        altFinder: 'Subfind', altRows: [], altRawRows: null, altLoading: false,
+        mergerTreeId: null, mergerTreeVariant: 'SubLink', mergerTreeData: null, mergerTreeLoading: false,
+        note: '', loading: true,
+      });
+      refetchMassRangeTile(id, saved.statistic, saved.params);
+      return;
+    }
+    switch (saved.kind) {
+      case 'camels-sam': {
+        const params = saved.params as CamelsSamParams;
+        replaceTile({ id, kind: 'camels-sam', params, rows: [], rawRows: null, note: '', octantsLoaded: 0, loading: true });
+        refetchCamelsSamTile(id, params);
+        return;
+      }
+      case 'blackhole-mergers': {
+        const params = saved.params as BlackholeMergersParams;
+        replaceTile({ id, kind: 'blackhole-mergers', params, rows: [], note: '', loading: true });
+        refetchBlackholeMergersTile(id, params);
+        return;
+      }
+      case 'simulation-parameters': {
+        const params = saved.params as SimulationParametersParams;
+        replaceTile({ id, kind: 'simulation-parameters', params, rows: [], rawRows: null, note: '', loading: true });
+        refetchSimulationParametersTile(id, params);
+        return;
+      }
+      case 'power-spectrum': {
+        const params = saved.params as PowerSpectrumParams;
+        replaceTile({ id, kind: 'power-spectrum', params, series: [], xLabel: '', yLabel: '', logX: true, logY: true, note: '', loading: true });
+        refetchPowerSpectrumTile(id, params);
+        return;
+      }
+      case 'bispectrum': {
+        const params = saved.params as BispectrumParams;
+        replaceTile({ id, kind: 'bispectrum', params, series: [], xLabel: '', yLabel: '', logX: true, logY: true, note: '', loading: true });
+        refetchBispectrumTile(id, params);
+        return;
+      }
+      case 'sfr-history': {
+        const params = saved.params as SFRHistoryParams;
+        replaceTile({ id, kind: 'sfr-history', params, series: [], xLabel: '', yLabel: '', logX: false, logY: true, note: '', loading: true });
+        refetchSFRHistoryTile(id, params);
+        return;
+      }
+      case 'xray-halo-profiles': {
+        const params = saved.params as XrayHaloProfilesParams;
+        replaceTile({ id, kind: 'xray-halo-profiles', params, note: '', nHalos: 0, loading: true });
+        refetchXrayHaloProfilesTile(id, params);
+        return;
+      }
+      case 'xray-photon-spectrum': {
+        const params = saved.params as XrayPhotonSpectrumParams;
+        replaceTile({ id, kind: 'xray-photon-spectrum', params, note: '', haloId: 0, logMass: 0, nPhotonsTotal: 0, loading: true });
+        refetchXrayPhotonSpectrumTile(id, params);
+        return;
+      }
+      case 'spread-metric': {
+        const params = saved.params as SpreadMetricParams;
+        replaceTile({ id, kind: 'spread-metric', params, note: '', speciesSampled: {}, speciesTotal: {}, loading: true });
+        refetchSpreadMetricTile(id, params);
+        return;
+      }
+      case 'group-matching': {
+        const params = saved.params as GroupMatchingParams;
+        replaceTile({ id, kind: 'group-matching', params, rows: [], note: '', loading: true });
+        refetchGroupMatchingTile(id, params);
+        return;
+      }
+      case 'ahf-halo-profiles': {
+        const params = saved.params as AhfHaloProfilesParams;
+        replaceTile({ id, kind: 'ahf-halo-profiles', params, rows: [], nHalos: 1, note: '', loading: true });
+        refetchAhfHaloProfilesTile(id, params);
+        return;
+      }
+      case 'halo-gas-profiles': {
+        const params = saved.params as HaloGasProfilesParams;
+        replaceTile({ id, kind: 'halo-gas-profiles', params, note: '', nHalos: 0, loading: true });
+        refetchHaloGasProfilesTile(id, params);
+        return;
+      }
+      case 'color-mass-diagram': {
+        const params = saved.params as ColorMassDiagramParams;
+        replaceTile({ id, kind: 'color-mass-diagram', params, note: '', nGalaxies: 0, loading: true });
+        refetchColorMassDiagramTile(id, params);
+        return;
+      }
+      case 'field-pdf': {
+        const params = saved.params as FieldPDFParams;
+        replaceTile({ id, kind: 'field-pdf', params, note: '', loading: true });
+        refetchFieldPDFTile(id, params);
+        return;
+      }
+      case 'lyman-alpha-spectrum': {
+        const params = saved.params as LymanAlphaSpectrumParams;
+        replaceTile({ id, kind: 'lyman-alpha-spectrum', params, note: '', loading: true });
+        refetchLymanAlphaSpectrumTile(id, params);
+        return;
+      }
+      case 'galaxy-scaling-relations': {
+        const params = saved.params as GalaxyScalingRelationsParams;
+        replaceTile({ id, kind: 'galaxy-scaling-relations', params, note: '', source: '', loading: true });
+        refetchGalaxyScalingRelationsTile(id, params);
+        return;
+      }
+      case 'field-map-2d': {
+        const params = saved.params as FieldMap2DParams;
+        replaceTile({ id, kind: 'field-map-2d', params, note: '', source: '', loading: true });
+        refetchFieldMap2DTile(id, params);
+        return;
+      }
+      case 'density-field-3d': {
+        const params = saved.params as DensityField3DParams;
+        replaceTile({ id, kind: 'density-field-3d', params, density: [], boxSize: 25, note: '', source: '', voids: null, loading: true });
+        refetchDensityField3DTile(id, params);
+        return;
+      }
+      case 'particle-cloud-3d': {
+        const params = saved.params as ParticleCloud3DParams;
+        replaceTile({ id, kind: 'particle-cloud-3d', params, positions: [], note: '', source: '', loading: true });
+        refetchParticleCloud3DTile(id, params);
+        return;
+      }
+      case 'ic-particles-3d': {
+        const params = saved.params as ICParticlesParams;
+        replaceTile({ id, kind: 'ic-particles-3d', params, positions: [], note: '', source: '', filesLoaded: 0, loading: true });
+        refetchICParticlesTile(id, params);
+        return;
+      }
+      default:
+        return; // unknown kind (e.g. an older/newer schema) - skip, don't crash the whole restore
+    }
+  };
+
+  // Persist (issue #21): every `tiles` change writes the current canvas's
+  // own restore-recipe (see SavedTile's own comment - never the fetched
+  // data itself) to localStorage. try/catch because localStorage can throw
+  // (private browsing, quota) - losing persistence silently is fine,
+  // losing the canvas itself to an uncaught exception is not.
+  useEffect(() => {
+    try {
+      localStorage.setItem(CANVAS_STORAGE_KEY, JSON.stringify(tiles.map(toSavedTile)));
+    } catch {
+      // ignore - see comment above
+    }
+  }, [tiles]);
+
+  // Restore (issue #21): once, on mount only - deliberately empty deps.
+  // Runs before the user can interact with the modal, so `pendingTileId`
+  // is still null and `replaceTile` appends (its own normal behavior when
+  // nothing is pending), same as a sequence of "add tile" clicks would.
+  useEffect(() => {
+    let raw: string | null;
+    try {
+      raw = localStorage.getItem(CANVAS_STORAGE_KEY);
+    } catch {
+      return;
+    }
+    if (!raw) return;
+    let saved: unknown;
+    try {
+      saved = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (!Array.isArray(saved)) return;
+    (saved as SavedTile[]).forEach(restoreSavedTile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const removeTile = (id: string) => {
     setTiles((prev) => prev.filter((t) => t.id !== id));

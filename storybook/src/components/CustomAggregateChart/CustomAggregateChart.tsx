@@ -1,9 +1,6 @@
-import { useMemo, useRef, useEffect } from 'react';
-import Plotly from 'plotly.js-dist-min';
-import createPlotlyComponent from 'react-plotly.js/factory';
+import { Suspense, useMemo, useRef, useEffect } from 'react';
+import { LazyPlot, LazyPlotFallback, resizePlotlyGraph } from '../LazyPlot/LazyPlot';
 import '../PlotChart/PlotChart.css';
-
-const Plot = createPlotlyComponent(Plotly);
 
 const BAR_COLOR = '#7B2D8E'; // matches PlotChart's own LINE_COLORS[0]
 
@@ -49,7 +46,7 @@ export function CustomAggregateChart({ data }: CustomAggregateChartProps) {
   useEffect(() => {
     if (!containerRef.current) return;
     const observer = new ResizeObserver(() => {
-      if (graphDivRef.current) Plotly.Plots.resize(graphDivRef.current);
+      if (graphDivRef.current) resizePlotlyGraph(graphDivRef.current);
     });
     observer.observe(containerRef.current);
     return () => observer.disconnect();
@@ -123,27 +120,29 @@ export function CustomAggregateChart({ data }: CustomAggregateChartProps) {
 
   return (
     <div className="plot-chart" ref={containerRef}>
-      <Plot
-        data={plotData}
-        layout={{
-          autosize: true,
-          margin: { l: 56, r: data.kind === 'heatmap' ? 70 : 16, t: 16, b: 48 },
-          paper_bgcolor: 'transparent',
-          plot_bgcolor: 'transparent',
-          font: { family: 'var(--font-ui)', size: 12, color: '#1A1A1A' },
-          showlegend: false,
-          ...layout,
-        }}
-        config={{ displayModeBar: false, responsive: true }}
-        style={{ width: '100%', height: '100%' }}
-        useResizeHandler
-        onInitialized={(_figure, graphDiv) => {
-          graphDivRef.current = graphDiv;
-        }}
-        onUpdate={(_figure, graphDiv) => {
-          graphDivRef.current = graphDiv;
-        }}
-      />
+      <Suspense fallback={<LazyPlotFallback />}>
+        <LazyPlot
+          data={plotData}
+          layout={{
+            autosize: true,
+            margin: { l: 56, r: data.kind === 'heatmap' ? 70 : 16, t: 16, b: 48 },
+            paper_bgcolor: 'transparent',
+            plot_bgcolor: 'transparent',
+            font: { family: 'var(--font-ui)', size: 12, color: '#1A1A1A' },
+            showlegend: false,
+            ...layout,
+          }}
+          config={{ displayModeBar: false, responsive: true }}
+          style={{ width: '100%', height: '100%' }}
+          useResizeHandler
+          onInitialized={(_figure, graphDiv) => {
+            graphDivRef.current = graphDiv;
+          }}
+          onUpdate={(_figure, graphDiv) => {
+            graphDivRef.current = graphDiv;
+          }}
+        />
+      </Suspense>
     </div>
   );
 }
