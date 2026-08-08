@@ -18,7 +18,7 @@ Composed entirely from `SingleRealizationFields`/`Button` — no tokens of its o
 
 - Suite/Set/Realization: `SingleRealizationFields` — one of `app.py`'s own `SINGLE_REALIZATION_STATISTICS`, so no Compare mode.
 - Set now includes real `1P`/`EX` alongside `LH`/`CV` (2026-08-08, issue #51) via `allowedSetsForSuite` — IllustrisTNG gets all four; SIMBA gets `LH`/`CV`/`1P` only, since its own real collated file has zero `EX` entries (confirmed via a direct listing, not a fetch gap).
-- `onepScheme="flat"` — this product's real `1P` data is a bare `1P_{N}` flat index (0–65) in the underlying file, not the param+variation folder naming other 1P-aware statistics use, and with no independently-confirmed mapping back to a specific parameter/variation. Rather than guess a split, `SingleRealizationFields` shows it as a plain Realization number with a caption disclosing the caveat.
+- `onepScheme="legacy"` — this product's real `1P` data is a bare `1P_{N}` flat index (0–65) in the underlying file itself, not the param+variation folder naming other 1P-aware statistics use, but a follow-up investigation confirmed (by comparing real per-index halo-mass data against Halo Gas Profiles) that it's the exact same real (param, variation) → index formula as that statistic's own legacy scheme, and even identified the 6 parameters' real names (Ωm, σ8, then 4 suite-prefixed feedback knobs) via a real max-halo-mass spread test cross-checked against Lau et al. 2025 (arXiv:2412.04559). See `HaloGasProfilesSidebar.mdx`/`SingleRealizationFields.mdx` for the shared scheme details.
 - No other fields. Not a placeholder — `app.py` genuinely has none for this statistic.
 
 ## Usecase
