@@ -2749,7 +2749,18 @@ export function App() {
 
   const handleSubmitCurated = (selection: CuratedSelection) => {
     setIsModalOpen(false);
-    const id = pendingTileId ?? `tile-${tiles.length + 1}`;
+    // Real bug fixed (direct QA report): `tile-${tiles.length + 1}` isn't
+    // actually unique - removeTile just filters the array with no id-
+    // recycling guard, so removing a tile then adding a new one can
+    // reproduce an id still held by a surviving tile (e.g. [tile-1,
+    // tile-2, tile-3] minus tile-2 -> length 2 -> next id is tile-3
+    // again). Two tiles sharing an id meant focusedTile/refetch's own
+    // `.then()` handlers (both keyed by id, no kind check) could resolve
+    // to the WRONG tile - the actual cause of a reported "3D Density
+    // Field shows a 2D Field Map error" bug, not a wrong fetch route.
+    // crypto.randomUUID() can't collide, including with ids restored from
+    // localStorage (issue #21) - no counter-seeding needed either.
+    const id = pendingTileId ?? `tile-${crypto.randomUUID()}`;
 
     if (isMassRangeStatistic(selection.statistic)) {
       const statistic = selection.statistic;
@@ -3064,7 +3075,9 @@ export function App() {
 
   const handleSubmitCustom = (selection: CustomSelection) => {
     setIsModalOpen(false);
-    const id = pendingTileId ?? `tile-${tiles.length + 1}`;
+    // See handleSubmitCurated's own comment on this same expression - a
+    // real tile-id collision bug, not just cosmetic here either.
+    const id = pendingTileId ?? `tile-${crypto.randomUUID()}`;
     const placeholder: CustomTileState = {
       id, kind: 'custom', selection, result: null, matchedCount: 0, loading: true,
     };
