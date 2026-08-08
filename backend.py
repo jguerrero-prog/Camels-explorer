@@ -224,6 +224,25 @@ SET_REALIZATIONS = {
                   # the synthetic fallback's seed range and the slider's upper bound,
                   # not for correctness of any real fetch.
     "EX": 4,      # Extreme
+    # Butterfly Effect: same ICs/cosmology/astrophysics as the fiducial run,
+    # only the random evolution seed differs - added 2026-08-07, direct user
+    # question ("did we wire in BE set yet?") after it was found completely
+    # unwired. Real, confirmed via direct directory listings (not assumed):
+    # Pk/FOF_Subfind/Rockstar/SubLink/Sims/BE and Caesar/IllustrisTNG/L25n256/BE
+    # (27 realizations, BE_0..BE_26) are real for IllustrisTNG/SIMBA/Astrid -
+    # never Swift-EAGLE (checked directly, absent from every one of those
+    # products for it). CMD's own 2D maps flip this around: BE is real for
+    # SIMBA/Astrid there but NOT IllustrisTNG's own CMD/2D_maps folder,
+    # confirmed directly for all three. Every real fetcher in this app
+    # already returns None gracefully for a URL that doesn't exist (same as
+    # any other unsupported suite/set/redshift combo), so this one line is
+    # the whole fix - no per-product allow-list changes needed, the
+    # suite/product asymmetries above resolve themselves via that existing
+    # graceful-degradation path rather than needing new gating code.
+    # VIDE Voids and Bispectrum stay real-space LH-only (see their own
+    # `set_name != "LH"` checks) - no BE folder exists for either, confirmed
+    # directly, so those exclusions are correctly left as-is.
+    "BE": 27,
 }
 # 1P's real public folders are compound-named by parameter index and variation
 # (e.g. "1P_p11_2", not "1P_{realization}" like every other set) - confirmed via
@@ -2308,7 +2327,19 @@ def get_ic_particles(suite, set_name, realization, max_particles=50_000, file_in
     exact same frontend chart, this is the same real kind of statistic (a
     3D point cloud) at a different, earlier real redshift, not a different
     kind of view. No synthetic version - a fabricated IC point cloud isn't
-    a useful stand-in the way a power-law curve is."""
+    a useful stand-in the way a power-law curve is.
+
+    Real, confirmed limitation (2026-08-07, while wiring the BE set): the
+    BE set's real `ICs/ics.*` files exist (listed in a real directory
+    listing) but the server returns HTTP 403 Forbidden on every fetch
+    attempt against them - both a Range request and a full GET, checked
+    directly across several BE realizations, not just one. This is a
+    server-side restriction on Flatiron's end, not something fixable in
+    this app. `_fetch_ic_particle_sample`'s own except clause already
+    catches this (`HTTPError` subclasses `URLError`) and returns `None`
+    gracefully, same as any other real gap - no special-case code needed,
+    just documenting why BE will never show real data for this one
+    statistic specifically, unlike every other product BE was wired into."""
     if not fetch_public or not (0 <= file_index < N_IC_FILES):
         return None
     fetched = _fetch_ic_particle_sample(suite, set_name, realization, file_index, 1, max_particles)
