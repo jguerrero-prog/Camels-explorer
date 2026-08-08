@@ -81,6 +81,7 @@ import {
   fetchDensityField3D, fetchVoidCatalog,
   fetchParticleCloud,
   fetchSamCatalog, SAM_OCTANTS,
+  fetchSimulationParameters,
   fetchICParticles, N_IC_FILES,
   fetchProgressive,
   fetchCustomFields, fetchCustomData, buildCustomFilters, fetchCustomHistogram,
@@ -90,6 +91,8 @@ import { CamelsSamSidebar } from './components/CamelsSamSidebar/CamelsSamSidebar
 import type { CamelsSamParams } from './components/CamelsSamSidebar/CamelsSamSidebar';
 import { BlackholeMergersSidebar } from './components/BlackholeMergersSidebar/BlackholeMergersSidebar';
 import type { BlackholeMergersParams } from './components/BlackholeMergersSidebar/BlackholeMergersSidebar';
+import { SimulationParametersSidebar } from './components/SimulationParametersSidebar/SimulationParametersSidebar';
+import type { SimulationParametersParams } from './components/SimulationParametersSidebar/SimulationParametersSidebar';
 import './App.css';
 
 /** DEFAULT_SNAPNUM mirrors backend.py's N_SNAPSHOTS - 1 (highest snapshot,
@@ -245,6 +248,18 @@ const BLACKHOLE_MERGERS_COLUMNS: ColumnDef[] = [
   massCol('Swallower BH Mass [Msun/h]'),
   { key: 'Swallowed BH ID', label: 'Swallowed BH ID', width: 130, format: (r) => String(r['Swallowed BH ID']) },
   massCol('Swallowed BH Mass [Msun/h]'),
+];
+
+/** Real columns backend.py's `get_simulation_parameters` returns (see
+ * SimulationParametersSidebar.mdx) - the 3 quantities every real column
+ * schema has in common (`Omega_m`/`sigma_8`/`seed`); 1P/BE's richer real
+ * 30-column schema is available via `UnderlyingHalos`'s own raw-column
+ * escape hatch, not duplicated here. */
+const SIMULATION_PARAMETERS_COLUMNS: ColumnDef[] = [
+  { key: 'Realization', label: 'Realization', width: 110, format: (r) => String(r.Realization) },
+  { key: 'Omega_m', label: 'Ωm', width: 90, format: (r) => (r.Omega_m as number).toFixed(4) },
+  { key: 'sigma_8', label: 'σ8', width: 90, format: (r) => (r.sigma_8 as number).toFixed(4) },
+  { key: 'seed', label: 'Seed', width: 90, format: (r) => String(r.seed) },
 ];
 
 /** Real (added 2026-08-07, direct user request: "can black hole mergers
@@ -561,6 +576,21 @@ type BlackholeMergersTileState = {
   error?: string;
 };
 
+/** Simulation Parameters (added 2026-08-07, direct user request, issue #14) -
+ * a genuinely new statistic (app.py never had this). No chart at all (see
+ * `PlotTile`'s own `chart: PlotTileChart | null` docs) - `rows`/`rawRows`
+ * feed `PlotTile`'s `halos` prop directly, Table mode only. */
+type SimulationParametersTileState = {
+  id: string;
+  kind: 'simulation-parameters';
+  params: SimulationParametersParams;
+  rows: HaloCatalogRow[];
+  rawRows: HaloCatalogRow[] | null;
+  note: string;
+  loading: boolean;
+  error?: string;
+};
+
 /** Custom tile (added 2026-08-05) - the Add Plot modal's "Custom" tab,
  * real and wired against Flatiron's own live FlatHUB API (see
  * api/routers/custom.py, CustomTab.tsx). Genuinely different from every
@@ -685,6 +715,7 @@ type CanvasTile =
   | ICParticles3DTileState
   | CamelsSamTileState
   | BlackholeMergersTileState
+  | SimulationParametersTileState
   | CustomTileState
   | EmptyTileState;
 
@@ -713,6 +744,7 @@ function tileDisplayTitle(tile: CanvasTile): string {
     case 'ic-particles-3d': return 'Initial Conditions';
     case 'camels-sam': return 'CAMELS-SAM';
     case 'blackhole-mergers': return 'Black Hole Mergers';
+    case 'simulation-parameters': return 'Simulation Parameters';
     case 'custom': return customTileTitle(tile.result);
     case 'empty': return tile.title;
     default: return '';
@@ -1356,6 +1388,17 @@ async function loadBlackholeMergersTile(id: string, params: BlackholeMergersPara
   return {
     id, kind: 'blackhole-mergers', params,
     rows: catalog.frame, note: catalog.note, loading: false,
+  };
+}
+
+async function loadSimulationParametersTile(id: string, params: SimulationParametersParams): Promise<SimulationParametersTileState> {
+  const catalog = await fetchSimulationParameters(params.suite, params.setName);
+  if (catalog === null) {
+    throw new Error('No Simulation Parameters file for this suite/set - try IllustrisTNG/LH.');
+  }
+  return {
+    id, kind: 'simulation-parameters', params,
+    rows: catalog.frame, rawRows: catalog.raw_frame, note: catalog.note, loading: false,
   };
 }
 
@@ -2343,6 +2386,24 @@ export function App() {
       });
   };
 
+  const refetchSimulationParametersTile = (id: string, params: SimulationParametersParams) => {
+    const seq = bumpRequestSeq(id);
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'simulation-parameters' ? { ...t, params, loading: true } : t)),
+    );
+    loadSimulationParametersTile(id, params)
+      .then((updated) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      })
+      .catch((err) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'simulation-parameters' ? { ...t, loading: false, error: String(err) } : t)),
+        );
+      });
+  };
+
   const refetchCustomTile = (id: string, selection: CustomSelection) => {
     const seq = bumpRequestSeq(id);
     setTiles((prev) =>
@@ -2423,6 +2484,19 @@ export function App() {
       replaceTile(placeholder);
       focusTile(id);
       refetchBlackholeMergersTile(id, params);
+      return;
+    }
+
+    if (selection.statistic === 'Simulation Parameters') {
+      const params: SimulationParametersParams = {
+        suite: selection.suite, setName: selection.set || 'LH',
+      };
+      const placeholder: SimulationParametersTileState = {
+        id, kind: 'simulation-parameters', params, rows: [], rawRows: null, note: '', loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchSimulationParametersTile(id, params);
       return;
     }
 
@@ -2778,6 +2852,13 @@ export function App() {
         <BlackholeMergersSidebar
           params={focusedTile.params}
           onChange={(params) => refetchBlackholeMergersTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'simulation-parameters' && (
+        <SimulationParametersSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchSimulationParametersTile(focusedTile.id, params)}
           onRemove={() => removeTile(focusedTile.id)}
         />
       )}
@@ -3465,6 +3546,32 @@ export function App() {
                         itemNoun: 'events',
                         footerNoun: 'events',
                         csvFilename: `${tile.params.suite}_${tile.params.setName}_${tile.params.realization}_blackhole_mergers.csv`,
+                      }}
+                      {...commonPlotTileProps(tile)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'simulation-parameters') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      error={tile.error}
+                      title="Simulation Parameters"
+                      chart={null}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realizations', value: tile.rows.length.toLocaleString() },
+                      ]}
+                      halos={{
+                        rows: tile.rows,
+                        rawRows: tile.rawRows,
+                        columns: SIMULATION_PARAMETERS_COLUMNS,
+                        filter: null,
+                        label: 'View parameters',
+                        itemNoun: 'realizations',
+                        footerNoun: 'realizations',
+                        csvFilename: `${tile.params.suite}_${tile.params.setName}_parameters.csv`,
                       }}
                       {...commonPlotTileProps(tile)}
                     />

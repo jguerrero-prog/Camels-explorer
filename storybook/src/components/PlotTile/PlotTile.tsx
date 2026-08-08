@@ -77,7 +77,15 @@ export type PlotTileCatalogTable = Omit<UnderlyingHalosProps, 'parentTitle' | 'd
 
 export type PlotTileProps = {
   title: string;
-  chart: PlotTileChart;
+  /** `null` for a statistic with no chartable shape at all - a flat
+   * parameter table has no natural x/y plot (added 2026-08-07, Simulation
+   * Parameters - the first real caller with no chart of any kind). Static/
+   * Interactive are simply absent from `availableChartModes` in that case,
+   * so the tile opens straight into Table mode with no dropdown at all
+   * (matches the existing "no toggle when nothing to switch to" behavior) -
+   * requires `halos`/`catalogTable` to be set, or there'd be nothing to
+   * render at all. */
+  chart: PlotTileChart | null;
   readoutGroups: ParamsReadoutGroup[];
   /** `null` when this statistic has no per-halo catalog concept at all -
    * Power Spectrum, Bispectrum, and SFR History are field/box-level
@@ -151,11 +159,13 @@ export type PlotTileProps = {
   readoutsHidden?: boolean;
 };
 
-function availableChartModes(chart: PlotTileChart, hasTable: boolean, has3d: boolean): ChartDisplayMode[] {
+function availableChartModes(chart: PlotTileChart | null, hasTable: boolean, has3d: boolean): ChartDisplayMode[] {
   const modes: ChartDisplayMode[] = [];
-  const hasStatic = chart.kind === 'static-image' || (chart.kind !== 'plotly-3d' && !!chart.imageUrl);
-  if (hasStatic) modes.push('static');
-  if (chart.kind !== 'static-image') modes.push('interactive');
+  if (chart) {
+    const hasStatic = chart.kind === 'static-image' || (chart.kind !== 'plotly-3d' && !!chart.imageUrl);
+    if (hasStatic) modes.push('static');
+    if (chart.kind !== 'static-image') modes.push('interactive');
+  }
   if (has3d) modes.push('scatter3d');
   if (hasTable) modes.push('table');
   return modes;
@@ -207,7 +217,7 @@ export function PlotTile({
               </div>
             ) : chartMode === 'scatter3d' && chart3d ? (
               chart3d
-            ) : chart.kind === 'static-image' ? (
+            ) : !chart ? null : chart.kind === 'static-image' ? (
               <StaticImageChart imageUrl={chart.imageUrl} alt={chart.alt} />
             ) : chart.kind === 'plotly-3d' ? (
               chart.content
