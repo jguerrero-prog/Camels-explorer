@@ -40,6 +40,8 @@ import { SFRHistorySidebar } from './components/SFRHistorySidebar/SFRHistorySide
 import type { SFRHistoryParams } from './components/SFRHistorySidebar/SFRHistorySidebar';
 import { XrayHaloProfilesSidebar } from './components/XrayHaloProfilesSidebar/XrayHaloProfilesSidebar';
 import type { XrayHaloProfilesParams } from './components/XrayHaloProfilesSidebar/XrayHaloProfilesSidebar';
+import { XrayPhotonSpectrumSidebar } from './components/XrayPhotonSpectrumSidebar/XrayPhotonSpectrumSidebar';
+import type { XrayPhotonSpectrumParams } from './components/XrayPhotonSpectrumSidebar/XrayPhotonSpectrumSidebar';
 import { HaloGasProfilesSidebar } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
 import type { HaloGasProfilesParams } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
 import { ColorMassDiagramSidebar } from './components/ColorMassDiagramSidebar/ColorMassDiagramSidebar';
@@ -72,6 +74,7 @@ import {
   fetchBispectrum, bispectrumImageUrl,
   fetchSFRHistory, sfrHistoryImageUrl,
   fetchXrayProfilesMeta, xrayProfilesImageUrl,
+  fetchXrayPhotonSpectrumMeta, xrayPhotonSpectrumImageUrl,
   fetchHaloProfilesMeta, haloProfilesImageUrl,
   fetchColorMassDiagramMeta, colorMassDiagramImageUrl,
   fetchFieldPDFMeta, fieldPDFImageUrl,
@@ -81,6 +84,7 @@ import {
   fetchDensityField3D, fetchVoidCatalog,
   fetchParticleCloud,
   fetchSamCatalog, SAM_OCTANTS,
+  fetchSimulationParameters,
   fetchICParticles, N_IC_FILES,
   fetchProgressive,
   fetchCustomFields, fetchCustomData, buildCustomFilters, fetchCustomHistogram,
@@ -90,6 +94,8 @@ import { CamelsSamSidebar } from './components/CamelsSamSidebar/CamelsSamSidebar
 import type { CamelsSamParams } from './components/CamelsSamSidebar/CamelsSamSidebar';
 import { BlackholeMergersSidebar } from './components/BlackholeMergersSidebar/BlackholeMergersSidebar';
 import type { BlackholeMergersParams } from './components/BlackholeMergersSidebar/BlackholeMergersSidebar';
+import { SimulationParametersSidebar } from './components/SimulationParametersSidebar/SimulationParametersSidebar';
+import type { SimulationParametersParams } from './components/SimulationParametersSidebar/SimulationParametersSidebar';
 import './App.css';
 
 /** DEFAULT_SNAPNUM mirrors backend.py's N_SNAPSHOTS - 1 (highest snapshot,
@@ -247,6 +253,18 @@ const BLACKHOLE_MERGERS_COLUMNS: ColumnDef[] = [
   massCol('Swallowed BH Mass [Msun/h]'),
 ];
 
+/** Real columns backend.py's `get_simulation_parameters` returns (see
+ * SimulationParametersSidebar.mdx) - the 3 quantities every real column
+ * schema has in common (`Omega_m`/`sigma_8`/`seed`); 1P/BE's richer real
+ * 30-column schema is available via `UnderlyingHalos`'s own raw-column
+ * escape hatch, not duplicated here. */
+const SIMULATION_PARAMETERS_COLUMNS: ColumnDef[] = [
+  { key: 'Realization', label: 'Realization', width: 110, format: (r) => String(r.Realization) },
+  { key: 'Omega_m', label: 'Ωm', width: 90, format: (r) => (r.Omega_m as number).toFixed(4) },
+  { key: 'sigma_8', label: 'σ8', width: 90, format: (r) => (r.sigma_8 as number).toFixed(4) },
+  { key: 'seed', label: 'Seed', width: 90, format: (r) => String(r.seed) },
+];
+
 /** Real (added 2026-08-07, direct user request: "can black hole mergers
  * have a 3D scatter plot option? Interactive, 3D Scatter, Table") - feeds
  * `PlotTile`'s new `chart3d` slot. The real merger event log has no
@@ -397,6 +415,23 @@ type XrayHaloProfilesTileState = {
   params: XrayHaloProfilesParams;
   note: string;
   nHalos: number;
+  loading: boolean;
+  error?: string;
+};
+
+/** X-ray Photon Spectrum (added 2026-08-07, issue #18) - real-data only,
+ * photon-energy histogram with no Plotly equivalent (PlotTile's
+ * chart.kind: 'static-image'), same shape as X-ray Halo Profiles above.
+ * `note`/`haloId`/`logMass`/`nPhotonsTotal` come from the one real JSON
+ * fetch (see fetchXrayPhotonSpectrumMeta) - the chart itself is the PNG. */
+type XrayPhotonSpectrumTileState = {
+  id: string;
+  kind: 'xray-photon-spectrum';
+  params: XrayPhotonSpectrumParams;
+  note: string;
+  haloId: number;
+  logMass: number;
+  nPhotonsTotal: number;
   loading: boolean;
   error?: string;
 };
@@ -561,6 +596,21 @@ type BlackholeMergersTileState = {
   error?: string;
 };
 
+/** Simulation Parameters (added 2026-08-07, direct user request, issue #14) -
+ * a genuinely new statistic (app.py never had this). No chart at all (see
+ * `PlotTile`'s own `chart: PlotTileChart | null` docs) - `rows`/`rawRows`
+ * feed `PlotTile`'s `halos` prop directly, Table mode only. */
+type SimulationParametersTileState = {
+  id: string;
+  kind: 'simulation-parameters';
+  params: SimulationParametersParams;
+  rows: HaloCatalogRow[];
+  rawRows: HaloCatalogRow[] | null;
+  note: string;
+  loading: boolean;
+  error?: string;
+};
+
 /** Custom tile (added 2026-08-05) - the Add Plot modal's "Custom" tab,
  * real and wired against Flatiron's own live FlatHUB API (see
  * api/routers/custom.py, CustomTab.tsx). Genuinely different from every
@@ -674,6 +724,7 @@ type CanvasTile =
   | BispectrumTileState
   | SFRHistoryTileState
   | XrayHaloProfilesTileState
+  | XrayPhotonSpectrumTileState
   | HaloGasProfilesTileState
   | ColorMassDiagramTileState
   | FieldPDFTileState
@@ -685,6 +736,7 @@ type CanvasTile =
   | ICParticles3DTileState
   | CamelsSamTileState
   | BlackholeMergersTileState
+  | SimulationParametersTileState
   | CustomTileState
   | EmptyTileState;
 
@@ -702,6 +754,7 @@ function tileDisplayTitle(tile: CanvasTile): string {
     case 'bispectrum': return 'Bispectrum';
     case 'sfr-history': return 'SFR History';
     case 'xray-halo-profiles': return 'X-ray Halo Profiles';
+    case 'xray-photon-spectrum': return 'X-ray Photon Spectrum';
     case 'halo-gas-profiles': return 'Halo Gas Profiles';
     case 'color-mass-diagram': return 'Color-Mass Diagram';
     case 'field-pdf': return 'Field PDF';
@@ -713,6 +766,7 @@ function tileDisplayTitle(tile: CanvasTile): string {
     case 'ic-particles-3d': return 'Initial Conditions';
     case 'camels-sam': return 'CAMELS-SAM';
     case 'blackhole-mergers': return 'Black Hole Mergers';
+    case 'simulation-parameters': return 'Simulation Parameters';
     case 'custom': return customTileTitle(tile.result);
     case 'empty': return tile.title;
     default: return '';
@@ -828,6 +882,11 @@ function generateTileCode(tile: CanvasTile): string | null {
     case 'xray-halo-profiles': {
       const p = tile.params;
       return `${header}profiles = backend.get_xray_profiles(\n`
+        + `    ${py(p.suite)}, ${py(p.setName)}, ${py(p.realization)}, fetch_public=True,\n)\n`;
+    }
+    case 'xray-photon-spectrum': {
+      const p = tile.params;
+      return `${header}sample = backend.get_xray_photon_sample(\n`
         + `    ${py(p.suite)}, ${py(p.setName)}, ${py(p.realization)}, fetch_public=True,\n)\n`;
     }
     case 'halo-gas-profiles': {
@@ -1098,6 +1157,19 @@ async function loadXrayHaloProfilesTile(id: string, params: XrayHaloProfilesPara
   return { id, kind: 'xray-halo-profiles', params, note: meta.note, nHalos: meta.nHalos, loading: false };
 }
 
+async function loadXrayPhotonSpectrumTile(id: string, params: XrayPhotonSpectrumParams): Promise<XrayPhotonSpectrumTileState> {
+  const meta = await fetchXrayPhotonSpectrumMeta(params);
+  if (meta === null) {
+    throw new Error(
+      'No X-ray SIMPUT photon data available for this suite/set/realization. Try IllustrisTNG or SIMBA, LH/CV/EX.',
+    );
+  }
+  return {
+    id, kind: 'xray-photon-spectrum', params, note: meta.note,
+    haloId: meta.haloId, logMass: meta.logMass, nPhotonsTotal: meta.nPhotonsTotal, loading: false,
+  };
+}
+
 async function loadHaloGasProfilesTile(id: string, params: HaloGasProfilesParams): Promise<HaloGasProfilesTileState> {
   const meta = await fetchHaloProfilesMeta(params);
   if (meta === null) {
@@ -1356,6 +1428,17 @@ async function loadBlackholeMergersTile(id: string, params: BlackholeMergersPara
   return {
     id, kind: 'blackhole-mergers', params,
     rows: catalog.frame, note: catalog.note, loading: false,
+  };
+}
+
+async function loadSimulationParametersTile(id: string, params: SimulationParametersParams): Promise<SimulationParametersTileState> {
+  const catalog = await fetchSimulationParameters(params.suite, params.setName);
+  if (catalog === null) {
+    throw new Error('No Simulation Parameters file for this suite/set - try IllustrisTNG/LH.');
+  }
+  return {
+    id, kind: 'simulation-parameters', params,
+    rows: catalog.frame, rawRows: catalog.raw_frame, note: catalog.note, loading: false,
   };
 }
 
@@ -2098,6 +2181,24 @@ export function App() {
       });
   };
 
+  const refetchXrayPhotonSpectrumTile = (id: string, params: XrayPhotonSpectrumParams) => {
+    const seq = bumpRequestSeq(id);
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'xray-photon-spectrum' ? { ...t, params, loading: true } : t)),
+    );
+    loadXrayPhotonSpectrumTile(id, params)
+      .then((updated) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      })
+      .catch((err) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'xray-photon-spectrum' ? { ...t, loading: false, error: String(err) } : t)),
+        );
+      });
+  };
+
   const refetchHaloGasProfilesTile = (id: string, params: HaloGasProfilesParams) => {
     const current = tiles.find((t) => t.id === id);
     if (
@@ -2343,6 +2444,24 @@ export function App() {
       });
   };
 
+  const refetchSimulationParametersTile = (id: string, params: SimulationParametersParams) => {
+    const seq = bumpRequestSeq(id);
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'simulation-parameters' ? { ...t, params, loading: true } : t)),
+    );
+    loadSimulationParametersTile(id, params)
+      .then((updated) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      })
+      .catch((err) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'simulation-parameters' ? { ...t, loading: false, error: String(err) } : t)),
+        );
+      });
+  };
+
   const refetchCustomTile = (id: string, selection: CustomSelection) => {
     const seq = bumpRequestSeq(id);
     setTiles((prev) =>
@@ -2426,6 +2545,19 @@ export function App() {
       return;
     }
 
+    if (selection.statistic === 'Simulation Parameters') {
+      const params: SimulationParametersParams = {
+        suite: selection.suite, setName: selection.set || 'LH',
+      };
+      const placeholder: SimulationParametersTileState = {
+        id, kind: 'simulation-parameters', params, rows: [], rawRows: null, note: '', loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchSimulationParametersTile(id, params);
+      return;
+    }
+
     if (selection.statistic === 'Power Spectrum') {
       const params: PowerSpectrumParams = {
         suite: selection.suite, setName: selection.set, compareMode: false,
@@ -2487,6 +2619,19 @@ export function App() {
       replaceTile(placeholder);
       focusTile(id);
       refetchXrayHaloProfilesTile(id, params);
+      return;
+    }
+
+    if (selection.statistic === 'X-ray Photon Spectrum') {
+      const params: XrayPhotonSpectrumParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+      };
+      const placeholder: XrayPhotonSpectrumTileState = {
+        id, kind: 'xray-photon-spectrum', params, note: '', haloId: 0, logMass: 0, nPhotonsTotal: 0, loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchXrayPhotonSpectrumTile(id, params);
       return;
     }
 
@@ -2703,6 +2848,13 @@ export function App() {
           onRemove={() => removeTile(focusedTile.id)}
         />
       )}
+      {!activePanel && focusedTile?.kind === 'xray-photon-spectrum' && (
+        <XrayPhotonSpectrumSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchXrayPhotonSpectrumTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
       {!activePanel && focusedTile?.kind === 'halo-gas-profiles' && (
         <HaloGasProfilesSidebar
           params={focusedTile.params}
@@ -2778,6 +2930,13 @@ export function App() {
         <BlackholeMergersSidebar
           params={focusedTile.params}
           onChange={(params) => refetchBlackholeMergersTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'simulation-parameters' && (
+        <SimulationParametersSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchSimulationParametersTile(focusedTile.id, params)}
           onRemove={() => removeTile(focusedTile.id)}
         />
       )}
@@ -3116,6 +3275,29 @@ export function App() {
                         { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
                         { label: 'Realization', value: String(tile.params.realization) },
                         { label: 'Halos', value: String(tile.nHalos) },
+                      ]}
+                      halos={null}
+                      {...commonPlotTileProps(tile)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'xray-photon-spectrum') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      error={tile.error}
+                      title="X-ray Photon Spectrum"
+                      chart={{
+                        kind: 'static-image',
+                        imageUrl: xrayPhotonSpectrumImageUrl(tile.params),
+                        alt: 'Photon-energy histogram for the most massive halo in this realization',
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Halo', value: `${tile.haloId} (log M200c = ${tile.logMass.toFixed(2)})` },
+                        { label: 'Photons', value: tile.nPhotonsTotal.toLocaleString() },
                       ]}
                       halos={null}
                       {...commonPlotTileProps(tile)}
@@ -3465,6 +3647,32 @@ export function App() {
                         itemNoun: 'events',
                         footerNoun: 'events',
                         csvFilename: `${tile.params.suite}_${tile.params.setName}_${tile.params.realization}_blackhole_mergers.csv`,
+                      }}
+                      {...commonPlotTileProps(tile)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'simulation-parameters') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      error={tile.error}
+                      title="Simulation Parameters"
+                      chart={null}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realizations', value: tile.rows.length.toLocaleString() },
+                      ]}
+                      halos={{
+                        rows: tile.rows,
+                        rawRows: tile.rawRows,
+                        columns: SIMULATION_PARAMETERS_COLUMNS,
+                        filter: null,
+                        label: 'View parameters',
+                        itemNoun: 'realizations',
+                        footerNoun: 'realizations',
+                        csvFilename: `${tile.params.suite}_${tile.params.setName}_parameters.csv`,
                       }}
                       {...commonPlotTileProps(tile)}
                     />

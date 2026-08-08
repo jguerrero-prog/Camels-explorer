@@ -1,0 +1,49 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as SimulationParametersSidebarStories from './SimulationParametersSidebar.stories';
+
+<Meta of={SimulationParametersSidebarStories} />
+
+# SimulationParametersSidebar
+
+Simulation Parameters' real per-tile sidebar, added 2026-08-07 (direct user request, issue #14) - a genuinely new statistic, not a Streamlit-to-React port. Real cosmological/astrophysical parameter values behind every other statistic in this app, exposed as its own browsable product for the first time.
+
+## Token
+
+Composed entirely from `SelectField`/`Button` - no tokens of its own.
+
+## Spec
+
+<Canvas of={SimulationParametersSidebarStories.Playground} />
+<Controls />
+
+- **Suite + Set, no Realization** - structurally like `FieldPDFSidebar`: one real file already covers every realization of a suite/set at once, so there's nothing to pick beyond which file. Unlike `FieldPDFSidebar` (whose one real file is LH-only, shared across every suite selection), Parameters' file is genuinely per-set, so Set still needs its own control here.
+- Suite hardcoded to the 4 real hydro suites with a confirmed `Parameters/{suite}/CosmoAstroSeed_*.txt` file (IllustrisTNG/SIMBA/Astrid/Swift-EAGLE) - mirrors `PowerSpectrumSidebar`'s own small-stable-set precedent rather than round-tripping through `GET /api/metadata`, which has no concept of this statistic at all.
+- Set options come from the real `GET /api/metadata` catalog (`catalog.sets`) - every set the app otherwise knows about is offered (LH/CV/1P/EX/BE/SB), even though a couple (SB) will real-gracefully return no data, matching this app's existing "let it 404 gracefully" convention rather than hand-maintaining a second allow-list.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas - `onChange` triggers a real refetch of `GET /api/parameters`.
+- **Real-data only, no synthetic fallback.** `backend.py`'s `get_simulation_parameters()` returns `None` outright when unavailable - a fabricated parameter table isn't a useful stand-in the way a power-law curve is.
+- **Two real column schemas, detected from the real file header at fetch time, not hardcoded by set name**: LH/CV/EX (and Swift-EAGLE's own LH) use a simple 8-column format (`Omega_m`/`sigma_8`/`A_SN1`/`A_AGN1`/`A_SN2`/`A_AGN2`/`seed`); 1P/BE use a much richer real 30-column format (the actual raw GADGET/AREPO simulation-config values, not a renamed copy of the same 4 knobs). The curated table shows the 3 quantities every real schema has in common (`Omega_m`/`sigma_8`/`seed`, aliased from `Omega0`/`sigma8` where needed) - the full real schema for whichever set is selected is available via the "Table" mode's raw-column escape hatch.
+- No chart - a flat parameter table has no natural x/y plot, so this tile is Table-mode only (see `PlotTile.mdx`).
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { SimulationParametersSidebar } from '@/components/SimulationParametersSidebar/SimulationParametersSidebar';
+import type { SimulationParametersParams } from '@/components/SimulationParametersSidebar/SimulationParametersSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<SimulationParametersParams>({
+    suite: 'IllustrisTNG', setName: 'LH',
+  });
+  return (
+    <SimulationParametersSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

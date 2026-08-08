@@ -11,6 +11,11 @@ python-dotenv==1.2.1
 numpy==2.0.2
 pandas==2.3.3
 h5py==3.14.0
+# Real fix (2026-08-07, issue #15) - registers HDF5 compression filter
+# plugins the _DM (dark-matter-only) suites' raw snapshots need that this
+# environment's native h5py/libhdf5 doesn't ship - see backend.py's own
+# import comment.
+hdf5plugin==7.0.0
 fsspec==2025.10.0
 # Real fix (2026-08-07, found while wiring SubLink merger-history):
 # fsspec's own HTTP backend (used by every fsspec.open("https://...") call

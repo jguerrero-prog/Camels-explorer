@@ -39,7 +39,15 @@ export type MassRangeSidebarProps = {
  * per-statistic defaults, not shape - see MassRangeSidebar.mdx.
  * Suite/Set/Compare mode/Realization now come from `RealizationFields`
  * (extracted the same day once PowerSpectrumSidebar/BispectrumSidebar/
- * SFRHistorySidebar were about to duplicate this same block again). */
+ * SFRHistorySidebar were about to duplicate this same block again).
+ * `allowedSuites` reads per-`statistic` (added 2026-08-07, issue #15) -
+ * the 3 mass-range statistics no longer share identical real suite
+ * coverage: Halo Mass Function is real for the 4 new `_DM` suites too
+ * (a halo mass function is physically meaningful with no baryons),
+ * Stellar Mass Function/Baryon Fraction are not (see backend.py's own
+ * guards) and stay at the default 4 via their own absent
+ * `statistic_suites` entry - keying by `statistic` here is what lets
+ * them diverge without duplicating this component 3 ways. */
 export function MassRangeSidebar({ statistic, params, onChange, onRemove }: MassRangeSidebarProps) {
   const catalog = useCatalogMetadata();
   const nSnapshots = catalog?.n_snapshots ?? FALLBACK_N_SNAPSHOTS;
@@ -47,7 +55,12 @@ export function MassRangeSidebar({ statistic, params, onChange, onRemove }: Mass
 
   return (
     <ParamsSidebar title={statistic} footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
-      <RealizationFields catalog={catalog} value={params} onChange={(v) => onChange({ ...params, ...v })} />
+      <RealizationFields
+        catalog={catalog}
+        value={params}
+        onChange={(v) => onChange({ ...params, ...v })}
+        allowedSuites={catalog?.statistic_suites[statistic]}
+      />
       <Slider
         label="Snapshot"
         min={0}

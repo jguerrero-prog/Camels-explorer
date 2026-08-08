@@ -63,7 +63,11 @@ export type PowerSpectrumSidebarProps = {
  * surface of any statistic in this app, from app.py's own "Power Spectrum"
  * block (the only one with two conditionally-revealed sub-sections: the
  * All-k RSD axis picker, and that picker's own Multipole radio nested one
- * level deeper). See PowerSpectrumSidebar.mdx. */
+ * level deeper). `allowedSuites` (added 2026-08-07, issue #15) widens past
+ * the default 4 suites - a matter power spectrum is real and physically
+ * meaningful for the 4 DM-only "_DM" suites too, unlike the baryon-
+ * dependent statistics that stay at 4 (see MassRangeSidebar's own note).
+ * See PowerSpectrumSidebar.mdx. */
 export function PowerSpectrumSidebar({ params, onChange, onRemove }: PowerSpectrumSidebarProps) {
   const catalog = useCatalogMetadata();
   const nSnapshots = catalog?.n_snapshots ?? FALLBACK_N_SNAPSHOTS;
@@ -71,7 +75,12 @@ export function PowerSpectrumSidebar({ params, onChange, onRemove }: PowerSpectr
 
   return (
     <ParamsSidebar title="Power Spectrum" footer={<Button variant="secondary" onClick={onRemove}>Remove plot</Button>}>
-      <RealizationFields catalog={catalog} value={params} onChange={(v) => onChange({ ...params, ...v })} />
+      <RealizationFields
+        catalog={catalog}
+        value={params}
+        onChange={(v) => onChange({ ...params, ...v })}
+        allowedSuites={catalog?.statistic_suites['Power Spectrum']}
+      />
       <Slider
         label="Snapshot"
         min={0}
