@@ -41,6 +41,13 @@ export type Catalog = {
   // has no real restriction narrower than "every suite"/"every set".
   statistic_suites: Record<string, string[]>;
   statistic_sets: Record<string, string[]>;
+  // Real per-suite SET coverage (2026-08-08, issue #30) - for statistics
+  // whose real set coverage genuinely differs BY SUITE (Spread Metric:
+  // SIMBA has no real 1P here, Astrid does), which statistic_sets' one
+  // flat list can't express. A statistic missing here has no such per-
+  // suite variation. See SingleRealizationFields' own allowedSetsForSuite
+  // prop, which reads this.
+  statistic_sets_for_suite: Record<string, Record<string, string[]>>;
   sfrh_symbolic_model: {
     fiducial: { Om: number; s8: number; A1: number; A3: number };
     om_range: [number, number];

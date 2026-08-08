@@ -59,6 +59,31 @@ def xray_photon_spectrum_plot(
     return Response(content=png, media_type="image/png")
 
 
+@router.get("/spread-metric")
+def spread_metric(
+    # str, not int (issue #30) - Astrid's real 1P realization id is
+    # compound ("2_4", the legacy scheme's own folder suffix, matching
+    # this product's own file naming verbatim - see backend.py's own
+    # comment on why this differs from Profiles' flat-index translation).
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str,
+    fetch_public: bool = False,
+):
+    result = require(B.get_spread_metric(suite, set_name, realization, fetch_public=fetch_public))
+    return to_jsonable(result)
+
+
+@router.get("/spread-metric/plot.png")
+def spread_metric_plot(
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str,
+    fetch_public: bool = False,
+):
+    """Static matplotlib render (log-x step histogram, one line per real
+    species) - real-data only, no Plotly equivalent (a genuinely new
+    statistic, app.py has no precedent for it either way)."""
+    png = require(B.render_spread_metric_png(suite, set_name, realization, fetch_public=fetch_public))
+    return Response(content=png, media_type="image/png")
+
+
 @router.get("/halo-profiles")
 def halo_profiles(
     # str, not int (2026-08-08, issue #26) - 1P's real realization id is

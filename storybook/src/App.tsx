@@ -42,6 +42,8 @@ import { XrayHaloProfilesSidebar } from './components/XrayHaloProfilesSidebar/Xr
 import type { XrayHaloProfilesParams } from './components/XrayHaloProfilesSidebar/XrayHaloProfilesSidebar';
 import { XrayPhotonSpectrumSidebar } from './components/XrayPhotonSpectrumSidebar/XrayPhotonSpectrumSidebar';
 import type { XrayPhotonSpectrumParams } from './components/XrayPhotonSpectrumSidebar/XrayPhotonSpectrumSidebar';
+import { SpreadMetricSidebar } from './components/SpreadMetricSidebar/SpreadMetricSidebar';
+import type { SpreadMetricParams } from './components/SpreadMetricSidebar/SpreadMetricSidebar';
 import { HaloGasProfilesSidebar } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
 import type { HaloGasProfilesParams } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
 import { ColorMassDiagramSidebar } from './components/ColorMassDiagramSidebar/ColorMassDiagramSidebar';
@@ -75,6 +77,7 @@ import {
   fetchSFRHistory, sfrHistoryImageUrl,
   fetchXrayProfilesMeta, xrayProfilesImageUrl,
   fetchXrayPhotonSpectrumMeta, xrayPhotonSpectrumImageUrl,
+  fetchSpreadMetricMeta, spreadMetricImageUrl,
   fetchHaloProfilesMeta, haloProfilesImageUrl,
   fetchColorMassDiagramMeta, colorMassDiagramImageUrl,
   fetchFieldPDFMeta, fieldPDFImageUrl,
@@ -436,6 +439,22 @@ type XrayPhotonSpectrumTileState = {
   error?: string;
 };
 
+/** Spread Metric (added 2026-08-08, issue #30) - real-data only, log-x
+ * step histogram with no Plotly equivalent (PlotTile's chart.kind:
+ * 'static-image'), same shape as X-ray Photon Spectrum above.
+ * `speciesSampled`/`speciesTotal` come from the one real JSON fetch (see
+ * fetchSpreadMetricMeta) - the chart itself is the PNG. */
+type SpreadMetricTileState = {
+  id: string;
+  kind: 'spread-metric';
+  params: SpreadMetricParams;
+  note: string;
+  speciesSampled: Record<string, number>;
+  speciesTotal: Record<string, number>;
+  loading: boolean;
+  error?: string;
+};
+
 type HaloGasProfilesTileState = {
   id: string;
   kind: 'halo-gas-profiles';
@@ -725,6 +744,7 @@ type CanvasTile =
   | SFRHistoryTileState
   | XrayHaloProfilesTileState
   | XrayPhotonSpectrumTileState
+  | SpreadMetricTileState
   | HaloGasProfilesTileState
   | ColorMassDiagramTileState
   | FieldPDFTileState
@@ -755,6 +775,7 @@ function tileDisplayTitle(tile: CanvasTile): string {
     case 'sfr-history': return 'SFR History';
     case 'xray-halo-profiles': return 'X-ray Halo Profiles';
     case 'xray-photon-spectrum': return 'X-ray Photon Spectrum';
+    case 'spread-metric': return 'Spread Metric';
     case 'halo-gas-profiles': return 'Halo Gas Profiles';
     case 'color-mass-diagram': return 'Color-Mass Diagram';
     case 'field-pdf': return 'Field PDF';
@@ -887,6 +908,11 @@ function generateTileCode(tile: CanvasTile): string | null {
     case 'xray-photon-spectrum': {
       const p = tile.params;
       return `${header}sample = backend.get_xray_photon_sample(\n`
+        + `    ${py(p.suite)}, ${py(p.setName)}, ${py(p.realization)}, fetch_public=True,\n)\n`;
+    }
+    case 'spread-metric': {
+      const p = tile.params;
+      return `${header}sample = backend.get_spread_metric(\n`
         + `    ${py(p.suite)}, ${py(p.setName)}, ${py(p.realization)}, fetch_public=True,\n)\n`;
     }
     case 'halo-gas-profiles': {
@@ -1167,6 +1193,19 @@ async function loadXrayPhotonSpectrumTile(id: string, params: XrayPhotonSpectrum
   return {
     id, kind: 'xray-photon-spectrum', params, note: meta.note,
     haloId: meta.haloId, logMass: meta.logMass, nPhotonsTotal: meta.nPhotonsTotal, loading: false,
+  };
+}
+
+async function loadSpreadMetricTile(id: string, params: SpreadMetricParams): Promise<SpreadMetricTileState> {
+  const meta = await fetchSpreadMetricMeta(params);
+  if (meta === null) {
+    throw new Error(
+      'No Spread Metric data available for this suite/set/realization. Try SIMBA or Astrid, LH/CV (Astrid also has 1P).',
+    );
+  }
+  return {
+    id, kind: 'spread-metric', params, note: meta.note,
+    speciesSampled: meta.speciesSampled, speciesTotal: meta.speciesTotal, loading: false,
   };
 }
 
@@ -2199,6 +2238,24 @@ export function App() {
       });
   };
 
+  const refetchSpreadMetricTile = (id: string, params: SpreadMetricParams) => {
+    const seq = bumpRequestSeq(id);
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'spread-metric' ? { ...t, params, loading: true } : t)),
+    );
+    loadSpreadMetricTile(id, params)
+      .then((updated) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      })
+      .catch((err) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'spread-metric' ? { ...t, loading: false, error: String(err) } : t)),
+        );
+      });
+  };
+
   const refetchHaloGasProfilesTile = (id: string, params: HaloGasProfilesParams) => {
     const current = tiles.find((t) => t.id === id);
     if (
@@ -2635,6 +2692,19 @@ export function App() {
       return;
     }
 
+    if (selection.statistic === 'Spread Metric') {
+      const params: SpreadMetricParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+      };
+      const placeholder: SpreadMetricTileState = {
+        id, kind: 'spread-metric', params, note: '', speciesSampled: {}, speciesTotal: {}, loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchSpreadMetricTile(id, params);
+      return;
+    }
+
     if (selection.statistic === 'Halo Gas Profiles') {
       const params: HaloGasProfilesParams = {
         suite: selection.suite, setName: selection.set, realization: selection.realization,
@@ -2852,6 +2922,13 @@ export function App() {
         <XrayPhotonSpectrumSidebar
           params={focusedTile.params}
           onChange={(params) => refetchXrayPhotonSpectrumTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'spread-metric' && (
+        <SpreadMetricSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchSpreadMetricTile(focusedTile.id, params)}
           onRemove={() => removeTile(focusedTile.id)}
         />
       )}
@@ -3298,6 +3375,31 @@ export function App() {
                         { label: 'Realization', value: String(tile.params.realization) },
                         { label: 'Halo', value: `${tile.haloId} (log M200c = ${tile.logMass.toFixed(2)})` },
                         { label: 'Photons', value: tile.nPhotonsTotal.toLocaleString() },
+                      ]}
+                      halos={null}
+                      {...commonPlotTileProps(tile)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'spread-metric') {
+                  const speciesReadout = Object.keys(tile.speciesTotal)
+                    .map((species) => `${species.replace('_', ' ')}: ${(tile.speciesSampled[species] ?? 0).toLocaleString()}/${tile.speciesTotal[species].toLocaleString()}`)
+                    .join(' · ');
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      error={tile.error}
+                      title="Spread Metric"
+                      chart={{
+                        kind: 'static-image',
+                        imageUrl: spreadMetricImageUrl(tile.params),
+                        alt: 'Per-species Lagrangian displacement (spread) distribution, log-x',
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Species (sampled/total)', value: speciesReadout || '—' },
                       ]}
                       halos={null}
                       {...commonPlotTileProps(tile)}
