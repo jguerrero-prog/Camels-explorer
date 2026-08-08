@@ -1,0 +1,50 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as GroupMatchingSidebarStories from './GroupMatchingSidebar.stories';
+
+<Meta of={GroupMatchingSidebarStories} />
+
+# GroupMatchingSidebar
+
+Group Matching's real per-tile sidebar (2026-08-08, issue #29) — a genuinely new statistic, not ported from `app.py`. Reads `Group_matching/{suite}/{set}/Nbody_{set}_{n}_{suite}_{set}_{n}_snap_033.hdf5`, a real, undocumented-by-CAMELS product joining each suite's N-body-only (`{suite}_DM`) FOF/Subfind halo catalog against its full-physics hydro counterpart at z=0 — "what did baryonic feedback do to this specific halo."
+
+## Token
+
+Composed entirely from `SingleRealizationFields`/`Button` — no tokens of its own, same shape as `BlackholeMergersSidebar`/`XrayHaloProfilesSidebar`.
+
+## Spec
+
+<Canvas of={GroupMatchingSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Realization: `SingleRealizationFields` — no Compare mode.
+- Suite restricted to `catalog.statistic_suites['Group Matching']` (IllustrisTNG/SIMBA/Astrid — real, confirmed via a direct directory listing that Swift-EAGLE has no Group_matching data at all).
+- Set restricted to `catalog.statistic_sets['Group Matching']` (LH only for now) — CV (cross-suite, same ICs at a fixed realization) and 1P (its own real folder-naming shim) are real but deliberately deferred, see `backend.py`'s own module comment.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/group-matching` (JSON: the per-halo cross-match table, feeding `UnderlyingHalos`) and `/plot.png` (N-body vs. hydro group mass, log-log scatter, see `PlotTile`'s `chart.kind: 'static-image'`).
+- **Real-data only, no synthetic fallback** — `get_group_matching()` returns `None` outright for suite/set combinations without this product.
+- Real index semantics, verified directly (not assumed from the folder name): `nbody_index`/`hydro_index` are row indices into each catalog's own `Group/GroupMass` array — confirmed by mass correlation (group-level mass tracks 1:1 between N-body and hydro to within ~2x; subhalo-level mass at the same indices does not). The N-body side is restricted to halos with >100 particles.
+- Real, resolved ambiguity: `cross_match` is NOT a simple threshold on `percent_matched` (their real ranges overlap). Instead, `cross_match=1` marks the file's own unique, mass-consistent best pairing; `cross_match=0` rows with a valid `Hydro Group Index` are mostly (~70-80%) a losing duplicate claim on a hydro halo another N-body halo already won — shown in the table, not dropped, since that disagreement is itself real information about a suite's baryonic feedback.
+- `Hydro Group Index = -1` means no real hydro counterpart was found at all (real sentinel, confirmed: always paired with `cross_match=0`).
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { GroupMatchingSidebar } from '@/components/GroupMatchingSidebar/GroupMatchingSidebar';
+import type { GroupMatchingParams } from '@/components/GroupMatchingSidebar/GroupMatchingSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<GroupMatchingParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 0,
+  });
+  return (
+    <GroupMatchingSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

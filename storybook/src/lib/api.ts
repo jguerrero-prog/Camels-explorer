@@ -658,6 +658,48 @@ export async function fetchSimulationParameters(suite: string, setName: string):
   return res.json();
 }
 
+/** Real (added 2026-08-08, direct user request, issue #29) -
+ * backend.py's `get_group_matching()`/`GET /api/group-matching`, a
+ * genuinely new statistic (app.py has no precedent either way). Same real
+ * `Catalog` shape as `fetchHaloCatalog` - one `Cross-matched` column is a
+ * real bool (see backend.py's own Group_matching module comment for why
+ * cross_match isn't a simple function of percent_matched alone), so this
+ * widens `HaloCatalogRow`'s `number`-only value type rather than reusing
+ * it verbatim. LH set only for now (`realization` is a plain int, not the
+ * compound 1P id several other statistics need) - see backend.py's
+ * `PUBLIC_GROUP_MATCHING_SETS`. */
+export type GroupMatchingRow = Record<string, number | boolean>;
+export type GroupMatchingCatalog = {
+  frame: GroupMatchingRow[];
+  box_size: number;
+  redshift: number;
+  note: string;
+  raw_frame: GroupMatchingRow[] | null;
+} | null;
+
+export async function fetchGroupMatching(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+}): Promise<GroupMatchingCatalog> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/group-matching?${qs}`);
+  if (res.status === 404) return null; // real gap: no Group_matching file for this suite/set/realization
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export function groupMatchingImageUrl(params: { suite: string; setName: string; realization: number }): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  return `${API_BASE}/group-matching/plot.png?${qs}`;
+}
+
 /** Runs `fetchChunk(i)` for i in [0, count) with at most `concurrency` in
  * flight at once, calling `onChunk(result, i)` as each settles (arrival
  * order, not index order) - shared by CAMELS-SAM (8 octants) and Initial

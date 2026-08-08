@@ -79,6 +79,7 @@ _STATISTIC_SUITES = {
     "Power Spectrum": B.PUBLIC_PK_SUITES,
     "Halo Mass Function": B.PUBLIC_SUBFIND_SUITES,
     "Spread Metric": B.PUBLIC_SPREAD_METRIC_SUITES,
+    "Group Matching": B.PUBLIC_GROUP_MATCHING_SUITES,
 }
 
 # Per-statistic real SET coverage that varies BY SUITE (2026-08-08, issue
@@ -104,6 +105,10 @@ _STATISTIC_SETS = {
     # 1P yet, and not resolved here either. See backend.py's own
     # PUBLIC_XRAY_SIMPUT_SETS comment.
     "X-ray Photon Spectrum": [s for s in B.SET_REALIZATIONS if s in B.PUBLIC_XRAY_SIMPUT_SETS],
+    # Real (2026-08-08, issue #29): LH only for now - CV (cross-suite, same
+    # ICs at a fixed realization) and 1P (its own folder-naming shim) are
+    # real but deliberately deferred, see backend.py's own module comment.
+    "Group Matching": [s for s in B.SET_REALIZATIONS if s in B.PUBLIC_GROUP_MATCHING_SETS],
 }
 
 

@@ -44,6 +44,8 @@ import { XrayPhotonSpectrumSidebar } from './components/XrayPhotonSpectrumSideba
 import type { XrayPhotonSpectrumParams } from './components/XrayPhotonSpectrumSidebar/XrayPhotonSpectrumSidebar';
 import { SpreadMetricSidebar } from './components/SpreadMetricSidebar/SpreadMetricSidebar';
 import type { SpreadMetricParams } from './components/SpreadMetricSidebar/SpreadMetricSidebar';
+import { GroupMatchingSidebar } from './components/GroupMatchingSidebar/GroupMatchingSidebar';
+import type { GroupMatchingParams } from './components/GroupMatchingSidebar/GroupMatchingSidebar';
 import { HaloGasProfilesSidebar } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
 import type { HaloGasProfilesParams } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
 import { ColorMassDiagramSidebar } from './components/ColorMassDiagramSidebar/ColorMassDiagramSidebar';
@@ -78,6 +80,7 @@ import {
   fetchXrayProfilesMeta, xrayProfilesImageUrl,
   fetchXrayPhotonSpectrumMeta, xrayPhotonSpectrumImageUrl,
   fetchSpreadMetricMeta, spreadMetricImageUrl,
+  fetchGroupMatching, groupMatchingImageUrl,
   fetchHaloProfilesMeta, haloProfilesImageUrl,
   fetchColorMassDiagramMeta, colorMassDiagramImageUrl,
   fetchFieldPDFMeta, fieldPDFImageUrl,
@@ -92,7 +95,7 @@ import {
   fetchProgressive,
   fetchCustomFields, fetchCustomData, buildCustomFilters, fetchCustomHistogram,
 } from './lib/api';
-import type { Result, VoidCatalog, CustomField, CustomHistogramField, HaloCatalogRow } from './lib/api';
+import type { Result, VoidCatalog, CustomField, CustomHistogramField, HaloCatalogRow, GroupMatchingRow } from './lib/api';
 import { CamelsSamSidebar } from './components/CamelsSamSidebar/CamelsSamSidebar';
 import type { CamelsSamParams } from './components/CamelsSamSidebar/CamelsSamSidebar';
 import { BlackholeMergersSidebar } from './components/BlackholeMergersSidebar/BlackholeMergersSidebar';
@@ -109,7 +112,7 @@ const DEFAULT_SNAPNUM = 33;
 const CANVAS_STATS = [
   { value: '1,000', label: 'LH Realizations' },
   { value: '4', label: 'suites' },
-  { value: '15', label: 'Statistics' },
+  { value: '18', label: 'Statistics' },
   { value: '5', label: 'Halo finders' },
 ];
 
@@ -267,6 +270,27 @@ const SIMULATION_PARAMETERS_COLUMNS: ColumnDef[] = [
   { key: 'sigma_8', label: 'σ8', width: 90, format: (r) => (r.sigma_8 as number).toFixed(4) },
   { key: 'seed', label: 'Seed', width: 90, format: (r) => String(r.seed) },
 ];
+
+function formatNullableMass(v: unknown) {
+  return typeof v === 'number' ? v.toExponential(2) : '—';
+}
+
+/** Real columns backend.py's `get_group_matching` returns (2026-08-08,
+ * issue #29) - see GroupMatchingSidebar.mdx for the real index/flag
+ * semantics these were verified against (mass correlation + duplicate-
+ * claim/mass-ratio evidence, not assumed from the file's own field names).
+ * `Hydro Group Mass`/`Mass Ratio` are `null` (not zero) for the real
+ * `Hydro Group Index = -1` rows - no hydro counterpart exists to show. */
+const GROUP_MATCHING_COLUMNS: ColumnDef[] = [
+  { key: 'N-body Group Index', label: 'N-body Group Index', width: 140, format: (r) => String(r['N-body Group Index']) },
+  { key: 'Hydro Group Index', label: 'Hydro Group Index', width: 130, format: (r) => (Number(r['Hydro Group Index']) === -1 ? 'no match' : String(r['Hydro Group Index'])) },
+  { key: 'Cross-matched', label: 'Cross-matched', width: 110, format: (r) => (r['Cross-matched'] ? 'Yes' : 'No') },
+  { key: 'Percent Matched', label: 'Percent Matched', width: 130, format: (r) => String(r['Percent Matched']) },
+  { key: 'N-body Group Mass [Msun/h]', label: 'N-body Group Mass [Msun/h]', width: 170, format: (r) => formatNullableMass(r['N-body Group Mass [Msun/h]']) },
+  { key: 'Hydro Group Mass [Msun/h]', label: 'Hydro Group Mass [Msun/h]', width: 170, format: (r) => formatNullableMass(r['Hydro Group Mass [Msun/h]']) },
+  { key: 'Mass Ratio (Hydro/N-body)', label: 'Mass Ratio (Hydro/N-body)', width: 170, format: (r) => (typeof r['Mass Ratio (Hydro/N-body)'] === 'number' ? (r['Mass Ratio (Hydro/N-body)'] as number).toFixed(3) : '—') },
+];
+const GROUP_MATCHING_FILTER = { key: 'Percent Matched', label: 'Minimum percent matched', format: (v: number) => String(v) };
 
 /** Real (added 2026-08-07, direct user request: "can black hole mergers
  * have a 3D scatter plot option? Interactive, 3D Scatter, Table") - feeds
@@ -451,6 +475,24 @@ type SpreadMetricTileState = {
   note: string;
   speciesSampled: Record<string, number>;
   speciesTotal: Record<string, number>;
+  loading: boolean;
+  error?: string;
+};
+
+/** Group Matching (added 2026-08-08, issue #29) - real-data only, both a
+ * chart AND a table (unlike X-ray Photon Spectrum/Spread Metric above,
+ * which are chart-only): `rows` feeds `UnderlyingHalos` directly (the
+ * file's own per-halo cross-match table IS the browsable catalog, same as
+ * Black Hole Mergers), while the N-body-vs-hydro mass scatter is the real
+ * server-rendered PNG (PlotTile's chart.kind: 'static-image'). Both come
+ * from the one real JSON fetch (fetchGroupMatching) - no separate meta
+ * request. */
+type GroupMatchingTileState = {
+  id: string;
+  kind: 'group-matching';
+  params: GroupMatchingParams;
+  rows: GroupMatchingRow[];
+  note: string;
   loading: boolean;
   error?: string;
 };
@@ -745,6 +787,7 @@ type CanvasTile =
   | XrayHaloProfilesTileState
   | XrayPhotonSpectrumTileState
   | SpreadMetricTileState
+  | GroupMatchingTileState
   | HaloGasProfilesTileState
   | ColorMassDiagramTileState
   | FieldPDFTileState
@@ -776,6 +819,7 @@ function tileDisplayTitle(tile: CanvasTile): string {
     case 'xray-halo-profiles': return 'X-ray Halo Profiles';
     case 'xray-photon-spectrum': return 'X-ray Photon Spectrum';
     case 'spread-metric': return 'Spread Metric';
+    case 'group-matching': return 'Group Matching';
     case 'halo-gas-profiles': return 'Halo Gas Profiles';
     case 'color-mass-diagram': return 'Color-Mass Diagram';
     case 'field-pdf': return 'Field PDF';
@@ -913,6 +957,11 @@ function generateTileCode(tile: CanvasTile): string | null {
     case 'spread-metric': {
       const p = tile.params;
       return `${header}sample = backend.get_spread_metric(\n`
+        + `    ${py(p.suite)}, ${py(p.setName)}, ${py(p.realization)}, fetch_public=True,\n)\n`;
+    }
+    case 'group-matching': {
+      const p = tile.params;
+      return `${header}catalog = backend.get_group_matching(\n`
         + `    ${py(p.suite)}, ${py(p.setName)}, ${py(p.realization)}, fetch_public=True,\n)\n`;
     }
     case 'halo-gas-profiles': {
@@ -1207,6 +1256,18 @@ async function loadSpreadMetricTile(id: string, params: SpreadMetricParams): Pro
     id, kind: 'spread-metric', params, note: meta.note,
     speciesSampled: meta.speciesSampled, speciesTotal: meta.speciesTotal, loading: false,
   };
+}
+
+async function loadGroupMatchingTile(id: string, params: GroupMatchingParams): Promise<GroupMatchingTileState> {
+  const catalog = await fetchGroupMatching({
+    suite: params.suite, setName: params.setName, realization: Number(params.realization),
+  });
+  if (catalog === null) {
+    throw new Error(
+      'No Group_matching data available for this suite/set/realization. Try IllustrisTNG, SIMBA, or Astrid, LH set.',
+    );
+  }
+  return { id, kind: 'group-matching', params, rows: catalog.frame, note: catalog.note, loading: false };
 }
 
 async function loadHaloGasProfilesTile(id: string, params: HaloGasProfilesParams): Promise<HaloGasProfilesTileState> {
@@ -2256,6 +2317,24 @@ export function App() {
       });
   };
 
+  const refetchGroupMatchingTile = (id: string, params: GroupMatchingParams) => {
+    const seq = bumpRequestSeq(id);
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'group-matching' ? { ...t, params, loading: true } : t)),
+    );
+    loadGroupMatchingTile(id, params)
+      .then((updated) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      })
+      .catch((err) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'group-matching' ? { ...t, loading: false, error: String(err) } : t)),
+        );
+      });
+  };
+
   const refetchHaloGasProfilesTile = (id: string, params: HaloGasProfilesParams) => {
     const current = tiles.find((t) => t.id === id);
     if (
@@ -2705,6 +2784,19 @@ export function App() {
       return;
     }
 
+    if (selection.statistic === 'Group Matching') {
+      const params: GroupMatchingParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+      };
+      const placeholder: GroupMatchingTileState = {
+        id, kind: 'group-matching', params, rows: [], note: '', loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchGroupMatchingTile(id, params);
+      return;
+    }
+
     if (selection.statistic === 'Halo Gas Profiles') {
       const params: HaloGasProfilesParams = {
         suite: selection.suite, setName: selection.set, realization: selection.realization,
@@ -2929,6 +3021,13 @@ export function App() {
         <SpreadMetricSidebar
           params={focusedTile.params}
           onChange={(params) => refetchSpreadMetricTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'group-matching' && (
+        <GroupMatchingSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchGroupMatchingTile(focusedTile.id, params)}
           onRemove={() => removeTile(focusedTile.id)}
         />
       )}
@@ -3402,6 +3501,41 @@ export function App() {
                         { label: 'Species (sampled/total)', value: speciesReadout || '—' },
                       ]}
                       halos={null}
+                      {...commonPlotTileProps(tile)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'group-matching') {
+                  const matched = tile.rows.filter((r) => r['Cross-matched']).length;
+                  const unmatched = tile.rows.filter((r) => Number(r['Hydro Group Index']) === -1).length;
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      error={tile.error}
+                      title="Group Matching"
+                      chart={{
+                        kind: 'static-image',
+                        imageUrl: groupMatchingImageUrl({
+                          suite: tile.params.suite, setName: tile.params.setName, realization: Number(tile.params.realization),
+                        }),
+                        alt: 'N-body vs. hydro group mass, log-log - best matches vs. losing/inconsistent candidates',
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'N-body halos', value: tile.rows.length.toLocaleString() },
+                        { label: 'Cross-matched / no hydro counterpart', value: `${matched.toLocaleString()} / ${unmatched.toLocaleString()}` },
+                      ]}
+                      halos={{
+                        rows: tile.rows,
+                        columns: GROUP_MATCHING_COLUMNS,
+                        filter: GROUP_MATCHING_FILTER,
+                        label: 'View N-body halos',
+                        itemNoun: 'halos',
+                        footerNoun: 'halos',
+                        csvFilename: `${tile.params.suite}_${tile.params.setName}_${tile.params.realization}_group_matching.csv`,
+                      }}
                       {...commonPlotTileProps(tile)}
                     />
                   );
