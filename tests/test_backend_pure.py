@@ -67,6 +67,90 @@ class TestParseIndexedHeader:
         assert B._parse_indexed_header("#ID Mvir(1)") == ["ID", "Mvir"]
 
 
+def _fits_card(keyword, value, comment=None):
+    body = f"{value} / {comment}" if comment else str(value)
+    card = f"{keyword:<8}= {body}"
+    return card[:80].ljust(80)
+
+
+def _fits_block(cards):
+    text = "".join(c[:80].ljust(80) for c in cards)
+    return text.ljust(B.FITS_BLOCK_BYTES)[:B.FITS_BLOCK_BYTES].encode("ascii")
+
+
+def _real_phlist_header_bytes():
+    """Synthetic bytes matching this app's own real, direct-fetch-confirmed
+    phlist.fits layout (2026-08-07, issue #18): Primary HDU (1 block, empty)
+    + BINTABLE extension (1 block, 3 columns: ENERGY float32, RA float64,
+    DEC float64 - 20 real bytes/row)."""
+    primary = _fits_block([
+        f"{'SIMPLE':<8}=                    T",
+        f"{'BITPIX':<8}=                    8",
+        f"{'NAXIS':<8}=                    0",
+        f"{'EXTEND':<8}=                    T",
+        f"{'END':<80}",
+    ])
+    ext = _fits_block([
+        _fits_card("XTENSION", "'BINTABLE'"),
+        _fits_card("NAXIS1", "20"),
+        _fits_card("NAXIS2", "25853"),
+        _fits_card("TFIELDS", "3"),
+        _fits_card("TTYPE1", "'ENERGY  '"),
+        _fits_card("TFORM1", "'E       '"),
+        _fits_card("TTYPE2", "'RA      '"),
+        _fits_card("TFORM2", "'D       '"),
+        _fits_card("TTYPE3", "'DEC     '"),
+        _fits_card("TFORM3", "'D       '"),
+        _fits_card("HDUCLASS", "'HEASARC/SIMPUT'"),  # real embedded-slash value, see _fits_card_value
+        _fits_card("REFRA", "0.0"),
+        _fits_card("REFDEC", "0.0"),
+        f"{'END':<80}",
+    ])
+    return primary + ext
+
+
+class TestFitsBinTableLayout:
+    def test_real_phlist_layout_parses_correctly(self):
+        layout = B._read_fits_bintable_layout(_real_phlist_header_bytes())
+        assert layout is not None
+        assert layout["data_start"] == 2 * B.FITS_BLOCK_BYTES
+        assert layout["row_bytes"] == 20
+        assert layout["n_rows"] == 25853
+        assert layout["ref_ra"] == 0.0 and layout["ref_dec"] == 0.0
+        assert layout["row_dtype"].names == ("ENERGY", "RA", "DEC")
+        assert layout["row_dtype"].itemsize == 20
+
+    def test_embedded_slash_in_quoted_value_is_not_treated_as_a_comment(self):
+        # HDUCLASS = 'HEASARC/SIMPUT' is real (this app's own phlist.fits
+        # files) - a naive split on the first "/" would truncate this to
+        # "HEASARC", which _fits_card_value must not do.
+        card = _fits_card("HDUCLASS", "'HEASARC/SIMPUT'").ljust(80)
+        assert B._fits_card_value(card) == "HEASARC/SIMPUT"
+
+    def test_missing_end_card_within_fetched_bytes_returns_none(self):
+        # Simulates fetching too few header bytes (a real risk this app
+        # guards against by fetching 4 blocks up front) - no truncation
+        # should ever be silently treated as a valid layout.
+        truncated = _real_phlist_header_bytes()[:B.FITS_BLOCK_BYTES + 80]
+        assert B._read_fits_bintable_layout(truncated) is None
+
+    def test_non_bintable_extension_returns_none(self):
+        primary = _fits_block([f"{'SIMPLE':<8}=                    T", f"{'NAXIS':<8}=                    0", f"{'END':<80}"])
+        ext = _fits_block([_fits_card("XTENSION", "'IMAGE   '"), f"{'END':<80}"])
+        assert B._read_fits_bintable_layout(primary + ext) is None
+
+    def test_unrecognized_tform_code_returns_none(self):
+        primary = _fits_block([f"{'SIMPLE':<8}=                    T", f"{'NAXIS':<8}=                    0", f"{'END':<80}"])
+        ext = _fits_block([
+            _fits_card("XTENSION", "'BINTABLE'"), _fits_card("NAXIS1", "20"),
+            _fits_card("NAXIS2", "1"), _fits_card("TFIELDS", "1"),
+            _fits_card("TTYPE1", "'WEIRD   '"), _fits_card("TFORM1", "'P       '"),  # real
+            # code this app doesn't handle (variable-length array descriptor)
+            f"{'END':<80}",
+        ])
+        assert B._read_fits_bintable_layout(primary + ext) is None
+
+
 class TestRealDataLookupTables:
     """Regression tests for hand-confirmed facts encoded as module-level
     lookup tables - these aren't functions, but a silent edit to either

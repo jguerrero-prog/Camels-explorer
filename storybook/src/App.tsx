@@ -40,6 +40,8 @@ import { SFRHistorySidebar } from './components/SFRHistorySidebar/SFRHistorySide
 import type { SFRHistoryParams } from './components/SFRHistorySidebar/SFRHistorySidebar';
 import { XrayHaloProfilesSidebar } from './components/XrayHaloProfilesSidebar/XrayHaloProfilesSidebar';
 import type { XrayHaloProfilesParams } from './components/XrayHaloProfilesSidebar/XrayHaloProfilesSidebar';
+import { XrayPhotonSpectrumSidebar } from './components/XrayPhotonSpectrumSidebar/XrayPhotonSpectrumSidebar';
+import type { XrayPhotonSpectrumParams } from './components/XrayPhotonSpectrumSidebar/XrayPhotonSpectrumSidebar';
 import { HaloGasProfilesSidebar } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
 import type { HaloGasProfilesParams } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
 import { ColorMassDiagramSidebar } from './components/ColorMassDiagramSidebar/ColorMassDiagramSidebar';
@@ -72,6 +74,7 @@ import {
   fetchBispectrum, bispectrumImageUrl,
   fetchSFRHistory, sfrHistoryImageUrl,
   fetchXrayProfilesMeta, xrayProfilesImageUrl,
+  fetchXrayPhotonSpectrumMeta, xrayPhotonSpectrumImageUrl,
   fetchHaloProfilesMeta, haloProfilesImageUrl,
   fetchColorMassDiagramMeta, colorMassDiagramImageUrl,
   fetchFieldPDFMeta, fieldPDFImageUrl,
@@ -416,6 +419,23 @@ type XrayHaloProfilesTileState = {
   error?: string;
 };
 
+/** X-ray Photon Spectrum (added 2026-08-07, issue #18) - real-data only,
+ * photon-energy histogram with no Plotly equivalent (PlotTile's
+ * chart.kind: 'static-image'), same shape as X-ray Halo Profiles above.
+ * `note`/`haloId`/`logMass`/`nPhotonsTotal` come from the one real JSON
+ * fetch (see fetchXrayPhotonSpectrumMeta) - the chart itself is the PNG. */
+type XrayPhotonSpectrumTileState = {
+  id: string;
+  kind: 'xray-photon-spectrum';
+  params: XrayPhotonSpectrumParams;
+  note: string;
+  haloId: number;
+  logMass: number;
+  nPhotonsTotal: number;
+  loading: boolean;
+  error?: string;
+};
+
 type HaloGasProfilesTileState = {
   id: string;
   kind: 'halo-gas-profiles';
@@ -704,6 +724,7 @@ type CanvasTile =
   | BispectrumTileState
   | SFRHistoryTileState
   | XrayHaloProfilesTileState
+  | XrayPhotonSpectrumTileState
   | HaloGasProfilesTileState
   | ColorMassDiagramTileState
   | FieldPDFTileState
@@ -733,6 +754,7 @@ function tileDisplayTitle(tile: CanvasTile): string {
     case 'bispectrum': return 'Bispectrum';
     case 'sfr-history': return 'SFR History';
     case 'xray-halo-profiles': return 'X-ray Halo Profiles';
+    case 'xray-photon-spectrum': return 'X-ray Photon Spectrum';
     case 'halo-gas-profiles': return 'Halo Gas Profiles';
     case 'color-mass-diagram': return 'Color-Mass Diagram';
     case 'field-pdf': return 'Field PDF';
@@ -860,6 +882,11 @@ function generateTileCode(tile: CanvasTile): string | null {
     case 'xray-halo-profiles': {
       const p = tile.params;
       return `${header}profiles = backend.get_xray_profiles(\n`
+        + `    ${py(p.suite)}, ${py(p.setName)}, ${py(p.realization)}, fetch_public=True,\n)\n`;
+    }
+    case 'xray-photon-spectrum': {
+      const p = tile.params;
+      return `${header}sample = backend.get_xray_photon_sample(\n`
         + `    ${py(p.suite)}, ${py(p.setName)}, ${py(p.realization)}, fetch_public=True,\n)\n`;
     }
     case 'halo-gas-profiles': {
@@ -1128,6 +1155,19 @@ async function loadXrayHaloProfilesTile(id: string, params: XrayHaloProfilesPara
     throw new Error('No X-ray profile data available for this suite/set/realization. Try IllustrisTNG or SIMBA.');
   }
   return { id, kind: 'xray-halo-profiles', params, note: meta.note, nHalos: meta.nHalos, loading: false };
+}
+
+async function loadXrayPhotonSpectrumTile(id: string, params: XrayPhotonSpectrumParams): Promise<XrayPhotonSpectrumTileState> {
+  const meta = await fetchXrayPhotonSpectrumMeta(params);
+  if (meta === null) {
+    throw new Error(
+      'No X-ray SIMPUT photon data available for this suite/set/realization. Try IllustrisTNG or SIMBA, LH/CV/EX.',
+    );
+  }
+  return {
+    id, kind: 'xray-photon-spectrum', params, note: meta.note,
+    haloId: meta.haloId, logMass: meta.logMass, nPhotonsTotal: meta.nPhotonsTotal, loading: false,
+  };
 }
 
 async function loadHaloGasProfilesTile(id: string, params: HaloGasProfilesParams): Promise<HaloGasProfilesTileState> {
@@ -2141,6 +2181,24 @@ export function App() {
       });
   };
 
+  const refetchXrayPhotonSpectrumTile = (id: string, params: XrayPhotonSpectrumParams) => {
+    const seq = bumpRequestSeq(id);
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'xray-photon-spectrum' ? { ...t, params, loading: true } : t)),
+    );
+    loadXrayPhotonSpectrumTile(id, params)
+      .then((updated) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      })
+      .catch((err) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'xray-photon-spectrum' ? { ...t, loading: false, error: String(err) } : t)),
+        );
+      });
+  };
+
   const refetchHaloGasProfilesTile = (id: string, params: HaloGasProfilesParams) => {
     const current = tiles.find((t) => t.id === id);
     if (
@@ -2564,6 +2622,19 @@ export function App() {
       return;
     }
 
+    if (selection.statistic === 'X-ray Photon Spectrum') {
+      const params: XrayPhotonSpectrumParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+      };
+      const placeholder: XrayPhotonSpectrumTileState = {
+        id, kind: 'xray-photon-spectrum', params, note: '', haloId: 0, logMass: 0, nPhotonsTotal: 0, loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchXrayPhotonSpectrumTile(id, params);
+      return;
+    }
+
     if (selection.statistic === 'Halo Gas Profiles') {
       const params: HaloGasProfilesParams = {
         suite: selection.suite, setName: selection.set, realization: selection.realization,
@@ -2774,6 +2845,13 @@ export function App() {
         <XrayHaloProfilesSidebar
           params={focusedTile.params}
           onChange={(params) => refetchXrayHaloProfilesTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'xray-photon-spectrum' && (
+        <XrayPhotonSpectrumSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchXrayPhotonSpectrumTile(focusedTile.id, params)}
           onRemove={() => removeTile(focusedTile.id)}
         />
       )}
@@ -3197,6 +3275,29 @@ export function App() {
                         { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
                         { label: 'Realization', value: String(tile.params.realization) },
                         { label: 'Halos', value: String(tile.nHalos) },
+                      ]}
+                      halos={null}
+                      {...commonPlotTileProps(tile)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'xray-photon-spectrum') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      error={tile.error}
+                      title="X-ray Photon Spectrum"
+                      chart={{
+                        kind: 'static-image',
+                        imageUrl: xrayPhotonSpectrumImageUrl(tile.params),
+                        alt: 'Photon-energy histogram for the most massive halo in this realization',
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Halo', value: `${tile.haloId} (log M200c = ${tile.logMass.toFixed(2)})` },
+                        { label: 'Photons', value: tile.nPhotonsTotal.toLocaleString() },
                       ]}
                       halos={null}
                       {...commonPlotTileProps(tile)}

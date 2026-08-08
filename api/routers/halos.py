@@ -30,6 +30,35 @@ def xray_profiles_plot(suite: str, set_name: Annotated[str, Depends(resolved_set
     return Response(content=png, media_type="image/png")
 
 
+@router.get("/xray-photon-spectrum")
+def xray_photon_spectrum(
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int,
+    halo_id: Optional[int] = None,
+    max_photons: int = 5000,
+    fetch_public: bool = False,
+):
+    result = require(B.get_xray_photon_sample(
+        suite, set_name, realization, halo_id=halo_id, max_photons=max_photons, fetch_public=fetch_public,
+    ))
+    return to_jsonable(result)
+
+
+@router.get("/xray-photon-spectrum/plot.png")
+def xray_photon_spectrum_plot(
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int,
+    halo_id: Optional[int] = None,
+    max_photons: int = 5000,
+    fetch_public: bool = False,
+):
+    """Static matplotlib render (photon-energy histogram) - real-data only,
+    no Plotly equivalent (this is a genuinely new statistic, app.py has no
+    precedent for it either way)."""
+    png = require(B.render_xray_photon_spectrum_png(
+        suite, set_name, realization, halo_id=halo_id, max_photons=max_photons, fetch_public=fetch_public,
+    ))
+    return Response(content=png, media_type="image/png")
+
+
 @router.get("/halo-profiles")
 def halo_profiles(
     suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, snapnum: int, field: str,
