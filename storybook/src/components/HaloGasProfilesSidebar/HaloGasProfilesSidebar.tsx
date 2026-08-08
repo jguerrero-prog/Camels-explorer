@@ -36,7 +36,10 @@ const FALLBACK_FIELDS = ['Gas Density', 'Thermal Pressure', 'Metallicity', 'Temp
 /** Halo Gas Profiles' real per-tile sidebar, from app.py's own "Halo Gas
  * Profiles" block. Reuses the shared Snapshot control (34-snapshot Pk/
  * SFRH schedule) since this product varies with it, unlike X-ray Halo
- * Profiles (fixed to one published snapshot). See
+ * Profiles (fixed to one published snapshot). 1P joined LH/CV 2026-08-08
+ * (issue #26) via `onepScheme="legacy"` - this product's real 1P folders
+ * use a different naming convention (no "p", 6 params, 11 variations)
+ * than the other 1P-aware statistics in this app. See
  * HaloGasProfilesSidebar.mdx. */
 export function HaloGasProfilesSidebar({ params, onChange, onRemove, maxHighlightRank }: HaloGasProfilesSidebarProps) {
   const catalog = useCatalogMetadata();
@@ -51,6 +54,7 @@ export function HaloGasProfilesSidebar({ params, onChange, onRemove, maxHighligh
         onChange={(v) => onChange({ ...params, ...v })}
         allowedSuites={catalog?.statistic_suites['Halo Gas Profiles']}
         allowedSets={catalog?.statistic_sets['Halo Gas Profiles']}
+        onepScheme="legacy"
       />
       <SelectField
         label="Field"

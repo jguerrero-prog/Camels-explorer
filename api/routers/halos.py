@@ -61,7 +61,11 @@ def xray_photon_spectrum_plot(
 
 @router.get("/halo-profiles")
 def halo_profiles(
-    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, snapnum: int, field: str,
+    # str, not int (2026-08-08, issue #26) - 1P's real realization id is
+    # compound ("4_n5", the legacy scheme's own folder suffix), same real
+    # reason Color-Mass Diagram/Galaxy Scaling Relations' own realization
+    # param is already `str` for their (different) 1P scheme.
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str, snapnum: int, field: str,
     fetch_public: bool = False,
 ):
     result = require(B.get_halo_profiles(
@@ -72,7 +76,7 @@ def halo_profiles(
 
 @router.get("/halo-profiles/plot.png")
 def halo_profiles_plot(
-    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int, snapnum: int, field: str,
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: str, snapnum: int, field: str,
     highlight_rank: int = 1,
     fetch_public: bool = False,
 ):

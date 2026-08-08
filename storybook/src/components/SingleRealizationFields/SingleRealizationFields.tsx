@@ -5,6 +5,7 @@ import { OptionSlider } from '../OptionSlider/OptionSlider';
 import type { Catalog } from '../../lib/useCatalogMetadata';
 import {
   realizationCountFor, onepRealizationId, parseOnepRealizationId, useOnepParamValue,
+  legacyOnepRealizationId, parseLegacyOnepRealizationId, LEGACY_ONEP_VARIATIONS, LEGACY_ONEP_PARAM_COUNT,
 } from '../../lib/useCatalogMetadata';
 import '../NumberStepper/NumberStepper.css';
 
@@ -47,6 +48,13 @@ export type SingleRealizationFieldsProps = {
    * shown in the modal for either hidden control - the value simply
    * starts at 0 and is adjustable once a tile exists. */
   hideRealizationValueControls?: boolean;
+  /** Which real 1P folder-naming scheme this statistic's own real 1P data
+   * uses - 'modern' (default, "1P_p{index}_{variation}", 28 params, 5
+   * variations) or 'legacy' ("1P_{index}_{variation}", no "p", 6 params,
+   * 11 variations -5..5). Added 2026-08-08, issue #26, for Halo Gas
+   * Profiles - the two schemes are genuinely different real conventions
+   * (see backend.py's own comment), not a UI preference. */
+  onepScheme?: 'modern' | 'legacy';
 };
 
 // Real 1P variation steps (app.py's own select_slider options) - 0 is the
@@ -69,15 +77,20 @@ const FALLBACK_ONEP_MAX_INDEX = 28;
  * with none of the multi-realization machinery at all. */
 export function SingleRealizationFields({
   catalog, value, onChange, allowedSuites, allowedSets, hideRealizationValueControls,
+  onepScheme = 'modern',
 }: SingleRealizationFieldsProps) {
   const activeSet = catalog?.sets.find((s) => s.name === value.setName);
   const realizationCount = realizationCountFor(catalog, value.setName, value.suite);
   const isOnep = value.setName === '1P';
+  const isLegacyOnep = onepScheme === 'legacy';
 
   const suiteOptions = (catalog?.suites ?? [value.suite]).filter((s) => !allowedSuites || allowedSuites.includes(s));
   const setOptions = (catalog?.sets ?? []).filter((s) => !allowedSets || allowedSets.includes(s.name));
   const applySet = (setName: string) =>
-    onChange({ ...value, setName, realization: setName === '1P' ? onepRealizationId(1, 0) : 0 });
+    onChange({
+      ...value, setName,
+      realization: setName === '1P' ? (isLegacyOnep ? legacyOnepRealizationId(1, 0) : onepRealizationId(1, 0)) : 0,
+    });
 
   // Auto-correct: a narrower allowlist can appear after the value was
   // already set (e.g. CuratedTab's Statistic picker switches to one with
@@ -99,36 +112,48 @@ export function SingleRealizationFields({
 
   // Same 1P picker as RealizationFields (see its own comment for why this
   // needs a parameter+variation picker instead of a plain realization
-  // number) - only Galaxy Scaling Relations and Color-Mass Diagram among
-  // this component's eight real statistics have real 1P data wired up
-  // server-side; the other six will show their existing "no data"/
-  // synthetic-fallback honesty for a 1P selection, same as any other
-  // unsupported suite/set combination.
+  // number) - Galaxy Scaling Relations, Color-Mass Diagram (modern scheme),
+  // and Halo Gas Profiles (legacy scheme, 2026-08-08, issue #26) among this
+  // component's eight real statistics have real 1P data wired up server-
+  // side; the other five will show their existing "no data"/synthetic-
+  // fallback honesty for a 1P selection, same as any other unsupported
+  // suite/set combination.
+  // Legacy scheme has no per-suite parameter identities/missing-variation
+  // data at all (unlike the modern scheme's ONEP_TNG_PARAMS, diffed from
+  // real output-file attrs) - always 6 generic "p{N}" options, no real-
+  // value lookup, no missing-variation warning. Real, not a placeholder:
+  // this scheme's own 6 parameters' physical identities haven't been
+  // determined, so showing a real value or a specific name here would be
+  // a guess, not a fact.
   const onepIsTng = value.suite === 'IllustrisTNG';
   const onepMaxIndex = catalog?.onep_max_index_for_suite[value.suite]
     ?? (onepIsTng ? FALLBACK_ONEP_MAX_INDEX : undefined);
-  const onepParamOptions = onepIsTng
-    ? (catalog?.onep_tng_params ?? []).map((p) => ({ index: p.index, name: p.name, label: `p${p.index}: ${p.name} (${p.category})` }))
-    : Array.from({ length: onepMaxIndex ?? 0 }, (_, i) => ({ index: i + 1, name: `p${i + 1}`, label: `p${i + 1}` }));
+  const onepParamOptions = isLegacyOnep
+    ? Array.from({ length: LEGACY_ONEP_PARAM_COUNT }, (_, i) => ({ index: i + 1, name: `p${i + 1}`, label: `p${i + 1}` }))
+    : onepIsTng
+      ? (catalog?.onep_tng_params ?? []).map((p) => ({ index: p.index, name: p.name, label: `p${p.index}: ${p.name} (${p.category})` }))
+      : Array.from({ length: onepMaxIndex ?? 0 }, (_, i) => ({ index: i + 1, name: `p${i + 1}`, label: `p${i + 1}` }));
   const parsedOnep = isOnep && typeof value.realization === 'string'
-    ? parseOnepRealizationId(value.realization)
+    ? (isLegacyOnep ? parseLegacyOnepRealizationId(value.realization) : parseOnepRealizationId(value.realization))
     : null;
   const onepParamIndex = parsedOnep?.paramIndex ?? 1;
   const onepVariation = parsedOnep?.variation ?? 0;
   const onepParamName = onepParamOptions.find((p) => p.index === onepParamIndex)?.name ?? `p${onepParamIndex}`;
-  const onepMissingVariations = onepIsTng
+  const onepMissingVariations = !isLegacyOnep && onepIsTng
     ? new Set(catalog?.onep_tng_missing_variations[String(onepParamIndex)] ?? [])
     : new Set<number>();
-  const onepRealValue = useOnepParamValue(value.suite, onepParamIndex, onepVariation, isOnep && onepIsTng);
+  const onepRealValue = useOnepParamValue(value.suite, onepParamIndex, onepVariation, isOnep && onepIsTng && !isLegacyOnep);
   const setOnep = (paramIndex: number, variation: number) =>
-    onChange({ ...value, realization: onepRealizationId(paramIndex, variation) });
+    onChange({ ...value, realization: isLegacyOnep ? legacyOnepRealizationId(paramIndex, variation) : onepRealizationId(paramIndex, variation) });
   const onepCaption = onepMissingVariations.has(onepVariation)
     ? `⚠️ p${onepParamIndex} has no published variation=${onepVariation > 0 ? `+${onepVariation}` : onepVariation} simulation (a real gap in the public release) - pick another variation.`
-    : onepIsTng
-      ? onepRealValue !== null
-        ? `real value: ${onepParamName} = ${onepRealValue.toPrecision(4)}`
-        : 'Real value not directly readable from any output file for this parameter - only the variation step is shown.'
-      : undefined;
+    : isLegacyOnep
+      ? undefined
+      : onepIsTng
+        ? onepRealValue !== null
+          ? `real value: ${onepParamName} = ${onepRealValue.toPrecision(4)}`
+          : 'Real value not directly readable from any output file for this parameter - only the variation step is shown.'
+        : undefined;
 
   return (
     <>
@@ -162,7 +187,7 @@ export function SingleRealizationFields({
             <>
               <OptionSlider
                 label="Variation"
-                options={ONEP_VARIATIONS}
+                options={isLegacyOnep ? LEGACY_ONEP_VARIATIONS : ONEP_VARIATIONS}
                 value={onepVariation}
                 formatValue={(v) => (v > 0 ? `+${v}` : String(v))}
                 onChange={(variation) => setOnep(onepParamIndex, variation)}

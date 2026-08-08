@@ -151,6 +151,28 @@ class TestFitsBinTableLayout:
         assert B._read_fits_bintable_layout(primary + ext) is None
 
 
+class TestProfilesOnepFlatIndex:
+    """Real, direct-fetch-confirmed formula (issue #26): Profiles' 1P
+    files embed a flat 0-65 index (param-major, variation -5..5), not the
+    (param, variation) pair the real folder name itself uses."""
+
+    def test_matches_real_confirmed_cases(self):
+        # Each of these was independently confirmed against a real file
+        # listing (2 suites) before trusting the formula.
+        cases = [(1, -2, 3), (1, 0, 5), (2, 3, 19), (6, -5, 55), (4, 2, 40), (3, -3, 24), (5, 5, 54)]
+        for param, variation, expected in cases:
+            assert B._profiles_onep_flat_index(param, variation) == expected
+
+    def test_parse_round_trips_with_real_folder_suffix_format(self):
+        assert B._parse_profiles_onep_realization("1_n2") == (1, -2)
+        assert B._parse_profiles_onep_realization("6_5") == (6, 5)
+        assert B._parse_profiles_onep_realization("3_0") == (3, 0)
+
+    def test_parse_rejects_non_onep_strings(self):
+        assert B._parse_profiles_onep_realization("garbage") is None
+        assert B._parse_profiles_onep_realization("42") is None
+
+
 class TestRealDataLookupTables:
     """Regression tests for hand-confirmed facts encoded as module-level
     lookup tables - these aren't functions, but a silent edit to either
