@@ -76,8 +76,8 @@ class TestRealDataLookupTables:
     def test_profiles_field_index_has_the_four_real_fields(self):
         assert set(B.PROFILES_FIELD_INDEX) == {"Gas Density", "Thermal Pressure", "Metallicity", "Temperature"}
 
-    def test_cmd_mass_type_fields_are_exactly_the_four_mass_fields(self):
-        assert B.CMD_MASS_TYPE_FIELDS == {"Mtot", "Mgas", "Mcdm", "Mstar"}
+    def test_cmd_mass_type_fields_are_the_five_mass_fields(self):
+        assert B.CMD_MASS_TYPE_FIELDS == {"Mtot", "Mgas", "Mcdm", "Mstar", "Mtot_Nbody"}
         assert "Temperature" not in B.CMD_MASS_TYPE_FIELDS
 
 

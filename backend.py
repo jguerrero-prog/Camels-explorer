@@ -476,8 +476,25 @@ CMD_FIELDS = {
     "Vcdm":  "Dark matter velocity",
     "B":     "Magnetic field strength",
     "MgFe":  "Magnesium-to-iron ratio",
+    # Real, previously-disclosed follow-up wired 2026-08-07 (issue #17) -
+    # CMD's N-body (DM-only) comparison map, Mtot-only (no gas/stars to
+    # split by), confirmed real for both 2D maps (2D_maps/data/Nbody/
+    # Maps_Mtot_Nbody_{suite}_{set}_z=0.00.npy) and PDF (PDF/hist_Grids_
+    # Mtot_Nbody_{suite}_LH_{grid}_z=0.0.npy - this one needed zero URL
+    # changes at all, since get_field_pdf's existing template already
+    # matches this field-key naming exactly). Separate from the "_DM"
+    # suite companions (issue #15) - a different real naming convention
+    # keyed to the hydro suite name with an "Nbody" qualifier, not a
+    # distinct suite value.
+    "Mtot_Nbody": "Total matter density (N-body, no baryons)",
 }
 DEFAULT_CMD_FIELD = "Mtot"
+
+# Real, confirmed via a direct fetch (2026-08-07, issue #17): Mtot_Nbody
+# exists for IllustrisTNG/SIMBA/Astrid (2D maps and PDF alike) - no
+# Swift-EAGLE, confirmed absent from CMD/2D_maps/data/Nbody/'s own real
+# file listing (every filename there names one of the other 3 suites).
+PUBLIC_CMD_NBODY_MAP_SUITES = {"IllustrisTNG", "SIMBA", "Astrid"}
 
 # Raw-snapshot fallback only implements the mass-type fields directly - the
 # derived-physics fields (T/Z/P/ne/HI/velocities/B/MgFe) need real formulas
@@ -504,10 +521,10 @@ CMD_MAP_SUITE_FOLDER = {
 }
 # CMD's 2D_maps folder also has Magneticum - deliberately excluded, it's a
 # tier-2 (access-gated) suite per this project's data policy, not because
-# the files themselves aren't fetchable. Its Nbody/ folder uses a different
-# filename scheme entirely (Maps_Mtot_Nbody_<hydro-suite>_..., Mtot-only
-# since there's no gas) and isn't wired up yet - a real follow-up, not
-# blocking this feature.
+# the files themselves aren't fetchable. Its Nbody/ folder (a different
+# filename scheme entirely, Maps_Mtot_Nbody_<hydro-suite>_..., Mtot-only
+# since there's no gas) is wired up as the "Mtot_Nbody" CMD_FIELDS entry -
+# see PUBLIC_CMD_NBODY_MAP_SUITES and _fetch_public_cmd_map's own handling.
 
 # VIDE (watershed void finder) catalogs - only IllustrisTNG/LH/z=0.00 is
 # actually populated (the VIDE_Voids/SIMBA/ folder exists but is empty, 0B).
@@ -2393,7 +2410,7 @@ def _downsample_grid(field, target):
     return trimmed.reshape(target, factor, target, factor, target, factor).mean(axis=(1, 3, 5))
 
 
-CMD_MASS_TYPE_FIELDS = {"Mtot", "Mgas", "Mcdm", "Mstar"}  # meaningful to show as overdensity
+CMD_MASS_TYPE_FIELDS = {"Mtot", "Mgas", "Mcdm", "Mstar", "Mtot_Nbody"}  # meaningful to show as overdensity
 
 
 def get_density_field_3d(suite, set_name, realization, snapnum, grid, field=DEFAULT_CMD_FIELD,
@@ -2670,7 +2687,20 @@ def _fetch_public_cmd_map(suite, set_name, realization, field=DEFAULT_CMD_FIELD)
     """Real 2D field map (256x256) from CMD's public 2D maps. Only z=0.00
     is published for this data source (unlike the 3D grids' 5 redshifts).
     Returns the map array, or None if unavailable."""
-    if not CMD_2D_MAPS_URL or suite not in PUBLIC_CMD_MAP_SUITES or field not in CMD_FIELDS:
+    if not CMD_2D_MAPS_URL or field not in CMD_FIELDS:
+        return None
+    # Real, separate real folder/naming convention (2026-08-07, issue #17) -
+    # confirmed via a direct listing of CMD/2D_maps/data/Nbody/: files live
+    # in their own "Nbody" folder (not a per-suite one) and name the real
+    # suite directly in the filename (Maps_Mtot_Nbody_{suite}_{set}_
+    # z=0.00.npy) rather than via CMD_MAP_SUITE_FOLDER's suite-folder alias.
+    if field == "Mtot_Nbody":
+        if suite not in PUBLIC_CMD_NBODY_MAP_SUITES:
+            return None
+        url = f"{CMD_2D_MAPS_URL}/Nbody/Maps_Mtot_Nbody_{suite}_{set_name}_z=0.00.npy"
+        return _fetch_npy_stack_slice(url, realization)
+
+    if suite not in PUBLIC_CMD_MAP_SUITES:
         return None
     folder = CMD_MAP_SUITE_FOLDER[suite]
     url = f"{CMD_2D_MAPS_URL}/{folder}/Maps_{field}_{folder}_{set_name}_z=0.00.npy"
@@ -2687,11 +2717,12 @@ def get_field_map_2d(suite, set_name, realization, field=DEFAULT_CMD_FIELD,
                 units = "overdensity ρ/ρ̄"
             else:
                 units = f"{CMD_FIELDS[field]} (CMD units)"
+            path = (f"2D_maps/Nbody/Maps_Mtot_Nbody_{suite}_{set_name}" if field == "Mtot_Nbody"
+                    else f"2D_maps/{CMD_MAP_SUITE_FOLDER[suite]}/{field}_{set_name}")
             return Map2D(
                 values=real_map, box_size=25.0, source="real",
                 note=(f"z = 0.00 (only redshift CMD publishes for 2D maps), {units} - "
-                      f"CMD public data release (2D_maps/{CMD_MAP_SUITE_FOLDER[suite]}/"
-                      f"{field}_{set_name}, one realization via HTTP Range request)"),
+                      f"CMD public data release ({path}, one realization via HTTP Range request)"),
             )
 
     return None
