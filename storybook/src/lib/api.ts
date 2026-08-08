@@ -589,10 +589,21 @@ export type SamCatalog = HaloCatalog;
 // mirrors backend.py's SAM_OCTANTS exactly.
 export const SAM_OCTANTS = ['0_0_0', '0_0_1', '0_1_0', '0_1_1', '1_0_0', '1_0_1', '1_1_0', '1_1_1'];
 
-export async function fetchSamCatalog(realization: number, octant: string = SAM_OCTANTS[0]): Promise<SamCatalog> {
-  const qs = new URLSearchParams({ set_name: 'LH', realization: String(realization), octant, fetch_public: 'true' });
+// Real (added 2026-08-08, issue #24): CV joins LH as a real CAMELS-SAM set -
+// each uses a different real per-realization folder name (LH: "sc-sam",
+// CV: "fid-sc-sam", confirmed via a direct fetch), and a different real
+// realization count (LH: 1000, CV: 5 - CV_5 confirmed empty). 1P stays
+// unsupported (a real 403 on a plain fetch, not yet resolved - see the
+// issue's own investigation note).
+export const SAM_SETS = ['LH', 'CV'];
+export const SAM_SET_REALIZATIONS: Record<string, number> = { LH: 1000, CV: 5 };
+
+export async function fetchSamCatalog(
+  setName: string, realization: number, octant: string = SAM_OCTANTS[0],
+): Promise<SamCatalog> {
+  const qs = new URLSearchParams({ set_name: setName, realization: String(realization), octant, fetch_public: 'true' });
   const res = await fetch(`${API_BASE}/sam-catalog?${qs}`);
-  if (res.status === 404) return null; // real gap: no SAM catalog for this realization/octant
+  if (res.status === 404) return null; // real gap: no SAM catalog for this set/realization/octant
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }

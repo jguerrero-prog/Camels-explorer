@@ -803,7 +803,7 @@ function describeTileProvenance(tile: CanvasTile): string | null {
     return `${statistic} from ${CAMELS_CITATION}, queried live via the public FlatHub interface, ${CAMELS_DATA_URL}.`;
   }
   if (tile.kind === 'camels-sam') {
-    return `${statistic} (Santa Cruz Semi-Analytic Model, LH set, realization ${tile.params.realization}) from ${CAMELS_CITATION}, ${CAMELS_DATA_URL}.`;
+    return `${statistic} (Santa Cruz Semi-Analytic Model, ${tile.params.setName} set, realization ${tile.params.realization}) from ${CAMELS_CITATION}, ${CAMELS_DATA_URL}.`;
   }
 
   const p = 'params' in tile ? (tile.params as Record<string, unknown>) : null;
@@ -1356,9 +1356,9 @@ function streamRemainingICFiles(
 }
 
 async function loadCamelsSamTile(id: string, params: CamelsSamParams): Promise<CamelsSamTileState> {
-  const catalog = await fetchSamCatalog(params.realization, SAM_OCTANTS[0]);
+  const catalog = await fetchSamCatalog(params.setName, params.realization, SAM_OCTANTS[0]);
   if (catalog === null) {
-    throw new Error('No CAMELS-SAM catalog for this realization - try another one (0-999).');
+    throw new Error(`No CAMELS-SAM catalog for this ${params.setName} realization - try another one.`);
   }
   return {
     id, kind: 'camels-sam', params,
@@ -1405,7 +1405,7 @@ function streamRemainingSamOctants(
   };
   fetchProgressive(
     SAM_OCTANTS.length - 1,
-    (i) => fetchSamCatalog(params.realization, SAM_OCTANTS[i + 1]),
+    (i) => fetchSamCatalog(params.setName, params.realization, SAM_OCTANTS[i + 1]),
     (catalog) => {
       octantsLoaded += 1;
       if (catalog) {
@@ -2522,7 +2522,7 @@ export function App() {
     }
 
     if (selection.statistic === 'CAMELS-SAM') {
-      const params: CamelsSamParams = { realization: Number(selection.realization) || 0 };
+      const params: CamelsSamParams = { setName: 'LH', realization: Number(selection.realization) || 0 };
       const placeholder: CamelsSamTileState = {
         id, kind: 'camels-sam', params, rows: [], rawRows: null, note: '', octantsLoaded: 0, loading: true,
       };
@@ -3596,7 +3596,7 @@ export function App() {
                       title="CAMELS-SAM"
                       chart={{ kind: 'plotly-3d', content: <CamelsSamCharts rows={tile.rows} /> }}
                       readoutGroups={[
-                        { label: 'Set', value: 'LH (Santa Cruz SAM)' },
+                        { label: 'Set', value: `${tile.params.setName} (Santa Cruz SAM)` },
                         { label: 'Realization', value: String(tile.params.realization) },
                         { label: 'Galaxies', value: tile.rows.length.toLocaleString() },
                         { label: 'Octants loaded', value: `${tile.octantsLoaded}/${SAM_OCTANTS.length}` },
@@ -3609,7 +3609,7 @@ export function App() {
                         label: 'View underlying galaxies',
                         itemNoun: 'galaxies',
                         footerNoun: 'galaxies',
-                        csvFilename: `LH_${tile.params.realization}_camels-sam.csv`,
+                        csvFilename: `${tile.params.setName}_${tile.params.realization}_camels-sam.csv`,
                       }}
                       {...commonPlotTileProps(tile)}
                     />
