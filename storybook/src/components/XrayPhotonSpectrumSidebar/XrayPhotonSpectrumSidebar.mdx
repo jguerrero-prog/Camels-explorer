@@ -1,0 +1,50 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as XrayPhotonSpectrumSidebarStories from './XrayPhotonSpectrumSidebar.stories';
+
+<Meta of={XrayPhotonSpectrumSidebarStories} />
+
+# XrayPhotonSpectrumSidebar
+
+X-ray Photon Spectrum's real per-tile sidebar (2026-08-07, issue #18) — a genuinely new statistic, not ported from `app.py` (which has no equivalent either way). Reads the full raw SIMPUT photon-list product directly (`X-rays/{suite}/{set}/{set}_{n}/snap_032/*_phlist.fits`), distinct from the small reduced `CAMELS.Xray.hdf5` file `X-ray Halo Profiles` reads.
+
+## Token
+
+Composed entirely from `SingleRealizationFields`/`Button` — no tokens of its own, same shape as `XrayHaloProfilesSidebar`.
+
+## Spec
+
+<Canvas of={XrayPhotonSpectrumSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Realization: `SingleRealizationFields` — no Compare mode.
+- Suite restricted to `catalog.statistic_suites['X-ray Photon Spectrum']` (IllustrisTNG/SIMBA — real, confirmed no `X-rays/` folder exists for any other suite).
+- Set restricted to `catalog.statistic_sets['X-ray Photon Spectrum']` (LH/CV/EX). 1P is deliberately excluded — its real folder here uses legacy `1P_{1..6}_{n5..5}` naming (no `p`, 6 params), the same convention AHF/Halo Gas Profiles/Lyman-alpha already don't resolve — not solved here either. See `backend.py`'s own `PUBLIC_XRAY_SIMPUT_SETS` comment.
+- No halo picker — always shows the most massive real halo in the realization (index 0 of the real `halodata.cat`, sorted by descending mass). A real, deliberately deferred follow-up (see issue #18) — building it needs a fetched, dynamically-populated `SelectField`, a shape no other sidebar in this app has yet.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/xray-photon-spectrum` (JSON: halo id/mass/total photon count) and `/plot.png` (the real render — a photon-energy histogram, see `StaticImageChart.mdx`, `PlotTile`'s `chart.kind: 'static-image'`).
+- **Real-data only, no synthetic fallback** — `get_xray_photon_sample()` returns `None` outright for suite/set combinations without this product, or a halo the real `halodata.cat` doesn't list.
+- Real sampling caveat, shown in the tile's own note: photon rows in the real `phlist.fits` file are **not** randomly ordered (confirmed directly — a contiguous chunk from the file's start, middle, and end each showed visibly different energy/RA/DEC distributions), so the backend samples several small chunks spread evenly across the real row count instead of reading a single contiguous block.
+- A sky-position scatter (RA/DEC offset, colored by energy) is a real, scoped follow-up this PR deliberately doesn't build — the histogram is the smaller, more broadly useful of the two real chart shapes this data supports (see issue #18).
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { XrayPhotonSpectrumSidebar } from '@/components/XrayPhotonSpectrumSidebar/XrayPhotonSpectrumSidebar';
+import type { XrayPhotonSpectrumParams } from '@/components/XrayPhotonSpectrumSidebar/XrayPhotonSpectrumSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<XrayPhotonSpectrumParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 0,
+  });
+  return (
+    <XrayPhotonSpectrumSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

@@ -286,6 +286,39 @@ export function xrayProfilesImageUrl(params: { suite: string; setName: string; r
   return `${API_BASE}/xray-profiles/plot.png?${qs}`;
 }
 
+// Real-data-only, no synthetic fallback (2026-08-07, issue #18) - same
+// note-only/PNG-is-the-chart split as fetchXrayProfilesMeta/
+// xrayProfilesImageUrl above. `haloId`/`logMass` come back from the real
+// per-realization halodata.cat file (backend.py's own
+// _fetch_xray_halo_catalog) - always the most massive real halo in this
+// realization, since this app doesn't expose a halo picker yet (a real,
+// deliberately deferred follow-up, see issue #18).
+export type XrayPhotonSpectrumMeta = { note: string; haloId: number; logMass: number; nPhotonsTotal: number };
+
+export async function fetchXrayPhotonSpectrumMeta(params: {
+  suite: string;
+  setName: string;
+  realization: number | string;
+}): Promise<XrayPhotonSpectrumMeta | null> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/xray-photon-spectrum?${qs}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  return { note: data.note, haloId: data.halo_id, logMass: data.log_mass, nPhotonsTotal: data.n_photons_total };
+}
+
+export function xrayPhotonSpectrumImageUrl(params: { suite: string; setName: string; realization: number | string }): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  return `${API_BASE}/xray-photon-spectrum/plot.png?${qs}`;
+}
+
 export type HaloProfilesMeta = { note: string; nHalos: number };
 
 export async function fetchHaloProfilesMeta(params: {

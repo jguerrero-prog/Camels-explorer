@@ -577,6 +577,56 @@ PUBLIC_XRAY_SUITES = {"IllustrisTNG", "SIMBA"}
 XRAY_SNAP_KEY = "snap_032"
 XRAY_SNAPNUM = 32
 
+# Full raw SIMPUT photon-list product (2026-08-07, issue #18) - the real
+# per-photon RA/Dec/energy X-ray data pyXSIM generated, distinct from the
+# small reduced CAMELS.Xray.hdf5 file above. Confirmed real via a direct
+# Range-fetch of 3 real files (2 suites): each halo has a small
+# "..._simput.fits" pointer file (11.25KB, a SIMPUT SRC_CAT row pointing at
+# the real photon-list file - not read by this app) and a "..._phlist.fits"
+# photon-list file (the one read here). phlist.fits layout, confirmed
+# identical across all 3 real files checked: Primary HDU (empty, exactly
+# one 2880-byte block) + one BINTABLE extension (EXTNAME=PHLIST,
+# HDUCLASS=HEASARC/SIMPUT, HDUCLAS1=PHOTONS), TFIELDS=3 (ENERGY float32 'E'
+# keV, RA float64 'D' deg, DEC float64 'D' deg), row size 20 bytes, header
+# also exactly one 2880-byte block. RA/DEC are offsets from the file's own
+# REFRA/REFDEC (both 0.0 in every file checked) - a sky-plane projection
+# centered on the halo, not an absolute celestial position.
+#
+# Real per-halo IDs/masses/positions come from a third, tiny (~3.5KB)
+# per-realization plain-text file, "...halodata.cat" (columns: ID,
+# lg(M200c), x, y, z in kpc/h, sorted by descending mass) - lets a halo be
+# picked without listing the real ~150-400-file snapshot directory.
+# Confirmed the real halo-ID set in this file exactly matches the real
+# phlist/simput file set across 4 checked realizations (2 suites x
+# {LH, CV}) once duplicate rows (a real, occasional oddity in the public
+# files - 1-2 halo IDs repeated verbatim) are deduplicated by ID.
+#
+# Real, confirmed via a direct Range-read comparison across one file's
+# start/middle/end (2026-08-07): photon rows are NOT randomly ordered -
+# three 5000-row chunks from different parts of a real 1.85M-row file gave
+# visibly different energy/RA/DEC distributions (e.g. mean energy 0.26,
+# 0.98, 0.49 keV for start/middle/end respectively). A contiguous read from
+# the start would be a spatially/spectrally biased sample. Sampling here
+# instead reads several small chunks spread evenly across the real row
+# count - confirmed two independently phase-offset stride patterns agree
+# closely on aggregate energy mean/std once combined, unlike any single
+# contiguous chunk.
+#
+# Suite/set scope: same two suites as the reduced product (confirmed no
+# X-rays/ folder exists for any other suite). Sets: LH/CV/EX use the
+# modern "{set}_{n}" folder convention (confirmed real via direct listings
+# for all three) - 1P is deliberately excluded, since its real folder here
+# uses the same *legacy* "1P_{1..6}_{n5..5}" naming (no "p", 6 params) as
+# AHF/Halo Gas Profiles/Lyman-alpha, none of which this app wires up for 1P
+# yet (see ONEP_VARIATION_SUFFIX's own comment) - not resolved here either.
+# Snapshot is fixed to snap_032 (z=0.05), matching the reduced product's
+# own only-published-snapshot scope - a handful of the most massive halos
+# also have a real snap_033 file in the same directory, a real bonus this
+# app doesn't surface.
+PUBLIC_XRAY_SIMPUT_SETS = {"LH", "CV", "EX"}
+XRAY_SIMPUT_EXPOSURE_TAG = "100ks.z0.05"
+XRAY_SIMPUT_N_CHUNKS = 20  # strided-sample chunk count - see this comment's own ordering note
+
 # Alternate halo finders (AHF, Rockstar, CAESAR) - each a genuinely different
 # file format, confirmed real via live directory listings before writing any
 # parser (not assumed from docs). All fixed to the highest-redshift snapshot
@@ -811,8 +861,8 @@ LYA_N_SIGHTLINES = 5000
 
 STATISTICS = ["Power Spectrum", "Halo Mass Function", "Stellar Mass Function", "SFR History",
               "Galaxy Scaling Relations", "Baryon Fraction", "3D Density Field", "3D Particle Cloud",
-              "2D Field Map", "X-ray Halo Profiles", "Halo Gas Profiles", "Color-Mass Diagram",
-              "Bispectrum", "Field PDF", "Lyman-alpha Spectrum"]
+              "2D Field Map", "X-ray Halo Profiles", "X-ray Photon Spectrum", "Halo Gas Profiles",
+              "Color-Mass Diagram", "Bispectrum", "Field PDF", "Lyman-alpha Spectrum"]
 
 
 @dataclass
@@ -909,6 +959,18 @@ class XrayProfiles:
     luminosities: np.ndarray   # erg/s, shape (n_halos, 7), 0.5-2.0 keV band
     log_mass: np.ndarray       # log10 M200c [Msun/h], shape (n_halos,)
     source: str = "real"       # real-data only, no synthetic fallback (see get_xray_profiles)
+    note: str = ""
+
+
+@dataclass
+class XrayPhotonSample:
+    energy: np.ndarray       # keV, per real sampled photon
+    ra_offset: np.ndarray    # deg, offset from the file's own REFRA (not absolute sky RA)
+    dec_offset: np.ndarray   # deg, offset from the file's own REFDEC (not absolute sky DEC)
+    halo_id: int
+    log_mass: float          # log10 M200c [Msun/h], from the real halodata.cat
+    n_photons_total: int     # real total row count (NAXIS2) - len(energy) is the sampled subset
+    source: str = "real"     # real-data only, no synthetic fallback (see get_xray_photon_sample)
     note: str = ""
 
 
@@ -2849,6 +2911,287 @@ def render_xray_profiles_png(suite, set_name, realization, fetch_public: bool = 
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
         sm.set_array([])
         fig.colorbar(sm, ax=ax, label="log10 M200c [Msun/h]")
+        fig.tight_layout()
+        return _finish_png(fig)
+
+
+FITS_BLOCK_BYTES = 2880
+FITS_CARD_BYTES = 80
+
+# FITS TFORM code -> numpy big-endian format string. Only the codes this
+# app's real phlist.fits files actually use (confirmed via a direct header
+# read) are covered - a real file using anything else fails closed (None
+# layout), not a guessed width.
+_FITS_TFORM_FORMATS = {"E": ">f4", "D": ">f8", "J": ">i4", "K": ">i8"}
+
+
+def _fits_card_value(card: str) -> str:
+    """Real card-value extraction (bytes 10-79 of an 80-byte FITS card).
+    Handles the one real wrinkle a naive '/'-split misses: a quoted string
+    value can itself contain a '/' (e.g. this app's own real
+    HDUCLASS = 'HEASARC/SIMPUT' card) - that inner slash must not be
+    mistaken for the start of a trailing comment."""
+    raw = card[10:]
+    stripped = raw.lstrip()
+    if stripped.startswith("'"):
+        end = stripped.find("'", 1)
+        return stripped[1:end].strip() if end != -1 else stripped[1:].strip()
+    return raw.split("/")[0].strip()
+
+
+def _parse_fits_header_block(block: bytes) -> tuple[dict, bool]:
+    """Parses one real 2880-byte FITS header block into {keyword: value}
+    (value left as its raw string form - callers cast what they need).
+    Returns (cards, saw_end) - saw_end is False if this block's own END
+    card wasn't found (i.e. the header spans more than one block)."""
+    cards = {}
+    for i in range(0, FITS_BLOCK_BYTES, FITS_CARD_BYTES):
+        card = block[i:i + FITS_CARD_BYTES].decode("ascii", errors="replace")
+        keyword = card[:8].strip()
+        if keyword == "END":
+            return cards, True
+        if keyword and card[8:10] == "= ":
+            cards[keyword] = _fits_card_value(card)
+    return cards, False
+
+
+def _read_fits_bintable_layout(header_bytes: bytes) -> dict | None:
+    """Real, generic FITS layout reader for this app's phlist.fits files:
+    skips the Primary HDU's header block(s) (NAXIS=0, no data section),
+    then reads the first extension's header to find NAXIS1 (row bytes),
+    NAXIS2 (row count), and build a real numpy structured dtype from each
+    TTYPEn/TFORMn column in the file's own real order (not assumed
+    ENERGY/RA/DEC order) - so a real file that ever reorders/adds columns
+    degrades to None instead of silently misreading bytes. Returns None if
+    the header doesn't parse as expected (not enough header bytes fetched,
+    non-BINTABLE extension, or a TFORM code this app doesn't recognize)."""
+    n_blocks = len(header_bytes) // FITS_BLOCK_BYTES
+    block_idx = 0
+    saw_end = False
+    while block_idx < n_blocks and not saw_end:
+        _, saw_end = _parse_fits_header_block(
+            header_bytes[block_idx * FITS_BLOCK_BYTES:(block_idx + 1) * FITS_BLOCK_BYTES])
+        block_idx += 1
+    if not saw_end or block_idx >= n_blocks:
+        return None  # primary header's own END wasn't found within the fetched bytes
+
+    ext_cards = {}
+    ext_saw_end = False
+    while block_idx < n_blocks and not ext_saw_end:
+        cards, ext_saw_end = _parse_fits_header_block(
+            header_bytes[block_idx * FITS_BLOCK_BYTES:(block_idx + 1) * FITS_BLOCK_BYTES])
+        ext_cards.update(cards)
+        block_idx += 1
+    if not ext_saw_end or ext_cards.get("XTENSION") != "BINTABLE":
+        return None
+
+    try:
+        row_bytes = int(ext_cards["NAXIS1"])
+        n_rows = int(ext_cards["NAXIS2"])
+        n_fields = int(ext_cards["TFIELDS"])
+    except (KeyError, ValueError):
+        return None
+
+    fields = []
+    offset = 0
+    for field_i in range(1, n_fields + 1):
+        ttype = ext_cards.get(f"TTYPE{field_i}")
+        tform = ext_cards.get(f"TFORM{field_i}")
+        if ttype is None or tform not in _FITS_TFORM_FORMATS:
+            return None
+        fields.append((ttype, _FITS_TFORM_FORMATS[tform]))
+        offset += np.dtype(_FITS_TFORM_FORMATS[tform]).itemsize
+    if offset != row_bytes:
+        return None  # real column widths don't sum to the file's own claimed row size
+
+    try:
+        ref_ra = float(ext_cards.get("REFRA", 0.0))
+        ref_dec = float(ext_cards.get("REFDEC", 0.0))
+    except ValueError:
+        ref_ra = ref_dec = 0.0
+
+    return {
+        "data_start": block_idx * FITS_BLOCK_BYTES, "row_bytes": row_bytes, "n_rows": n_rows,
+        "row_dtype": np.dtype(fields), "ref_ra": ref_ra, "ref_dec": ref_dec,
+    }
+
+
+def _xray_simput_url(suite, set_name, realization, snapnum, halo_id) -> str:
+    return (f"{PUBLIC_DATA_URL}/X-rays/{suite}/{set_name}/{set_name}_{realization}/"
+            f"snap_0{snapnum}/{suite}.{set_name}_{realization}.snap_0{snapnum}.halo_{halo_id:03d}."
+            f"{XRAY_SIMPUT_EXPOSURE_TAG}.z_phlist.fits")
+
+
+@lru_cache(maxsize=64)
+def _fetch_xray_halo_catalog(suite, set_name, realization, snapnum=XRAY_SNAPNUM):
+    """Real per-realization halo list (ID, log10 M200c, position) from the
+    tiny plain-text halodata.cat file - lets a halo be picked without
+    listing the real snap_0{nn}/ directory (150-400 files). Deduplicates by
+    ID (real files occasionally repeat 1-2 halo IDs verbatim - confirmed
+    directly, not a parsing bug) and preserves the file's own real row
+    order (descending mass), so index 0 is always the most massive real
+    halo. Returns None if this suite/set/realization has no X-ray SIMPUT
+    product at all."""
+    if suite not in PUBLIC_XRAY_SUITES or set_name not in PUBLIC_XRAY_SIMPUT_SETS:
+        return None
+    url = (f"{PUBLIC_DATA_URL}/X-rays/{suite}/{set_name}/{set_name}_{realization}/"
+           f"snap_0{snapnum}/{suite}.{set_name}_{realization}.snap_0{snapnum}.halodata.cat")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            text = resp.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    seen_ids = set()
+    halos = []
+    for line in text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        try:
+            halo_id = int(parts[0])
+            log_mass, x, y, z = (float(v) for v in parts[1:5])
+        except ValueError:
+            continue
+        if halo_id in seen_ids:
+            continue  # real duplicate row, confirmed directly - keep first occurrence
+        seen_ids.add(halo_id)
+        halos.append({"id": halo_id, "log_mass": log_mass, "x": x, "y": y, "z": z})
+    return halos or None
+
+
+@lru_cache(maxsize=64)
+def _fetch_xray_photon_sample(suite, set_name, realization, halo_id, snapnum=XRAY_SNAPNUM, max_photons=5000):
+    """Real per-photon (energy, RA offset, DEC offset) sample from one real
+    per-halo phlist.fits file, via HTTP Range requests - never a full
+    download (real files run from 10s of KB to 100+ MB). Reads the real
+    header first (generic FITS layout, see _read_fits_bintable_layout) to
+    learn the real row count/column layout, then samples
+    XRAY_SIMPUT_N_CHUNKS small chunks spread evenly across the full real
+    row range (see PUBLIC_XRAY_SIMPUT_SETS's own module comment for why a
+    single contiguous chunk would be biased). Returns a dict of real arrays/
+    scalars, or None."""
+    if suite not in PUBLIC_XRAY_SUITES or set_name not in PUBLIC_XRAY_SIMPUT_SETS:
+        return None
+    url = _xray_simput_url(suite, set_name, realization, snapnum, halo_id)
+    try:
+        req = urllib.request.Request(
+            url, headers={"Range": f"bytes=0-{4 * FITS_BLOCK_BYTES - 1}", "User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            header_bytes = resp.read()
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+    layout = _read_fits_bintable_layout(header_bytes)
+    if layout is None or not {"ENERGY", "RA", "DEC"}.issubset(layout["row_dtype"].names):
+        return None
+
+    n_rows = layout["n_rows"]
+    row_bytes = layout["row_bytes"]
+    data_start = layout["data_start"]
+    if n_rows <= max_photons:
+        chunk_starts, chunk_rows = [0], [n_rows]
+    else:
+        n_chunks = min(XRAY_SIMPUT_N_CHUNKS, n_rows)
+        rows_per_chunk = max(1, max_photons // n_chunks)
+        span = max(1, n_rows - rows_per_chunk)
+        chunk_starts = [int(i * span / max(1, n_chunks - 1)) for i in range(n_chunks)]
+        chunk_rows = [rows_per_chunk] * n_chunks
+
+    rows_out = []
+    try:
+        for start_row, n in zip(chunk_starts, chunk_rows):
+            byte_start = data_start + start_row * row_bytes
+            byte_end = byte_start + n * row_bytes - 1
+            req = urllib.request.Request(
+                url, headers={"Range": f"bytes={byte_start}-{byte_end}", "User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                chunk = resp.read()
+            if len(chunk) != n * row_bytes:
+                continue  # a short real read for this one chunk - skip it, keep the rest
+            rows_out.append(np.frombuffer(chunk, dtype=layout["row_dtype"]))
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+    if not rows_out:
+        return None
+
+    rows = np.concatenate(rows_out)
+    return {
+        "energy": rows["ENERGY"].astype(np.float64), "ra": rows["RA"].astype(np.float64),
+        "dec": rows["DEC"].astype(np.float64), "n_rows": n_rows,
+        "ref_ra": layout["ref_ra"], "ref_dec": layout["ref_dec"],
+    }
+
+
+def get_xray_halo_catalog(suite, set_name, realization, fetch_public: bool = False):
+    """Real per-realization X-ray SIMPUT halo list (ID + log10 M200c),
+    sorted by descending mass. No synthetic version - see get_xray_profiles'
+    own reasoning."""
+    if not fetch_public:
+        return None
+    return _fetch_xray_halo_catalog(suite, set_name, realization)
+
+
+def get_xray_photon_sample(suite, set_name, realization, halo_id=None, max_photons=5000,
+                            fetch_public: bool = False) -> XrayPhotonSample | None:
+    """Real per-photon energy/sky-offset sample from one halo's real SIMPUT
+    phlist.fits file (see PUBLIC_XRAY_SIMPUT_SETS's own module comment for
+    the real format/sampling approach). `halo_id=None` picks the most
+    massive real halo in this realization (index 0 of the real
+    halodata.cat, sorted by descending mass). No synthetic version - a
+    fabricated photon list isn't a useful stand-in, same reasoning as every
+    other catalog-shaped statistic in this app."""
+    if not fetch_public:
+        return None
+    halos = _fetch_xray_halo_catalog(suite, set_name, realization)
+    if halos is None:
+        return None
+    if halo_id is None:
+        halo = halos[0]
+    else:
+        halo = next((h for h in halos if h["id"] == halo_id), None)
+        if halo is None:
+            return None
+
+    fetched = _fetch_xray_photon_sample(suite, set_name, realization, halo["id"], max_photons=max_photons)
+    if fetched is None:
+        return None
+    return XrayPhotonSample(
+        energy=fetched["energy"], ra_offset=fetched["ra"], dec_offset=fetched["dec"],
+        halo_id=halo["id"], log_mass=halo["log_mass"], n_photons_total=fetched["n_rows"],
+        note=(f"z = {SNAPSHOT_REDSHIFTS[XRAY_SNAPNUM]:.2f} ({XRAY_SNAP_KEY}, "
+              f"{XRAY_SIMPUT_EXPOSURE_TAG} exposure) - public CAMELS data release "
+              f"(X-rays/{suite}/{set_name}/{set_name}_{realization}/{XRAY_SNAP_KEY}/halo_"
+              f"{halo['id']:03d}, real SIMPUT photon list, log10 M200c={halo['log_mass']:.2f}), "
+              f"{len(fetched['energy']):,} of {fetched['n_rows']:,} real photons sampled "
+              f"(spread across up to {XRAY_SIMPUT_N_CHUNKS} chunks evenly across the file - a "
+              f"contiguous read from the start would be spatially/spectrally biased, confirmed "
+              f"directly). RA/DEC are offsets (deg) from this file's own reference point "
+              f"({fetched['ref_ra']:.4f}, {fetched['ref_dec']:.4f}), not absolute sky coordinates."),
+    )
+
+
+def render_xray_photon_spectrum_png(suite, set_name, realization, halo_id=None, max_photons=5000,
+                                     fetch_public: bool = False) -> bytes | None:
+    """Real photon-energy histogram (the smaller, more broadly-useful of
+    the two real chart shapes this real photon sample supports - a sky-
+    position scatter colored by energy is a real, deliberately deferred
+    follow-up, not built here, see issue #18). Returns None (not raising)
+    when get_xray_photon_sample itself returns None."""
+    sample = get_xray_photon_sample(suite, set_name, realization, halo_id=halo_id,
+                                     max_photons=max_photons, fetch_public=fetch_public)
+    if sample is None:
+        return None
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(7, 5), dpi=150, facecolor="white")
+        ax = fig.subplots()
+        ax.hist(sample.energy, bins=40, color="#4c72b0", edgecolor="white", linewidth=0.3)
+        ax.set_xlabel("Photon energy [keV]")
+        ax.set_ylabel(f"Photons ({len(sample.energy):,} of {sample.n_photons_total:,} sampled)")
+        ax.set_title(f"Halo {sample.halo_id:03d} (log10 M200c = {sample.log_mass:.2f})")
+        ax.grid(alpha=0.3)
         fig.tight_layout()
         return _finish_png(fig)
 

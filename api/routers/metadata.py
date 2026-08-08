@@ -71,6 +71,7 @@ _STATISTIC_SUITES = {
                                                     # a deliberately separate literal, see its own comment
     "3D Particle Cloud": B.PUBLIC_SIMS_SUITES,
     "X-ray Halo Profiles": B.PUBLIC_XRAY_SUITES,
+    "X-ray Photon Spectrum": B.PUBLIC_XRAY_SUITES,
     "Halo Gas Profiles": B.PUBLIC_PROFILES_SUITES,
     "Bispectrum": B.PUBLIC_BK_SUITES,
     "Field PDF": B.PUBLIC_PDF_SUITES,
@@ -86,6 +87,12 @@ _STATISTIC_SUITES = {
 _STATISTIC_SETS = {
     "Bispectrum": ["LH"],
     "Halo Gas Profiles": [s for s in B.SET_REALIZATIONS if s in B.PUBLIC_PROFILES_SETS],
+    # Real (2026-08-07, issue #18): 1P's real X-ray SIMPUT folder uses the
+    # *legacy* "1P_{1..6}_{n5..5}" naming (no "p", 6 params), same as AHF/
+    # Halo Gas Profiles/Lyman-alpha - none of which this app wires up for
+    # 1P yet, and not resolved here either. See backend.py's own
+    # PUBLIC_XRAY_SIMPUT_SETS comment.
+    "X-ray Photon Spectrum": [s for s in B.SET_REALIZATIONS if s in B.PUBLIC_XRAY_SIMPUT_SETS],
 }
 
 
