@@ -319,6 +319,41 @@ export function xrayPhotonSpectrumImageUrl(params: { suite: string; setName: str
   return `${API_BASE}/xray-photon-spectrum/plot.png?${qs}`;
 }
 
+// Real-data-only, no synthetic fallback (2026-08-08, issue #30) - same
+// note-only/PNG-is-the-chart split as fetchXrayProfilesMeta/
+// xrayProfilesImageUrl above. `speciesSampled`/`speciesTotal` come back
+// keyed by real species name ("dark_matter"/"gas"/"stars" - "stars" is
+// real only for SIMBA, confirmed absent for Astrid).
+export type SpreadMetricMeta = { note: string; speciesSampled: Record<string, number>; speciesTotal: Record<string, number> };
+
+export async function fetchSpreadMetricMeta(params: {
+  suite: string;
+  setName: string;
+  realization: number | string;
+}): Promise<SpreadMetricMeta | null> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/spread-metric?${qs}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const speciesSampled: Record<string, number> = {};
+  for (const [species, values] of Object.entries(data.species_spread as Record<string, number[]>)) {
+    speciesSampled[species] = values.length;
+  }
+  return { note: data.note, speciesSampled, speciesTotal: data.species_n_total };
+}
+
+export function spreadMetricImageUrl(params: { suite: string; setName: string; realization: number | string }): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  return `${API_BASE}/spread-metric/plot.png?${qs}`;
+}
+
 export type HaloProfilesMeta = { note: string; nHalos: number };
 
 export async function fetchHaloProfilesMeta(params: {

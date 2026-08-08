@@ -33,6 +33,14 @@ export type SingleRealizationFieldsProps = {
   /** Restricts the Set dropdown similarly - only Halo Gas Profiles is
    * narrower than "every set" among this component's real statistics. */
   allowedSets?: string[];
+  /** Like `allowedSets`, but the allowed list depends on the currently
+   * selected Suite (added 2026-08-08, issue #30, for Spread Metric -
+   * SIMBA's real coverage here is {LH, CV}, Astrid's is {LH, CV, 1P}, a
+   * genuine per-suite difference `allowedSets`' one flat list can't
+   * express). Takes precedence over `allowedSets` when both are passed;
+   * a suite missing from this map has no real sets at all for this
+   * statistic (an empty Set dropdown, not a guessed fallback). */
+  allowedSetsForSuite?: Record<string, string[]>;
   /** Hides both real value-adjustment controls this component can render -
    * the 1P "Variation" OptionSlider and the plain "Realization"
    * NumberStepper (non-1P sets) - defaulting to shown, i.e. every real
@@ -76,7 +84,7 @@ const FALLBACK_ONEP_MAX_INDEX = 28;
  * Compare-mode prop, since seven real statistics need this exact shape
  * with none of the multi-realization machinery at all. */
 export function SingleRealizationFields({
-  catalog, value, onChange, allowedSuites, allowedSets, hideRealizationValueControls,
+  catalog, value, onChange, allowedSuites, allowedSets, allowedSetsForSuite, hideRealizationValueControls,
   onepScheme = 'modern',
 }: SingleRealizationFieldsProps) {
   const activeSet = catalog?.sets.find((s) => s.name === value.setName);
@@ -84,8 +92,9 @@ export function SingleRealizationFields({
   const isOnep = value.setName === '1P';
   const isLegacyOnep = onepScheme === 'legacy';
 
+  const effectiveAllowedSets = allowedSetsForSuite ? (allowedSetsForSuite[value.suite] ?? []) : allowedSets;
   const suiteOptions = (catalog?.suites ?? [value.suite]).filter((s) => !allowedSuites || allowedSuites.includes(s));
-  const setOptions = (catalog?.sets ?? []).filter((s) => !allowedSets || allowedSets.includes(s.name));
+  const setOptions = (catalog?.sets ?? []).filter((s) => !effectiveAllowedSets || effectiveAllowedSets.includes(s.name));
   const applySet = (setName: string) =>
     onChange({
       ...value, setName,
@@ -104,11 +113,16 @@ export function SingleRealizationFields({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowedSuites, value.suite]);
   useEffect(() => {
-    if (allowedSets && setOptions.length > 0 && !setOptions.some((s) => s.name === value.setName)) {
+    if (effectiveAllowedSets && setOptions.length > 0 && !setOptions.some((s) => s.name === value.setName)) {
       applySet(setOptions[0].name);
     }
+    // Also re-runs on `value.suite` (not just `effectiveAllowedSets`/
+    // `value.setName`) - with `allowedSetsForSuite`, switching Suite alone
+    // can invalidate the current Set even though `effectiveAllowedSets`'s
+    // own identity may not have visibly changed to a shallow dependency
+    // check in every case.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allowedSets, value.setName]);
+  }, [effectiveAllowedSets, value.setName, value.suite]);
 
   // Same 1P picker as RealizationFields (see its own comment for why this
   // needs a parameter+variation picker instead of a plain realization

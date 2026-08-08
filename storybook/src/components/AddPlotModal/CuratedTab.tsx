@@ -11,6 +11,12 @@ export type CuratedSelection = {
   statistic: string;
 };
 
+// Statistics whose real 1P data uses the *legacy* folder-naming scheme
+// (no "p", 6 params, 11 variations -5..5) rather than the modern default
+// - see SingleRealizationFields' own onepScheme prop. Added 2026-08-08
+// (issue #30, Spread Metric) alongside Halo Gas Profiles (issue #26).
+const LEGACY_ONEP_STATISTICS = new Set(['Halo Gas Profiles', 'Spread Metric']);
+
 export type CuratedTabProps = {
   selection: CuratedSelection;
   onChange: (selection: CuratedSelection) => void;
@@ -111,6 +117,8 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
                 : catalog.statistic_suites[selection.statistic]
           }
           allowedSets={catalog.statistic_sets[selection.statistic]}
+          allowedSetsForSuite={catalog.statistic_sets_for_suite[selection.statistic]}
+          onepScheme={LEGACY_ONEP_STATISTICS.has(selection.statistic) ? 'legacy' : 'modern'}
           hideRealizationValueControls
         />
       )}

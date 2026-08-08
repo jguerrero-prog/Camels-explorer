@@ -1,0 +1,51 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as SpreadMetricSidebarStories from './SpreadMetricSidebar.stories';
+
+<Meta of={SpreadMetricSidebarStories} />
+
+# SpreadMetricSidebar
+
+Spread Metric's real per-tile sidebar (2026-08-08, issue #30) — a genuinely new statistic, not ported from `app.py`. Reads `Spread_metric/{suite}/{set}/{set}_{n}/Spread_Output_{set}_{n}_snap{NNN}.hdf5`, the real per-particle Lagrangian-displacement diagnostic (Gebhardt et al. 2024, MNRAS 529, 4896) — "the final distance at z=0 between a particle and the dark matter particle it was nearest to in the initial conditions."
+
+## Token
+
+Composed entirely from `SingleRealizationFields`/`Button` — no tokens of its own, same shape as `XrayHaloProfilesSidebar`.
+
+## Spec
+
+<Canvas of={SpreadMetricSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Realization: `SingleRealizationFields` — no Compare mode.
+- Suite restricted to `catalog.statistic_suites['Spread Metric']` (SIMBA/Astrid — real, confirmed via both a direct listing and the paper's own methods section that IllustrisTNG's real LH/CV are genuinely empty by design, not a fetch bug; IllustrisTNG's real SB28 coverage is deliberately deferred, see `backend.py`'s own module comment).
+- Set restricted **per suite**, not one flat list — `allowedSetsForSuite={catalog.statistic_sets_for_suite['Spread Metric']}` (SIMBA: LH/CV; Astrid: LH/CV/1P). This is the first real statistic in this app whose set coverage genuinely varies by suite; `SingleRealizationFields` gained a dedicated prop for it rather than reusing the flat `allowedSets` (see that component's own comment).
+- `onepScheme="legacy"` for Astrid's real 1P folders — same convention as `HaloGasProfilesSidebar` (no "p", 6 params, 11 variations -5..5), confirmed real and clean (66 folders, no gaps) directly against a listing.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/spread-metric` (JSON: per-species sample size/total) and `/plot.png` (the real render — a log-x step histogram, one line per real species, see `StaticImageChart.mdx`, `PlotTile`'s `chart.kind: 'static-image'`).
+- **Real-data only, no synthetic fallback** — `get_spread_metric()` returns `None` outright for suite/set combinations without this product.
+- Real sampling caveat, shown in the tile's own note: `spread` values in the real file are **not** randomly ordered (confirmed directly — a contiguous chunk from the file's start differs meaningfully from middle/end chunks), so the backend samples 20 small chunks spread evenly across the real particle count instead of reading a contiguous block or the whole (1.1-3.1GB) file.
+- Real per-suite species asymmetry: SIMBA has real `dark_matter`/`gas`/`stars` data; Astrid has no `stars` group at all (confirmed absent, not a fetch gap) — the chart simply shows whichever species are real for the selected suite, no placeholder line for a missing one.
+- SIMBA's real 1P folders exist but mix two different naming schemes for different parameter ranges (a legacy flat-index scheme for params 1-6, a differently-shaped bare scheme for params 7-28) — deliberately unresolved, out of this issue's scope, which is why SIMBA's own 1P set isn't offered here even though Astrid's is.
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { SpreadMetricSidebar } from '@/components/SpreadMetricSidebar/SpreadMetricSidebar';
+import type { SpreadMetricParams } from '@/components/SpreadMetricSidebar/SpreadMetricSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<SpreadMetricParams>({
+    suite: 'SIMBA', setName: 'LH', realization: 0,
+  });
+  return (
+    <SpreadMetricSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+    />
+  );
+}
+```

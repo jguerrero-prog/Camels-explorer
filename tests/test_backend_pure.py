@@ -196,6 +196,16 @@ class TestRealDataLookupTables:
         assert B.SAM_SET_FOLDER["LH"] == "sc-sam" and B.SAM_SET_FOLDER["CV"] == "fid-sc-sam"
         assert B.SAM_SET_REALIZATIONS["LH"] == 1000 and B.SAM_SET_REALIZATIONS["CV"] == 5
 
+    def test_spread_metric_snap_covers_every_public_suite(self):
+        # Real, confirmed via direct fetches (issue #30): a suite missing
+        # from SPREAD_METRIC_SNAP would KeyError inside
+        # _fetch_spread_metric_sample rather than failing closed - every
+        # public suite must have a real snapshot number.
+        assert set(B.SPREAD_METRIC_SNAP) == B.PUBLIC_SPREAD_METRIC_SUITES
+        assert B.SPREAD_METRIC_SNAP["SIMBA"] == "033" and B.SPREAD_METRIC_SNAP["Astrid"] == "090"
+        assert B.PUBLIC_SPREAD_METRIC_SETS["SIMBA"] == {"LH", "CV"}
+        assert B.PUBLIC_SPREAD_METRIC_SETS["Astrid"] == {"LH", "CV", "1P"}
+
 
 class TestPngRenderConcurrency:
     """Real regression test for the matplotlib thread-safety bug found and

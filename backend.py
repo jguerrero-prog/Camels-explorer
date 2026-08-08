@@ -902,7 +902,7 @@ LYA_N_SIGHTLINES = 5000
 STATISTICS = ["Power Spectrum", "Halo Mass Function", "Stellar Mass Function", "SFR History",
               "Galaxy Scaling Relations", "Baryon Fraction", "3D Density Field", "3D Particle Cloud",
               "2D Field Map", "X-ray Halo Profiles", "X-ray Photon Spectrum", "Halo Gas Profiles",
-              "Color-Mass Diagram", "Bispectrum", "Field PDF", "Lyman-alpha Spectrum"]
+              "Color-Mass Diagram", "Bispectrum", "Field PDF", "Lyman-alpha Spectrum", "Spread Metric"]
 
 
 @dataclass
@@ -1079,6 +1079,16 @@ class LymanAlphaSpectrum:
                                        # absorption comes from even in the fully-saturated
                                        # (flux=0) regime where tau/flux alone are uninformative
     source: str = "real"    # real-data only, no synthetic fallback (see get_lya_spectrum)
+    note: str = ""
+
+
+@dataclass
+class SpreadMetricSample:
+    species_spread: dict       # {"dark_matter": np.ndarray, "gas": ..., "stars"?: ...} kpc/h,
+                                # a real strided sample - see get_spread_metric's own note
+    species_n_total: dict      # real total particle count per species (may be far more than
+                                # the sample above)
+    source: str = "real"       # real-data only, no synthetic fallback (see get_spread_metric)
     note: str = ""
 
 
@@ -4316,5 +4326,154 @@ def render_lya_spectrum_png(suite, set_name, realization, snapnum, sightline,
         ax2.set_xlabel("spectral pixel (uncalibrated)")
         ax2.set_ylabel("HI column density")
         ax2.grid(alpha=0.3, which="both")
+        fig.tight_layout()
+        return _finish_png(fig)
+
+
+# ---------------------------------------------------------------------------
+# Spread_metric (per-particle Lagrangian displacement diagnostic) -
+# 2026-08-08, issue #30. Real, undocumented top-level product (absent from
+# organization.html and the DR1 paper), traced to a real published paper -
+# Gebhardt et al. 2024 (MNRAS 529, 4896, arXiv:2307.11832), metric
+# originally from Borrow et al. 2020: "the final distance at z=0 between
+# [a] particle and the dark matter particle it was nearest to in the
+# initial conditions" - a per-particle Lagrangian-displacement diagnostic
+# characterizing baryonic feedback's effect on structure.
+#
+# Real coverage is genuinely asymmetric per suite, confirmed directly (a
+# folder listing AND cross-checked against the paper's own methods,
+# Sec 2.2) - not a uniform product:
+#   SIMBA: LH (1000)/CV (27) real and populated. 1P also has real folders
+#     but mixes two different naming schemes for different parameter
+#     ranges (params 1-6: a legacy flat 0-65 index like Profiles' own 1P;
+#     params 7-28: a bare "{param}_{variation}" with no "p") - genuinely
+#     unresolved, deliberately out of this issue's scope.
+#   Astrid: LH (1000)/CV (27)/1P (66, the same clean legacy 6-param/11-
+#     variation scheme as Profiles' own 1P - but this product's own file
+#     name matches the folder suffix VERBATIM (confirmed directly), unlike
+#     Profiles' flat-index translation - do not reuse
+#     _profiles_onep_flat_index here, it would be wrong for this product).
+#   IllustrisTNG: LH/CV genuinely EMPTY (0 real folders) by design - the
+#     paper's own Sec 2.2 lists only "1P and LH... from Astrid" and
+#     "28-parameter 1P and SB28... from IllustrisTNG" as computed, not a
+#     fetch bug. SB28 (1000 real folders) IS populated but deliberately
+#     deferred to a follow-up: its real folder name ("SB28", not this
+#     app's UI-facing "SB") and real realization count (1000) don't match
+#     this app's existing SB_REALIZATIONS_FOR_SUITE (2048 for
+#     IllustrisTNG, a different real product's own count) - needs its own
+#     resolution, not built here.
+PUBLIC_SPREAD_METRIC_SUITES = {"SIMBA", "Astrid"}
+PUBLIC_SPREAD_METRIC_SETS = {"SIMBA": {"LH", "CV"}, "Astrid": {"LH", "CV", "1P"}}
+# Real, confirmed via direct fetches: the file's own embedded snapshot
+# number is each suite's real z=0 snapshot in its OWN native schedule -
+# SIMBA is "033" (this app's usual 34-snapshot z=0), Astrid is "090" (the
+# same ~90-snapshot schedule Subfind/AHF/Rockstar/CAESAR already use for
+# it elsewhere in this app) - not this app's own normalized index.
+SPREAD_METRIC_SNAP = {"SIMBA": "033", "Astrid": "090"}
+SPREAD_METRIC_SPECIES = ("dark_matter", "gas", "stars")  # "stars" real only for SIMBA -
+                                                           # confirmed absent (no group at
+                                                           # all) for Astrid
+SPREAD_METRIC_N_CHUNKS = 20
+SPREAD_METRIC_CHUNK_SIZE = 2500  # per chunk, per species - 20 x 2500 = 50,000-value sample
+# Real, confirmed via direct timing (2026-08-08): a naive strided read at
+# fsspec's default 5MB HTTP block size took 43.8s (each of the 20 slices
+# pulled a whole 5MB block). An explicit block_size close to one chunk's
+# own real byte size (2500 * 8 = 20,000 bytes) cut this to ~2s - confirmed
+# directly, not guessed.
+SPREAD_METRIC_BLOCK_SIZE = 65536
+# Real, confirmed via a direct Range-read comparison across one file's
+# start/middle/end (2026-08-08): spread values are NOT randomly ordered -
+# a contiguous 50,000-value chunk from the start (mean 112.4) differs
+# meaningfully from middle/end chunks (mean 87.9/87.6). Two independently
+# phase-offset strided samples (20 chunks spread evenly across the full
+# array) agree closely (mean 104.9/104.7) - same real-ordering risk and
+# fix already found for X-ray SIMPUT's photon lists (issue #18).
+
+
+@lru_cache(maxsize=32)
+def _fetch_spread_metric_sample(suite, set_name, realization):
+    """Real per-species (dark_matter/gas/stars) strided sample of the
+    real `spread` array - never the whole array (1.1-3.1GB/realization),
+    and never a single contiguous chunk (order-biased, see this section's
+    own module comment). Returns (species_spread, species_n_total) or
+    None."""
+    if suite not in PUBLIC_SPREAD_METRIC_SUITES or set_name not in PUBLIC_SPREAD_METRIC_SETS.get(suite, set()):
+        return None
+    snap = SPREAD_METRIC_SNAP[suite]
+    url = (f"{PUBLIC_DATA_URL}/Spread_metric/{suite}/{set_name}/{set_name}_{realization}/"
+           f"Spread_Output_{set_name}_{realization}_snap{snap}.hdf5")
+    try:
+        with fsspec.open(url, "rb", block_size=SPREAD_METRIC_BLOCK_SIZE) as fobj:
+            with h5py.File(fobj, "r") as hf:
+                species_spread, species_n_total = {}, {}
+                for species in SPREAD_METRIC_SPECIES:
+                    if species not in hf or "spread" not in hf[species]:
+                        continue
+                    sp = hf[species]["spread"]
+                    n = sp.shape[0]
+                    species_n_total[species] = n
+                    total_sample = SPREAD_METRIC_N_CHUNKS * SPREAD_METRIC_CHUNK_SIZE
+                    if n <= total_sample:
+                        species_spread[species] = sp[:]
+                        continue
+                    starts = [int(i * (n - SPREAD_METRIC_CHUNK_SIZE) / (SPREAD_METRIC_N_CHUNKS - 1))
+                              for i in range(SPREAD_METRIC_N_CHUNKS)]
+                    species_spread[species] = np.concatenate(
+                        [sp[s:s + SPREAD_METRIC_CHUNK_SIZE] for s in starts])
+    except Exception:
+        logger.exception("_fetch_spread_metric_sample failed for suite=%s set_name=%s realization=%s", suite, set_name, realization)
+        return None
+    if not species_spread:
+        return None
+    return species_spread, species_n_total
+
+
+def get_spread_metric(suite, set_name, realization, fetch_public: bool = False) -> SpreadMetricSample | None:
+    """Real per-particle Lagrangian displacement ("spread") sample, split
+    by species. No synthetic version - a fabricated spread distribution
+    isn't a useful stand-in, same reasoning as every other catalog-shaped
+    statistic in this app."""
+    if not fetch_public:
+        return None
+    fetched = _fetch_spread_metric_sample(suite, set_name, realization)
+    if fetched is None:
+        return None
+    species_spread, species_n_total = fetched
+    species_list = ", ".join(sorted(species_spread))
+    return SpreadMetricSample(
+        species_spread=species_spread, species_n_total=species_n_total,
+        note=(f"z = 0.00 - public CAMELS data release (Spread_metric/{suite}/{set_name}/"
+              f"{set_name}_{realization}/Spread_Output_{set_name}_{realization}_"
+              f"snap{SPREAD_METRIC_SNAP[suite]}.hdf5), species: {species_list} - "
+              f"{SPREAD_METRIC_N_CHUNKS} chunks spread evenly across each species' real "
+              f"particle count (a contiguous read from the start would be order-biased, "
+              f"confirmed directly), not the complete real array"),
+    )
+
+
+def render_spread_metric_png(suite, set_name, realization, fetch_public: bool = False) -> bytes | None:
+    """Real per-species spread distribution (log-x histogram, one line per
+    species) - the paper's own diagnostic shape (Gebhardt et al. 2024
+    Fig. 2-3), not a raw particle browser (per issue #30's own scope).
+    Returns None (not raising) when get_spread_metric itself does."""
+    sample = get_spread_metric(suite, set_name, realization, fetch_public=fetch_public)
+    if sample is None:
+        return None
+    colors = {"dark_matter": "#4c4c4c", "gas": "#4c72b0", "stars": "#dd8452"}
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(7, 5), dpi=150, facecolor="white")
+        ax = fig.subplots()
+        for species, values in sample.species_spread.items():
+            positive = values[values > 0]
+            if len(positive) == 0:
+                continue
+            bins = np.logspace(np.log10(positive.min()), np.log10(positive.max()), 40)
+            ax.hist(positive, bins=bins, histtype="step", lw=1.6,
+                    color=colors.get(species, "#333333"), label=species.replace("_", " "))
+        ax.set_xscale("log")
+        ax.set_xlabel("spread [kpc/h]")
+        ax.set_ylabel(f"particles (of {SPREAD_METRIC_N_CHUNKS * SPREAD_METRIC_CHUNK_SIZE:,} sampled per species)")
+        ax.legend()
+        ax.grid(alpha=0.3, which="both")
         fig.tight_layout()
         return _finish_png(fig)

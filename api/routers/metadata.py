@@ -78,6 +78,17 @@ _STATISTIC_SUITES = {
     "Lyman-alpha Spectrum": B.PUBLIC_LYA_SUITES,
     "Power Spectrum": B.PUBLIC_PK_SUITES,
     "Halo Mass Function": B.PUBLIC_SUBFIND_SUITES,
+    "Spread Metric": B.PUBLIC_SPREAD_METRIC_SUITES,
+}
+
+# Per-statistic real SET coverage that varies BY SUITE (2026-08-08, issue
+# #30) - Spread Metric's real set coverage genuinely differs per suite
+# (SIMBA has no real 1P here; Astrid does) in a way `_STATISTIC_SETS`
+# below can't express (one flat list, suite-independent). A statistic
+# missing here has no such per-suite variation - `_STATISTIC_SETS`/no
+# restriction at all still applies uniformly across its allowed suites.
+_STATISTIC_SETS_FOR_SUITE = {
+    "Spread Metric": {suite: sorted(sets) for suite, sets in B.PUBLIC_SPREAD_METRIC_SETS.items()},
 }
 
 # Per-statistic real SET coverage, for the two statistics whose real gate
@@ -187,6 +198,7 @@ def metadata():
             for statistic, allowed in _STATISTIC_SUITES.items()
         },
         "statistic_sets": _STATISTIC_SETS,
+        "statistic_sets_for_suite": _STATISTIC_SETS_FOR_SUITE,
         "sfrh_symbolic_model": {
             "fiducial": B.SFRHSymbolicModel.FIDUCIAL,
             "om_range": B.SFRHSymbolicModel.OM_RANGE,
