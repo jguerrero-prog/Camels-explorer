@@ -588,6 +588,26 @@ PUBLIC_XRAY_SUITES = {"IllustrisTNG", "SIMBA"}
 XRAY_SNAP_KEY = "snap_032"
 XRAY_SNAPNUM = 32
 
+# Real per-suite SET coverage for the collated profile product above
+# (get_xray_profiles) - confirmed directly (2026-08-08, issue #51) by
+# listing the real file's own top-level group keys, which are flat
+# "{set}_{realization}" strings, not the compound "1P_p{n}_{v}" naming
+# other statistics' own 1P scheme uses:
+# - IllustrisTNG: 66 real "1P_0".."1P_65" keys (flat index, same real
+#   count - not confirmed same real mapping - as Halo Gas Profiles' own
+#   legacy 6-param x 11-variation scheme, issue #26) + 4 real "EX_0".."EX_3".
+# - SIMBA: the same 66 real "1P_N" keys, but ZERO real "EX_*" keys - a
+#   real, suite-specific absence (SIMBA's own file genuinely has no EX
+#   entries), not a fetch gap.
+# _fetch_xray_profiles/get_xray_profiles themselves have no set
+# restriction at all (`hf[suite][f"{set_name}_{realization}"]` is fully
+# generic) - this dict exists only to drive the frontend's real Suite/Set
+# picker, not to gate the fetch itself.
+PUBLIC_XRAY_PROFILES_SETS = {
+    "IllustrisTNG": {"LH", "CV", "1P", "EX"},
+    "SIMBA": {"LH", "CV", "1P"},
+}
+
 # Full raw SIMPUT photon-list product (2026-08-07, issue #18) - the real
 # per-photon RA/Dec/energy X-ray data pyXSIM generated, distinct from the
 # small reduced CAMELS.Xray.hdf5 file above. Confirmed real via a direct
