@@ -15,10 +15,11 @@ export type CuratedSelection = {
 // (no "p", 6 params, 11 variations -5..5) rather than the modern default
 // - see SingleRealizationFields' own onepScheme prop. Added 2026-08-08
 // (issue #30, Spread Metric) alongside Halo Gas Profiles (issue #26).
-const LEGACY_ONEP_STATISTICS = new Set(['Halo Gas Profiles', 'Spread Metric']);
-// Real flat "1P_{N}" index, no parameter/variation structure at all - see
-// SingleRealizationFields' own onepScheme prop. Added 2026-08-08, issue #51.
-const FLAT_ONEP_STATISTICS = new Set(['X-ray Halo Profiles']);
+// X-ray Halo Profiles joined 2026-08-08 (issue #51) - its own real file
+// stores a bare flat "1P_{N}" index with no folder structure at all, but
+// confirmed to be the exact same (param, variation) -> index formula as
+// this scheme, not a separate convention.
+const LEGACY_ONEP_STATISTICS = new Set(['Halo Gas Profiles', 'Spread Metric', 'X-ray Halo Profiles']);
 
 export type CuratedTabProps = {
   selection: CuratedSelection;
@@ -121,11 +122,7 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
           }
           allowedSets={catalog.statistic_sets[selection.statistic]}
           allowedSetsForSuite={catalog.statistic_sets_for_suite[selection.statistic]}
-          onepScheme={
-            LEGACY_ONEP_STATISTICS.has(selection.statistic)
-              ? 'legacy'
-              : FLAT_ONEP_STATISTICS.has(selection.statistic) ? 'flat' : 'modern'
-          }
+          onepScheme={LEGACY_ONEP_STATISTICS.has(selection.statistic) ? 'legacy' : 'modern'}
           hideRealizationValueControls
         />
       )}

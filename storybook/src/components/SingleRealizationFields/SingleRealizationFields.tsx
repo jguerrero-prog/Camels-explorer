@@ -58,19 +58,15 @@ export type SingleRealizationFieldsProps = {
   hideRealizationValueControls?: boolean;
   /** Which real 1P folder-naming scheme this statistic's own real 1P data
    * uses - 'modern' (default, "1P_p{index}_{variation}", 28 params, 5
-   * variations), 'legacy' ("1P_{index}_{variation}", no "p", 6 params, 11
-   * variations -5..5), or 'flat' (a bare "1P_{N}" real flat index, added
-   * 2026-08-08, issue #51, for X-ray Halo Profiles - the real file has no
-   * per-parameter/variation structure exposed at all, just a real flat
-   * 0-65 index, and no independently-confirmed mapping from that index
-   * back to a specific parameter/variation - unlike 'legacy', which at
-   * least knows its own real parameter COUNT even without real physical
-   * identities, 'flat' skips the whole 1P Parameter/Variation UI entirely
-   * and falls through to the plain Realization stepper below, since
-   * showing a fabricated parameter/variation split here would be a guess,
-   * not a fact). The two schemes above are genuinely different real
-   * conventions (see backend.py's own comment), not a UI preference. */
-  onepScheme?: 'modern' | 'legacy' | 'flat';
+   * variations) or 'legacy' ("1P_{index}_{variation}", no "p", 6 params,
+   * 11 variations -5..5). Real, genuinely different conventions (see
+   * backend.py's own comment), not a UI preference - X-ray Halo Profiles
+   * (issue #51) uses 'legacy' too, despite its own real file storing a
+   * bare flat "1P_{N}" index with no folder structure at all - confirmed
+   * (not assumed) to be the exact same (param, variation) -> index formula
+   * as Halo Gas Profiles' own legacy scheme, by comparing real per-index
+   * halo-mass data between both products. */
+  onepScheme?: 'modern' | 'legacy';
 };
 
 // Real 1P variation steps (app.py's own select_slider options) - 0 is the
@@ -97,8 +93,7 @@ export function SingleRealizationFields({
 }: SingleRealizationFieldsProps) {
   const activeSet = catalog?.sets.find((s) => s.name === value.setName);
   const realizationCount = realizationCountFor(catalog, value.setName, value.suite);
-  const isFlatOnep = onepScheme === 'flat';
-  const isOnep = value.setName === '1P' && !isFlatOnep;
+  const isOnep = value.setName === '1P';
   const isLegacyOnep = onepScheme === 'legacy';
 
   const effectiveAllowedSets = allowedSetsForSuite ? (allowedSetsForSuite[value.suite] ?? []) : allowedSets;
@@ -107,7 +102,7 @@ export function SingleRealizationFields({
   const applySet = (setName: string) =>
     onChange({
       ...value, setName,
-      realization: setName === '1P' && !isFlatOnep ? (isLegacyOnep ? legacyOnepRealizationId(1, 0) : onepRealizationId(1, 0)) : 0,
+      realization: setName === '1P' ? (isLegacyOnep ? legacyOnepRealizationId(1, 0) : onepRealizationId(1, 0)) : 0,
     });
 
   // Auto-correct: a narrower allowlist can appear after the value was
@@ -136,23 +131,26 @@ export function SingleRealizationFields({
   // Same 1P picker as RealizationFields (see its own comment for why this
   // needs a parameter+variation picker instead of a plain realization
   // number) - Galaxy Scaling Relations, Color-Mass Diagram (modern scheme),
-  // and Halo Gas Profiles (legacy scheme, 2026-08-08, issue #26) among this
-  // component's eight real statistics have real 1P data wired up server-
-  // side; the other five will show their existing "no data"/synthetic-
-  // fallback honesty for a 1P selection, same as any other unsupported
-  // suite/set combination.
-  // Legacy scheme has no per-suite parameter identities/missing-variation
-  // data at all (unlike the modern scheme's ONEP_TNG_PARAMS, diffed from
-  // real output-file attrs) - always 6 generic "p{N}" options, no real-
-  // value lookup, no missing-variation warning. Real, not a placeholder:
-  // this scheme's own 6 parameters' physical identities haven't been
-  // determined, so showing a real value or a specific name here would be
-  // a guess, not a fact.
+  // Halo Gas Profiles, and X-ray Halo Profiles (legacy scheme - 2026-08-08,
+  // issues #26/#51) among this component's real statistics have real 1P
+  // data wired up server-side; the rest will show their existing "no
+  // data"/synthetic-fallback honesty for a 1P selection, same as any other
+  // unsupported suite/set combination.
+  // Legacy scheme's own 6 parameters' real NAMES were identified 2026-08-08
+  // (issue #51's own follow-up, see LEGACY_ONEP_PARAM_COUNT's own comment
+  // for the evidence) - real names, not real per-variation VALUES (unlike
+  // the modern scheme's ONEP_TNG_PARAMS, which has both, diffed from real
+  // output-file attrs) - so this scheme still has no missing-variation
+  // warning or live real-value caption, only the confirmed name.
   const onepIsTng = value.suite === 'IllustrisTNG';
   const onepMaxIndex = catalog?.onep_max_index_for_suite[value.suite]
     ?? (onepIsTng ? FALLBACK_ONEP_MAX_INDEX : undefined);
+  const legacyParamNames = catalog?.legacy_onep_param_names[value.suite];
   const onepParamOptions = isLegacyOnep
-    ? Array.from({ length: LEGACY_ONEP_PARAM_COUNT }, (_, i) => ({ index: i + 1, name: `p${i + 1}`, label: `p${i + 1}` }))
+    ? Array.from({ length: LEGACY_ONEP_PARAM_COUNT }, (_, i) => {
+        const name = legacyParamNames?.[i] ?? `p${i + 1}`;
+        return { index: i + 1, name, label: name };
+      })
     : onepIsTng
       ? (catalog?.onep_tng_params ?? []).map((p) => ({ index: p.index, name: p.name, label: `p${p.index}: ${p.name} (${p.category})` }))
       : Array.from({ length: onepMaxIndex ?? 0 }, (_, i) => ({ index: i + 1, name: `p${i + 1}`, label: `p${i + 1}` }));
@@ -171,7 +169,7 @@ export function SingleRealizationFields({
   const onepCaption = onepMissingVariations.has(onepVariation)
     ? `⚠️ p${onepParamIndex} has no published variation=${onepVariation > 0 ? `+${onepVariation}` : onepVariation} simulation (a real gap in the public release) - pick another variation.`
     : isLegacyOnep
-      ? undefined
+      ? 'Real parameter name, confirmed via a real max-halo-mass spread test across all 6 - the exact numeric value at each variation step isn\'t published anywhere, only the step index.'
       : onepIsTng
         ? onepRealValue !== null
           ? `real value: ${onepParamName} = ${onepRealValue.toPrecision(4)}`
@@ -227,9 +225,7 @@ export function SingleRealizationFields({
           caption={
             value.setName === 'SB' && realizationCount === null
               ? `⚠️ SB isn't published for ${value.suite} - only IllustrisTNG (SB28) and Astrid (SB7) have an SB set.`
-              : isFlatOnep && value.setName === '1P'
-                ? `0–${realizationCount !== null ? realizationCount - 1 : '?'} - this product's own real flat index; the exact parameter/variation it maps to isn't independently confirmed.`
-                : realizationCount !== null ? `0–${realizationCount - 1}` : undefined
+              : realizationCount !== null ? `0–${realizationCount - 1}` : undefined
           }
         />
       ) : null}

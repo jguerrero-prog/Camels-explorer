@@ -214,6 +214,46 @@ class TestRealDataLookupTables:
         assert "Swift-EAGLE" not in B.PUBLIC_GROUP_MATCHING_SUITES
         assert B.PUBLIC_GROUP_MATCHING_SETS == {"LH"}
 
+    def test_xray_profiles_legacy_1p_id_translates_to_the_real_flat_key(self, monkeypatch):
+        # Real-code-path test (issue #51's follow-up) for
+        # _fetch_xray_profiles' new 1P translation branch - fakes
+        # fsspec.open to serve a small, hand-built real-shaped HDF5 file
+        # (same structure confirmed via a direct fetch) rather than a live
+        # network call, matching TestAhfProfilesJoin/TestGroupMatchingJoin's
+        # own "fake data, real code path" approach.
+        import io
+
+        import h5py
+
+        buf = io.BytesIO()
+        with h5py.File(buf, "w") as f:
+            f.create_dataset("Rbins", data=np.array([1.0, 2.0, 3.0]))
+            # param 1, variation -5 -> flat index (1-1)*11 + (-5+5) = 0
+            grp = f.create_group("IllustrisTNG/1P_0/snap_032/halo_000")
+            grp.attrs["lM200c"] = 12.5
+            sa = grp.create_group("SIMPUTAnalysis")
+            sa.create_dataset("L_0.5_2.0keV_Dens", data=np.array([1e36, 2e36]))
+        buf.seek(0)
+
+        class FakeOpen:
+            def __enter__(self):
+                return buf
+
+            def __exit__(self, *exc):
+                return False
+
+        monkeypatch.setattr(B.fsspec, "open", lambda *a, **k: FakeOpen())
+        result = B.get_xray_profiles("IllustrisTNG", "1P", "1_n5", fetch_public=True)
+        assert result is not None
+        assert result.log_mass[0] == pytest.approx(12.5)
+
+    def test_xray_profiles_invalid_legacy_1p_id_returns_none_without_fetching(self, monkeypatch):
+        def boom(*args, **kwargs):
+            raise AssertionError("should not fetch for an unparseable 1P id")
+
+        monkeypatch.setattr(B.fsspec, "open", boom)
+        assert B.get_xray_profiles("IllustrisTNG", "1P", "garbage", fetch_public=True) is None
+
     def test_xray_profiles_sets_reflect_simbas_real_missing_ex(self):
         # Real, confirmed via a direct listing of the collated X-ray file
         # (issue #51): IllustrisTNG has real "1P"/"EX" flat-index keys;

@@ -591,18 +591,41 @@ XRAY_SNAPNUM = 32
 # Real per-suite SET coverage for the collated profile product above
 # (get_xray_profiles) - confirmed directly (2026-08-08, issue #51) by
 # listing the real file's own top-level group keys, which are flat
-# "{set}_{realization}" strings, not the compound "1P_p{n}_{v}" naming
-# other statistics' own 1P scheme uses:
-# - IllustrisTNG: 66 real "1P_0".."1P_65" keys (flat index, same real
-#   count - not confirmed same real mapping - as Halo Gas Profiles' own
-#   legacy 6-param x 11-variation scheme, issue #26) + 4 real "EX_0".."EX_3".
+# "1P_{N}" strings (0-65), not the compound "1P_p{n}_{v}" naming other
+# statistics' own modern 1P scheme uses:
+# - IllustrisTNG: 66 real "1P_0".."1P_65" keys, plus 4 real
+#   "EX_0".."EX_3".
 # - SIMBA: the same 66 real "1P_N" keys, but ZERO real "EX_*" keys - a
 #   real, suite-specific absence (SIMBA's own file genuinely has no EX
 #   entries), not a fetch gap.
-# _fetch_xray_profiles/get_xray_profiles themselves have no set
-# restriction at all (`hf[suite][f"{set_name}_{realization}"]` is fully
-# generic) - this dict exists only to drive the frontend's real Suite/Set
-# picker, not to gate the fetch itself.
+#
+# The flat index turned out to be the EXACT SAME real (param_index,
+# variation) -> index formula as Halo Gas Profiles' own legacy 1P scheme
+# (issue #26, _profiles_onep_flat_index) - confirmed by comparing real
+# max-halo-mass per flat index between both products (near-identical at
+# every index checked, both suites - not just a same-total-count
+# coincidence). This also let the legacy scheme's own 6 parameters be
+# identified for the first time: comparing real max-halo-mass SPREAD
+# across each parameter's own 11 variations shows a sharp 2-then-4 split
+# (param 1: 1.28 dex spread; param 2: 0.26 dex; params 3-6: ~0.01 dex,
+# consistent with zero) - exactly the signature of 2 cosmological
+# parameters (which change the dark-matter-dominated halo mass function)
+# followed by 4 baryonic feedback knobs (which can't). This matches (a)
+# the modern-scheme Parameters file's own real column order (Omega0,
+# sigma8, then 4 astro params) and (b) Lau et al. 2025 (arXiv:2412.04559,
+# Table 1), which independently documents CAMELS' own real "2 cosmological
+# (Ωm, σ8) + 4 astrophysical (SN1, SN2, AGN1, AGN2)" convention with each
+# suite's own real feedback-parameter letter prefix (A_ IllustrisTNG,
+# B_ SIMBA, C_ Astrid). So legacy param index 1-6 = Ωm, σ8, SN1, SN2, AGN1,
+# AGN2 - real parameter NAMES, not real per-variation VALUES (no output-
+# file attr gives those directly for this scheme, unlike the modern
+# scheme's own ONEP_TNG_PARAMS/get_onep_param_value).
+#
+# _fetch_xray_profiles/get_xray_profiles have no set restriction of their
+# own beyond the 1P flat-index translation above (LH/CV/EX all resolve
+# directly, `hf[suite][f"{set_name}_{realization}"]`) - this dict exists
+# only to drive the frontend's real Suite/Set picker, not to gate the fetch
+# itself.
 PUBLIC_XRAY_PROFILES_SETS = {
     "IllustrisTNG": {"LH", "CV", "1P", "EX"},
     "SIMBA": {"LH", "CV", "1P"},
@@ -766,6 +789,23 @@ PUBLIC_PROFILES_SETS = {"LH", "CV", "1P"}
 PROFILES_FIELD_INDEX = {"Gas Density": 0, "Thermal Pressure": 1, "Metallicity": 2, "Temperature": 3}
 PROFILES_ONEP_VARIATIONS = tuple(range(-5, 6))  # -5..5, 11 values
 PROFILES_ONEP_PARAM_COUNT = 6
+
+# Real parameter NAMES for the legacy scheme above (identified 2026-08-08,
+# issue #51's own follow-up investigation - see PUBLIC_XRAY_PROFILES_SETS'
+# own comment for the full evidence: a sharp real max-halo-mass spread
+# split across the 6 params, cross-checked against the modern scheme's own
+# Parameters file column order and Lau et al. 2025 arXiv:2412.04559 Table
+# 1's real "2 cosmological + 4 astrophysical" convention). Suite-specific
+# feedback-parameter letter prefix per that same table (A_ IllustrisTNG,
+# B_ SIMBA, C_ Astrid - Astrid included for completeness even though no
+# legacy-1P-scheme statistic covers it yet). Real NAMES, not real per-
+# variation VALUES - no output-file attr gives those directly for this
+# scheme, unlike ONEP_TNG_PARAMS' own attr_key lookups.
+LEGACY_ONEP_PARAM_NAMES = {
+    "IllustrisTNG": ("Omega_m", "sigma_8", "A_SN1", "A_SN2", "A_AGN1", "A_AGN2"),
+    "SIMBA": ("Omega_m", "sigma_8", "B_SN1", "B_SN2", "B_AGN1", "B_AGN2"),
+    "Astrid": ("Omega_m", "sigma_8", "C_SN1", "C_SN2", "C_AGN1", "C_AGN2"),
+}
 
 
 def _profiles_onep_flat_index(param_index: int, variation: int) -> int:
@@ -3094,11 +3134,30 @@ def _fetch_xray_profiles(suite, set_name, realization):
     file (fsspec lazy HTTP reads - the 457MB file is never downloaded whole,
     same trick as the raw-snapshot readers). Returns an XrayProfiles or None
     if this suite/set/realization has no entry (e.g. SIMBA's few missing LH
-    realizations)."""
+    realizations).
+
+    1P's real top-level keys in this file are a bare flat "1P_{N}" index
+    (0-65) - a different real convention from every other 1P-aware
+    statistic's own compound folder naming, confirmed via a direct listing
+    (issue #51). Cross-checked against Halo Gas Profiles' own confirmed
+    legacy 1P scheme (issue #26) by comparing real max-halo-mass per flat
+    index between both products - matched almost exactly at every index
+    checked (both suites), confirming this file uses the EXACT SAME
+    (param_index, variation) -> flat-index formula
+    (_profiles_onep_flat_index), not just a same-sized coincidence. So the
+    real legacy compound id (e.g. "4_n5") is translated the same way Halo
+    Gas Profiles' own _fetch_halo_profiles_file already does, not a new
+    scheme of its own."""
     if suite not in PUBLIC_XRAY_SUITES:
         return None
 
-    key = f"{set_name}_{realization}"
+    if set_name == "1P":
+        parsed = _parse_profiles_onep_realization(realization)
+        if parsed is None:
+            return None
+        key = f"1P_{_profiles_onep_flat_index(*parsed)}"
+    else:
+        key = f"{set_name}_{realization}"
     try:
         with fsspec.open(PUBLIC_XRAY_URL, "rb") as fobj:
             with h5py.File(fobj, "r") as hf:

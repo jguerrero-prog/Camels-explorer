@@ -35,6 +35,13 @@ export type Catalog = {
   onep_tng_params: { index: number; name: string; category: string }[];
   onep_max_index_for_suite: Record<string, number>;
   onep_tng_missing_variations: Record<string, number[]>;
+  // Real parameter NAMES for the *legacy* 1P scheme (issue #51's own
+  // follow-up investigation - see LEGACY_ONEP_PARAM_COUNT's own comment
+  // below for the evidence), keyed by suite since the 4 astrophysical
+  // params' own letter prefix differs by suite (A_/B_/C_). Names, not
+  // real per-variation values - no output file gives those directly for
+  // this scheme.
+  legacy_onep_param_names: Record<string, string[]>;
   // Per-statistic real suite/set coverage, keyed by the exact name in
   // `statistics` - see RealizationFields/SingleRealizationFields's own
   // allowedSuites/allowedSets props. A statistic missing from either map
@@ -119,9 +126,21 @@ export function parseOnepRealizationId(id: string): { paramIndex: number; variat
 // "p" prefix, 6 params (not 28), 11 variations -5..5 (not 5). Confirmed via
 // direct fetches across both suites this scheme is real for (IllustrisTNG,
 // SIMBA) - all 66 real param x variation folders exist for each, no gaps.
-// Used by Halo Gas Profiles (this app's first real caller) - AHF/Lyman-
-// alpha would need the same scheme if ever wired for 1P (see backend.py's
-// own PUBLIC_PROFILES_SETS comment), not built here.
+// Used by Halo Gas Profiles (this app's first real caller) and X-ray
+// Halo Profiles (issue #51 - the same real flat-index formula, confirmed
+// by comparing real max-halo-mass per index between both products) -
+// AHF/Lyman-alpha would need the same scheme if ever wired for 1P (see
+// backend.py's own PUBLIC_PROFILES_SETS comment), not built here.
+//
+// The 6 params' own real NAMES (Omega_m, sigma_8, then 4 suite-prefixed
+// astrophysical feedback knobs) were identified 2026-08-08 (issue #51's
+// own follow-up) via a real max-halo-mass spread test across all 6 -
+// params 1-2 show a huge/moderate spread (cosmological: changes the DM
+// halo mass function), params 3-6 show ~zero spread (astrophysical:
+// can't) - cross-checked against the modern scheme's own Parameters file
+// column order and Lau et al. 2025 (arXiv:2412.04559, Table 1)'s real "2
+// cosmological + 4 astrophysical" convention. See catalog.legacy_onep_
+// param_names (backend.py's own LEGACY_ONEP_PARAM_NAMES).
 export const LEGACY_ONEP_VARIATIONS = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
 export const LEGACY_ONEP_PARAM_COUNT = 6;
 
