@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import Response
 
 import backend as B
 from api.deps import require, resolved_set_name
@@ -104,6 +105,27 @@ def parameters(
 ):
     result = require(B.get_simulation_parameters(suite, set_name, fetch_public=fetch_public))
     return to_jsonable(result)
+
+
+@router.get("/group-matching")
+def group_matching(
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int,
+    fetch_public: bool = False,
+):
+    result = require(B.get_group_matching(suite, set_name, realization, fetch_public=fetch_public))
+    return to_jsonable(result)
+
+
+@router.get("/group-matching/plot.png")
+def group_matching_plot(
+    suite: str, set_name: Annotated[str, Depends(resolved_set_name)], realization: int,
+    fetch_public: bool = False,
+):
+    """Static matplotlib render (N-body vs. hydro group mass, log-log) -
+    real-data only, no Plotly equivalent (a genuinely new statistic, app.py
+    has no precedent for it either way)."""
+    png = require(B.render_group_matching_png(suite, set_name, realization, fetch_public=fetch_public))
+    return Response(content=png, media_type="image/png")
 
 
 @router.get("/onep-param-value")

@@ -1,0 +1,53 @@
+import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
+import * as AhfHaloProfilesSidebarStories from './AhfHaloProfilesSidebar.stories';
+
+<Meta of={AhfHaloProfilesSidebarStories} />
+
+# AhfHaloProfilesSidebar
+
+AHF Radial Profiles' real per-tile sidebar (2026-08-08, issue #25) — a genuinely new statistic, not ported from `app.py`. Reads AHF's own `.AHF_profiles` file (real DR1 paper Sec 3.2.2 product — "radial profiles" and "particle ID lists to identify the host halo of each particle" are the two real AHF products beyond the basic halo catalog already wired via the Catalog Browser's finder picker).
+
+## Token
+
+Composed from `SingleRealizationFields`/`Slider` (×2)/`Button` — same shape as `HaloGasProfilesSidebar`, minus the Field picker (AHF's own file has one fixed real column set, not a choice of fields) and with a per-halo rank slider instead of a highlight-on-top-of-everything slider.
+
+## Spec
+
+<Canvas of={AhfHaloProfilesSidebarStories.Playground} />
+<Controls />
+
+- Suite/Set/Realization: `SingleRealizationFields` — no Compare mode.
+- Suite restricted to `catalog.statistic_suites['AHF Radial Profiles']` (IllustrisTNG/SIMBA — AHF's own already-established real coverage in this app).
+- Set restricted to LH only for now — only LH_0 has been directly verified against the real `AHF_halos`/`AHF_profiles` `nbins` join (see `backend.py`'s own module comment); other real AHF sets likely work the same way but aren't confirmed yet.
+- Snapshot: the shared 0-33 schedule (AHF's own filenames encode a computed redshift string per snapshot).
+- Halo (by Mvir rank): **not** a highlight on top of a population chart — AHF's real `.AHF_profiles` file has no shared radial grid across halos (each halo's own real bin count, `nbins`, varies), so exactly one halo's real profile is fetched and shown at a time. `maxHaloRank` comes from the currently-loaded tile's own real halo count.
+
+## Usecase
+
+- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/ahf-halo-profile` (JSON: the selected halo's own real per-bin table, feeding `UnderlyingHalos`) and `/plot.png` (density vs. radius, log-log, see `PlotTile`'s `chart.kind: 'static-image'`).
+- **Real-data only, no synthetic fallback** — `get_ahf_halo_profile()` returns `None` outright for suite/set/realization combinations without this product.
+- Real, resolved ambiguity: `.AHF_profiles` has no halo-ID column of its own — its rows are simply concatenated per halo, in the same order as `.AHF_halos`, whose own `nbins` column gives the exact real block size for each halo (confirmed exactly: `sum(nbins)` equals the profile file's own total row count, checked on both IllustrisTNG and SIMBA). The file's own `r` column carries a real, undocumented sign — some inner bins are written negative — so Radius here is `abs(r)` (confirmed real: `|r|` increases monotonically out to approximately each halo's own Rvir); the real signed value is still available via the raw-fields escape hatch.
+- Bonus fix (found while building this): AHF's own 64-bit-scale halo IDs (`ID`/`hostHalo`) were silently rounded through `float64` in the existing AHF halo-catalog reader's raw-fields escape hatch — fixed to keep those two columns as exact strings everywhere in this app's AHF code.
+- Deliberately deferred: AHF's other two real products beyond the halo catalog and this profile file — `.AHF_particles` (real per-particle halo membership; large, e.g. 1.45M member particles for one realization's most massive halo alone, and has no natural chart) and `.AHF_substructure` (real host/subhalo hierarchy, not even mentioned in the DR1 paper's own text).
+
+## Code
+
+```tsx
+import { useState } from 'react';
+import { AhfHaloProfilesSidebar } from '@/components/AhfHaloProfilesSidebar/AhfHaloProfilesSidebar';
+import type { AhfHaloProfilesParams } from '@/components/AhfHaloProfilesSidebar/AhfHaloProfilesSidebar';
+
+function FocusedTileSidebar() {
+  const [params, setParams] = useState<AhfHaloProfilesParams>({
+    suite: 'IllustrisTNG', setName: 'LH', realization: 0, snapnum: 33, haloRank: 1,
+  });
+  return (
+    <AhfHaloProfilesSidebar
+      params={params}
+      onChange={setParams}
+      onRemove={() => {/* remove this tile from the canvas */}}
+      maxHaloRank={3133}
+    />
+  );
+}
+```

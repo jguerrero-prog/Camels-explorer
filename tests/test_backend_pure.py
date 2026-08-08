@@ -151,6 +151,28 @@ class TestFitsBinTableLayout:
         assert B._read_fits_bintable_layout(primary + ext) is None
 
 
+class TestProfilesOnepFlatIndex:
+    """Real, direct-fetch-confirmed formula (issue #26): Profiles' 1P
+    files embed a flat 0-65 index (param-major, variation -5..5), not the
+    (param, variation) pair the real folder name itself uses."""
+
+    def test_matches_real_confirmed_cases(self):
+        # Each of these was independently confirmed against a real file
+        # listing (2 suites) before trusting the formula.
+        cases = [(1, -2, 3), (1, 0, 5), (2, 3, 19), (6, -5, 55), (4, 2, 40), (3, -3, 24), (5, 5, 54)]
+        for param, variation, expected in cases:
+            assert B._profiles_onep_flat_index(param, variation) == expected
+
+    def test_parse_round_trips_with_real_folder_suffix_format(self):
+        assert B._parse_profiles_onep_realization("1_n2") == (1, -2)
+        assert B._parse_profiles_onep_realization("6_5") == (6, 5)
+        assert B._parse_profiles_onep_realization("3_0") == (3, 0)
+
+    def test_parse_rejects_non_onep_strings(self):
+        assert B._parse_profiles_onep_realization("garbage") is None
+        assert B._parse_profiles_onep_realization("42") is None
+
+
 class TestRealDataLookupTables:
     """Regression tests for hand-confirmed facts encoded as module-level
     lookup tables - these aren't functions, but a silent edit to either
@@ -163,6 +185,181 @@ class TestRealDataLookupTables:
     def test_cmd_mass_type_fields_are_the_five_mass_fields(self):
         assert B.CMD_MASS_TYPE_FIELDS == {"Mtot", "Mgas", "Mcdm", "Mstar", "Mtot_Nbody"}
         assert "Temperature" not in B.CMD_MASS_TYPE_FIELDS
+
+    def test_sam_set_folder_and_realizations_cover_every_public_sam_set(self):
+        # Real, confirmed via direct fetches (issue #24): LH uses folder
+        # "sc-sam" (1000 realizations), CV uses "fid-sc-sam" (5 - CV_5 is
+        # a real, confirmed-empty folder). A set missing from either dict
+        # would silently 404 or misconstruct a URL, not fail loudly.
+        assert set(B.SAM_SET_FOLDER) == B.PUBLIC_SAM_SETS
+        assert set(B.SAM_SET_REALIZATIONS) == B.PUBLIC_SAM_SETS
+        assert B.SAM_SET_FOLDER["LH"] == "sc-sam" and B.SAM_SET_FOLDER["CV"] == "fid-sc-sam"
+        assert B.SAM_SET_REALIZATIONS["LH"] == 1000 and B.SAM_SET_REALIZATIONS["CV"] == 5
+
+    def test_spread_metric_snap_covers_every_public_suite(self):
+        # Real, confirmed via direct fetches (issue #30): a suite missing
+        # from SPREAD_METRIC_SNAP would KeyError inside
+        # _fetch_spread_metric_sample rather than failing closed - every
+        # public suite must have a real snapshot number.
+        assert set(B.SPREAD_METRIC_SNAP) == B.PUBLIC_SPREAD_METRIC_SUITES
+        assert B.SPREAD_METRIC_SNAP["SIMBA"] == "033" and B.SPREAD_METRIC_SNAP["Astrid"] == "090"
+        assert B.PUBLIC_SPREAD_METRIC_SETS["SIMBA"] == {"LH", "CV"}
+        assert B.PUBLIC_SPREAD_METRIC_SETS["Astrid"] == {"LH", "CV", "1P"}
+
+    def test_group_matching_suites_and_sets(self):
+        # Real, confirmed via a directory listing (issue #29): no
+        # Swift-EAGLE at all for this product, and LH is the only set
+        # wired so far (CV/1P are real but deliberately deferred).
+        assert B.PUBLIC_GROUP_MATCHING_SUITES == {"IllustrisTNG", "SIMBA", "Astrid"}
+        assert "Swift-EAGLE" not in B.PUBLIC_GROUP_MATCHING_SUITES
+        assert B.PUBLIC_GROUP_MATCHING_SETS == {"LH"}
+
+    def test_group_matching_url_matches_the_real_flat_filename_convention(self):
+        # Real files live flat inside the set folder, named
+        # Nbody_{set}_{n}_{suite}_{set}_{n}_snap_033.hdf5 - confirmed
+        # directly against Group_matching/IllustrisTNG/LH/.
+        url = B._group_matching_url("IllustrisTNG", "LH", 593)
+        assert url == (
+            f"{B.PUBLIC_DATA_URL}/Group_matching/IllustrisTNG/LH/"
+            "Nbody_LH_593_IllustrisTNG_LH_593_snap_033.hdf5"
+        )
+
+
+class TestGroupMatchingJoin:
+    """Real-code-path test for get_group_matching()'s join arithmetic
+    (issue #29) - drives the actual function with hand-built, synthetic
+    stand-ins for the two real fetchers it calls (_fetch_group_matching_raw,
+    _fetch_public_subfind) rather than hitting the network, matching
+    TestPngRenderConcurrency's own "fake data, real code path" approach.
+    The synthetic values below reproduce the real ambiguity found directly
+    against IllustrisTNG/SIMBA LH_0 (see backend.py's own Group_matching
+    module comment): a duplicate hydro claim (index 1, won by row 0's
+    cross_match=1 pairing, lost by row 2's cross_match=0 pairing) and an
+    out-of-range hydro_index guarded by get_group_matching's own bounds
+    check."""
+
+    def test_join_derives_mass_ratio_and_note_counts_correctly(self, monkeypatch):
+        monkeypatch.setattr(B, "_fetch_group_matching_raw", lambda suite, set_name, realization: {
+            "nbody_index": np.array([0, 1, 2, 3]),
+            "hydro_index": np.array([0, 1, 1, -1]),
+            "cross_match": np.array([1, 1, 0, 0]),
+            "percent_matched": np.array([90, 70, 60, 0]),
+        })
+
+        def fake_subfind(suite, set_name, realization):
+            if suite.endswith("_DM"):
+                return {"group_mass": np.array([1.0e13, 2.0e12, 5.0e11, 1.0e11])}
+            return {"group_mass": np.array([9.0e12, 1.5e12])}
+
+        monkeypatch.setattr(B, "_fetch_public_subfind", fake_subfind)
+
+        result = B.get_group_matching("IllustrisTNG", "LH", 0, fetch_public=True)
+        frame = result.frame
+        assert len(frame) == 4
+        assert list(frame["Cross-matched"]) == [True, True, False, False]
+        assert list(frame["Hydro Group Index"]) == [0, 1, 1, -1]
+        # row 0: 9e12 / 1e13; row 1: 1.5e12 / 2e12 - both cross_match=1, sane ratios
+        assert frame["Mass Ratio (Hydro/N-body)"].iloc[0] == pytest.approx(0.9)
+        assert frame["Mass Ratio (Hydro/N-body)"].iloc[1] == pytest.approx(0.75)
+        # row 2: a losing duplicate claim on hydro_index=1, already won by row 1
+        assert frame["Mass Ratio (Hydro/N-body)"].iloc[2] == pytest.approx(1.5e12 / 5.0e11)
+        # row 3: no hydro counterpart - NaN mass/ratio, not zero
+        assert np.isnan(frame["Hydro Group Mass [Msun/h]"].iloc[3])
+        assert np.isnan(frame["Mass Ratio (Hydro/N-body)"].iloc[3])
+        assert "2 rows are the file's own best 1:1 cross-match" in result.note
+        assert "1 N-body halos have no real hydro counterpart" in result.note
+        assert "remaining 1 have a candidate hydro halo" in result.note
+
+    def test_fetch_public_off_returns_none_without_calling_fetchers(self, monkeypatch):
+        def boom(*args, **kwargs):
+            raise AssertionError("should not fetch when fetch_public is False")
+
+        monkeypatch.setattr(B, "_fetch_group_matching_raw", boom)
+        assert B.get_group_matching("IllustrisTNG", "LH", 0, fetch_public=False) is None
+
+
+class _FakeAhfResponse:
+    """Minimal stand-in for urllib.request.urlopen's context-manager
+    response, keyed by URL - see TestAhfProfilesJoin's own docstring for why
+    a full network mock (not just an internal-function monkeypatch) is
+    needed here."""
+
+    def __init__(self, text):
+        self._body = text.encode()
+
+    def read(self):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class TestAhfProfilesJoin:
+    """Real-code-path test for get_ahf_halo_profile()'s block-splitting
+    logic (issue #25) - _fetch_ahf_profiles_raw does two sequential real
+    HTTP fetches (AHF_halos, then AHF_profiles) with no intermediate
+    mockable function, so this fakes urllib.request.urlopen itself (keyed by
+    URL) rather than a backend.py internal, matching TestGroupMatchingJoin's
+    own "fake data, real code path" approach. The synthetic AHF_halos header
+    only has the 4 columns the real join logic actually looks up by name
+    (ID/hostHalo/Mvir/nbins) - the real file has ~86, but every other column
+    is untouched by this join. Reproduces the real ambiguity found directly
+    against IllustrisTNG LH_0 (see backend.py's own AHF module comment): a
+    negative `r` in a halo's own early bins, real IDs beyond float64's exact
+    range, and a block boundary that must land exactly on `nbins`."""
+
+    def _urls(self):
+        return {
+            "http://fake/halos.AHF_halos": (
+                "#ID(1)\thostHalo(2)\tMvir(4)\tnbins(37)\n"
+                "10000000000000000001\t-1\t5.0e13\t3\n"
+                "10000000000000000002\t-1\t2.0e13\t2\n"
+            ),
+            "http://fake/profiles.AHF_profiles": (
+                "#r(1)\tnpart(2)\tM_in_r(3)\tovdens(4)\tdens(5)\tvcirc(6)\tvesc(7)\tsigv(8)\tM_gas(25)\tM_star(26)\n"
+                "-0.1\t10\t1e9\t1\t100\t1\t1\t1\t0\t0\n"
+                "0.2\t20\t2e9\t1\t80\t1\t1\t1\t0\t0\n"
+                "0.3\t30\t3e9\t1\t60\t1\t1\t1\t0\t0\n"
+                "-0.05\t5\t5e8\t1\t40\t1\t1\t1\t0\t0\n"
+                "0.15\t15\t1.5e9\t1\t20\t1\t1\t1\t0\t0\n"
+            ),
+        }
+
+    def _patch(self, monkeypatch):
+        monkeypatch.setattr(
+            B, "_ahf_profile_filenames",
+            lambda suite, set_name, realization, snapnum=B.AHF_SNAPNUM: (
+                "http://fake/", "halos.AHF_halos", "profiles.AHF_profiles",
+            ),
+        )
+        urls = self._urls()
+
+        def fake_urlopen(req, timeout=None):
+            return _FakeAhfResponse(urls[req.full_url])
+
+        monkeypatch.setattr(B.urllib.request, "urlopen", fake_urlopen)
+
+    def test_block_boundaries_follow_nbins_and_radius_uses_abs(self, monkeypatch):
+        self._patch(monkeypatch)
+        # rank 1 = highest Mvir = halo 0 (5.0e13), whose block is the FIRST
+        # 3 profile rows (its own real nbins) - rank 2 gets the remaining 2.
+        result = B.get_ahf_halo_profile("IllustrisTNG", "LH", 0, halo_rank=1, fetch_public=True)
+        assert list(result.frame["Radius [kpc/h]"]) == pytest.approx([0.1, 0.2, 0.3])
+        assert "10000000000000000001" in result.note  # exact ID, not float64-rounded
+
+        result2 = B.get_ahf_halo_profile("IllustrisTNG", "LH", 0, halo_rank=2, fetch_public=True)
+        assert list(result2.frame["Radius [kpc/h]"]) == pytest.approx([0.05, 0.15])
+        assert "10000000000000000002" in result2.note
+
+    def test_fetch_public_off_returns_none_without_fetching(self, monkeypatch):
+        def boom(*args, **kwargs):
+            raise AssertionError("should not fetch when fetch_public is False")
+
+        monkeypatch.setattr(B, "_ahf_profile_filenames", boom)
+        assert B.get_ahf_halo_profile("IllustrisTNG", "LH", 0, fetch_public=False) is None
 
 
 class TestPngRenderConcurrency:

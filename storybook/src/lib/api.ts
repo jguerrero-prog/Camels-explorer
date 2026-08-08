@@ -319,6 +319,41 @@ export function xrayPhotonSpectrumImageUrl(params: { suite: string; setName: str
   return `${API_BASE}/xray-photon-spectrum/plot.png?${qs}`;
 }
 
+// Real-data-only, no synthetic fallback (2026-08-08, issue #30) - same
+// note-only/PNG-is-the-chart split as fetchXrayProfilesMeta/
+// xrayProfilesImageUrl above. `speciesSampled`/`speciesTotal` come back
+// keyed by real species name ("dark_matter"/"gas"/"stars" - "stars" is
+// real only for SIMBA, confirmed absent for Astrid).
+export type SpreadMetricMeta = { note: string; speciesSampled: Record<string, number>; speciesTotal: Record<string, number> };
+
+export async function fetchSpreadMetricMeta(params: {
+  suite: string;
+  setName: string;
+  realization: number | string;
+}): Promise<SpreadMetricMeta | null> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/spread-metric?${qs}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  const speciesSampled: Record<string, number> = {};
+  for (const [species, values] of Object.entries(data.species_spread as Record<string, number[]>)) {
+    speciesSampled[species] = values.length;
+  }
+  return { note: data.note, speciesSampled, speciesTotal: data.species_n_total };
+}
+
+export function spreadMetricImageUrl(params: { suite: string; setName: string; realization: number | string }): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  return `${API_BASE}/spread-metric/plot.png?${qs}`;
+}
+
 export type HaloProfilesMeta = { note: string; nHalos: number };
 
 export async function fetchHaloProfilesMeta(params: {
@@ -589,10 +624,21 @@ export type SamCatalog = HaloCatalog;
 // mirrors backend.py's SAM_OCTANTS exactly.
 export const SAM_OCTANTS = ['0_0_0', '0_0_1', '0_1_0', '0_1_1', '1_0_0', '1_0_1', '1_1_0', '1_1_1'];
 
-export async function fetchSamCatalog(realization: number, octant: string = SAM_OCTANTS[0]): Promise<SamCatalog> {
-  const qs = new URLSearchParams({ set_name: 'LH', realization: String(realization), octant, fetch_public: 'true' });
+// Real (added 2026-08-08, issue #24): CV joins LH as a real CAMELS-SAM set -
+// each uses a different real per-realization folder name (LH: "sc-sam",
+// CV: "fid-sc-sam", confirmed via a direct fetch), and a different real
+// realization count (LH: 1000, CV: 5 - CV_5 confirmed empty). 1P stays
+// unsupported (a real 403 on a plain fetch, not yet resolved - see the
+// issue's own investigation note).
+export const SAM_SETS = ['LH', 'CV'];
+export const SAM_SET_REALIZATIONS: Record<string, number> = { LH: 1000, CV: 5 };
+
+export async function fetchSamCatalog(
+  setName: string, realization: number, octant: string = SAM_OCTANTS[0],
+): Promise<SamCatalog> {
+  const qs = new URLSearchParams({ set_name: setName, realization: String(realization), octant, fetch_public: 'true' });
   const res = await fetch(`${API_BASE}/sam-catalog?${qs}`);
-  if (res.status === 404) return null; // real gap: no SAM catalog for this realization/octant
+  if (res.status === 404) return null; // real gap: no SAM catalog for this set/realization/octant
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -610,6 +656,90 @@ export async function fetchSimulationParameters(suite: string, setName: string):
   if (res.status === 404) return null; // real gap: no Parameters file for this suite/set
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
+}
+
+/** Real (added 2026-08-08, direct user request, issue #29) -
+ * backend.py's `get_group_matching()`/`GET /api/group-matching`, a
+ * genuinely new statistic (app.py has no precedent either way). Same real
+ * `Catalog` shape as `fetchHaloCatalog` - one `Cross-matched` column is a
+ * real bool (see backend.py's own Group_matching module comment for why
+ * cross_match isn't a simple function of percent_matched alone), so this
+ * widens `HaloCatalogRow`'s `number`-only value type rather than reusing
+ * it verbatim. LH set only for now (`realization` is a plain int, not the
+ * compound 1P id several other statistics need) - see backend.py's
+ * `PUBLIC_GROUP_MATCHING_SETS`. */
+export type GroupMatchingRow = Record<string, number | boolean>;
+export type GroupMatchingCatalog = {
+  frame: GroupMatchingRow[];
+  box_size: number;
+  redshift: number;
+  note: string;
+  raw_frame: GroupMatchingRow[] | null;
+} | null;
+
+export async function fetchGroupMatching(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+}): Promise<GroupMatchingCatalog> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/group-matching?${qs}`);
+  if (res.status === 404) return null; // real gap: no Group_matching file for this suite/set/realization
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export function groupMatchingImageUrl(params: { suite: string; setName: string; realization: number }): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    fetch_public: 'true',
+  });
+  return `${API_BASE}/group-matching/plot.png?${qs}`;
+}
+
+/** Real (added 2026-08-08, direct user request, issue #25) - backend.py's
+ * `get_ahf_halo_profile()`/`GET /api/ahf-halo-profile`, a genuinely new
+ * statistic (app.py has no precedent either way). AHF's real
+ * `.AHF_profiles` file has no fixed common radial grid across halos (each
+ * halo's own real bin count varies) - unlike Halo Gas Profiles' illstack-
+ * based product, which uses one shared 25-bin grid for every halo - so this
+ * is scoped to one halo at a time (`haloRank`, same rank-by-mass convention
+ * Halo Gas Profiles' own `highlight_rank` uses), not a whole-population
+ * fetch. Same real `Catalog` shape as `fetchHaloCatalog`. */
+export type AhfHaloProfileCatalog = HaloCatalog;
+
+export async function fetchAhfHaloProfile(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  snapnum: number;
+  haloRank: number;
+}): Promise<AhfHaloProfileCatalog> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    snapnum: String(params.snapnum), halo_rank: String(params.haloRank), fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/ahf-halo-profile?${qs}`);
+  if (res.status === 404) return null; // real gap: no AHF profile data for this suite/set/realization/rank
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export function ahfHaloProfileImageUrl(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  snapnum: number;
+  haloRank: number;
+}): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    snapnum: String(params.snapnum), halo_rank: String(params.haloRank), fetch_public: 'true',
+  });
+  return `${API_BASE}/ahf-halo-profile/plot.png?${qs}`;
 }
 
 /** Runs `fetchChunk(i)` for i in [0, count) with at most `concurrency` in

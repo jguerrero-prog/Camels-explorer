@@ -78,6 +78,19 @@ _STATISTIC_SUITES = {
     "Lyman-alpha Spectrum": B.PUBLIC_LYA_SUITES,
     "Power Spectrum": B.PUBLIC_PK_SUITES,
     "Halo Mass Function": B.PUBLIC_SUBFIND_SUITES,
+    "Spread Metric": B.PUBLIC_SPREAD_METRIC_SUITES,
+    "Group Matching": B.PUBLIC_GROUP_MATCHING_SUITES,
+    "AHF Radial Profiles": B.PUBLIC_AHF_SUITES,
+}
+
+# Per-statistic real SET coverage that varies BY SUITE (2026-08-08, issue
+# #30) - Spread Metric's real set coverage genuinely differs per suite
+# (SIMBA has no real 1P here; Astrid does) in a way `_STATISTIC_SETS`
+# below can't express (one flat list, suite-independent). A statistic
+# missing here has no such per-suite variation - `_STATISTIC_SETS`/no
+# restriction at all still applies uniformly across its allowed suites.
+_STATISTIC_SETS_FOR_SUITE = {
+    "Spread Metric": {suite: sorted(sets) for suite, sets in B.PUBLIC_SPREAD_METRIC_SETS.items()},
 }
 
 # Per-statistic real SET coverage, for the two statistics whose real gate
@@ -93,6 +106,15 @@ _STATISTIC_SETS = {
     # 1P yet, and not resolved here either. See backend.py's own
     # PUBLIC_XRAY_SIMPUT_SETS comment.
     "X-ray Photon Spectrum": [s for s in B.SET_REALIZATIONS if s in B.PUBLIC_XRAY_SIMPUT_SETS],
+    # Real (2026-08-08, issue #29): LH only for now - CV (cross-suite, same
+    # ICs at a fixed realization) and 1P (its own folder-naming shim) are
+    # real but deliberately deferred, see backend.py's own module comment.
+    "Group Matching": [s for s in B.SET_REALIZATIONS if s in B.PUBLIC_GROUP_MATCHING_SETS],
+    # Real (2026-08-08, issue #25): LH only for now - only LH_0 has been
+    # directly verified against the real .AHF_profiles/nbins join (see
+    # backend.py's own module comment). AHF's own directory structure would
+    # likely accept other sets too, but that's untested, not confirmed.
+    "AHF Radial Profiles": ["LH"],
 }
 
 
@@ -187,6 +209,7 @@ def metadata():
             for statistic, allowed in _STATISTIC_SUITES.items()
         },
         "statistic_sets": _STATISTIC_SETS,
+        "statistic_sets_for_suite": _STATISTIC_SETS_FOR_SUITE,
         "sfrh_symbolic_model": {
             "fiducial": B.SFRHSymbolicModel.FIDUCIAL,
             "om_range": B.SFRHSymbolicModel.OM_RANGE,

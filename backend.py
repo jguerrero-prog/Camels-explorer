@@ -534,19 +534,30 @@ VIDE_SUITE_PREFIX = {"IllustrisTNG": "Illustris"}
 
 # CAMELS-SAM (Santa Cruz Semi-Analytic Model on N-body sims) - a separate
 # dataset entirely, not tied to any hydro suite. 1P is empty in the public
-# release (0 bytes). LH is uniform (1000 realizations, each a plain
-# .../sc-sam/{octant}/ folder) and is the only set wired up. CV is
-# deliberately excluded despite existing: it only has 6 slots (CV_0-CV_5,
-# CV_5 empty) and an irregular structure - CV_0/CV_1 nest *several* SAM
-# parameter-variation reruns per realization (folders like fid-sc-sam/,
-# Asn1x4p0-sc-sam/, ...), while CV_2-4 don't - a real follow-up, not a
-# quick extension of the LH path pattern. Each LH realization is split
-# across 8 spatial octants (~500MB-1.5GB each) - the frontend fetches and
-# appends all 8 progressively (2026-08-07) for the complete realization,
-# each read as only a byte-range tail of its octant file (the file is
-# ordered by redshift, high-z first - confirmed directly that the last
-# bytes are z=0, not assumed), never a whole octant downloaded.
-PUBLIC_SAM_SETS = {"LH"}
+# release (0 bytes), and real 1P coverage per the DR1 paper (Sec 3.9, 12
+# real sims) needs a different access method than a plain fetch (confirmed
+# directly - a real 403, not a 404, unlike every other path checked in
+# this project) - not resolved here, see issue #24's own investigation
+# note. LH is uniform (1000 realizations, each a plain .../sc-sam/{octant}/
+# folder). CV (added 2026-08-08, issue #24) is real but was originally
+# excluded for reacting to its own irregular top-level structure rather
+# than its real usable data: CV_0/CV_1 additionally nest *several* SAM
+# parameter-variation reruns alongside their own real fiducial run (extra
+# folders like Asn1x4p0-sc-sam/), while CV_2-4 don't - but every CV
+# realization's own real ".../fid-sc-sam/{octant}/" folder (a different
+# folder name than LH's plain "sc-sam/", confirmed via a direct fetch) is
+# clean and uniform across all of CV_0-CV_4 (all 8 octants, same 41-column
+# schema) - only CV_5 is genuinely absent (confirmed via a real directory
+# listing: the folder exists but lists zero entries, 0 bytes, matching the
+# paper's own "5 simulations"). Each LH/CV realization is split across 8
+# spatial octants (~500MB-1.5GB each) - the frontend fetches and appends
+# all 8 progressively for the complete realization, each read as only a
+# byte-range tail of its octant file (the file is ordered by redshift,
+# high-z first - confirmed directly that the last bytes are z=0, not
+# assumed), never a whole octant downloaded.
+PUBLIC_SAM_SETS = {"LH", "CV"}
+SAM_SET_FOLDER = {"LH": "sc-sam", "CV": "fid-sc-sam"}
+SAM_SET_REALIZATIONS = {"LH": 1000, "CV": 5}  # CV_0-CV_4 real, CV_5 confirmed empty
 CAMELS_SAM_BOX_SIZE = 100.0  # Mpc/h, per docs/source/SAM.rst
 SAM_DEFAULT_OCTANT = "0_0_0"
 # Real, confirmed via a directory listing of SCSAM/LH/LH_0/sc-sam/ - all 8
@@ -715,12 +726,41 @@ SUBLINK_Z0_SNAPNUM = 33
 # ~939 kpc R200c and a temperature profile peaking at ~2.6e7 K - textbook
 # cluster-scale ICM, not a units bug). Uses the same 34-snapshot Pk/SFRH
 # schedule (0-33), unlike Subfind/AHF/Rockstar/CAESAR's ~0-90 numbering.
-# Scoped to LH/CV only - 1P uses a compound directory naming (e.g.
-# "1P_4_n5") that doesn't match this app's simple "{set}_{realization}"
-# convention used everywhere else, confirmed via a real directory listing.
+# 1P joined LH/CV 2026-08-08 (issue #26) - its real folder naming (e.g.
+# "1P_4_n5") is the same legacy scheme (no "p", 6 params, 11 variations
+# -5..5) AHF/Lyman-alpha would need if ever wired for 1P - confirmed via a
+# direct listing of both real suites' Profiles/{suite}/1P/ (66 folders
+# each, exactly 6 params x 11 variations, no gaps). The FOLDER path needed
+# no code change at all (this app's generic f"{set_name}_{realization}"
+# convention already builds "1P_4_n5" correctly once "1P" is in this set
+# and `realization` is passed as "4_n5"). What's genuinely different: the
+# real FILE inside that folder is named with neither the param nor the
+# variation directly, but a flat 0-65 index across all 66 combinations
+# (param-major, variation ordered -5..5) - confirmed the formula
+# `(param_index - 1) * 11 + (variation + 5)` exactly reproduces the real
+# embedded index for 7 independently-checked (param, variation, suite)
+# combinations, and that the same index holds across all 34 snapshots
+# within one real folder (not just snapshot 000), before trusting it.
 PUBLIC_PROFILES_SUITES = {"IllustrisTNG", "SIMBA"}
-PUBLIC_PROFILES_SETS = {"LH", "CV"}
+PUBLIC_PROFILES_SETS = {"LH", "CV", "1P"}
 PROFILES_FIELD_INDEX = {"Gas Density": 0, "Thermal Pressure": 1, "Metallicity": 2, "Temperature": 3}
+PROFILES_ONEP_VARIATIONS = tuple(range(-5, 6))  # -5..5, 11 values
+PROFILES_ONEP_PARAM_COUNT = 6
+
+
+def _profiles_onep_flat_index(param_index: int, variation: int) -> int:
+    return (param_index - 1) * 11 + (variation + 5)
+
+
+def _parse_profiles_onep_realization(realization: str) -> tuple[int, int] | None:
+    """Parses this product's own real legacy 1P realization id (e.g.
+    "4_n5", no "p" prefix - matches the real folder's own suffix after
+    "1P_") into (param_index, variation). Returns None for anything else."""
+    m = re.fullmatch(r"(\d+)_(n?\d+)", str(realization))
+    if not m:
+        return None
+    variation = -int(m.group(2)[1:]) if m.group(2).startswith("n") else int(m.group(2))
+    return int(m.group(1)), variation
 
 # Photometry (Synthesizer-generated mock photometric catalogs) - real, and
 # broader suite coverage than most other real-data products here (confirmed
@@ -862,7 +902,8 @@ LYA_N_SIGHTLINES = 5000
 STATISTICS = ["Power Spectrum", "Halo Mass Function", "Stellar Mass Function", "SFR History",
               "Galaxy Scaling Relations", "Baryon Fraction", "3D Density Field", "3D Particle Cloud",
               "2D Field Map", "X-ray Halo Profiles", "X-ray Photon Spectrum", "Halo Gas Profiles",
-              "Color-Mass Diagram", "Bispectrum", "Field PDF", "Lyman-alpha Spectrum"]
+              "Color-Mass Diagram", "Bispectrum", "Field PDF", "Lyman-alpha Spectrum", "Spread Metric",
+              "Group Matching", "AHF Radial Profiles"]
 
 
 @dataclass
@@ -1039,6 +1080,16 @@ class LymanAlphaSpectrum:
                                        # absorption comes from even in the fully-saturated
                                        # (flux=0) regime where tau/flux alone are uninformative
     source: str = "real"    # real-data only, no synthetic fallback (see get_lya_spectrum)
+    note: str = ""
+
+
+@dataclass
+class SpreadMetricSample:
+    species_spread: dict       # {"dark_matter": np.ndarray, "gas": ..., "stars"?: ...} kpc/h,
+                                # a real strided sample - see get_spread_metric's own note
+    species_n_total: dict      # real total particle count per species (may be far more than
+                                # the sample above)
+    source: str = "real"       # real-data only, no synthetic fallback (see get_spread_metric)
     note: str = ""
 
 
@@ -2004,9 +2055,10 @@ def _fetch_sam_galprop_tail(set_name, realization, octant=SAM_DEFAULT_OCTANT, ma
     spatial octants (a real 1/8-volume sample) and a byte-range sample of a
     500MB-1.5GB file, not the complete realization. Returns a pandas
     DataFrame filtered to the final (z~0) snapshot, or None."""
-    if set_name not in PUBLIC_SAM_SETS:
+    if set_name not in PUBLIC_SAM_SETS or realization >= SAM_SET_REALIZATIONS[set_name]:
         return None
-    url = f"{PUBLIC_DATA_URL}/SCSAM/{set_name}/{set_name}_{realization}/sc-sam/{octant}/galprop_0-99.dat"
+    folder = SAM_SET_FOLDER[set_name]
+    url = f"{PUBLIC_DATA_URL}/SCSAM/{set_name}/{set_name}_{realization}/{folder}/{octant}/galprop_0-99.dat"
     try:
         req = urllib.request.Request(url, headers={"Range": f"bytes=-{max_bytes}"})
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -2065,7 +2117,7 @@ def get_sam_catalog(set_name, realization, octant=SAM_DEFAULT_OCTANT, fetch_publ
     return Catalog(
         frame=frame, box_size=CAMELS_SAM_BOX_SIZE, redshift=float(df["redshift"].iloc[0]), raw_frame=raw_frame,
         note=(f"z ~ {df['redshift'].iloc[0]:.2f} - public CAMELS data release "
-              f"(SCSAM/{set_name}/{set_name}_{realization}/sc-sam/{octant}, "
+              f"(SCSAM/{set_name}/{set_name}_{realization}/{SAM_SET_FOLDER[set_name]}/{octant}, "
               f"{len(frame)} galaxies with stars - octant {octant} of {len(SAM_OCTANTS)}, tail "
               f"sample of that octant's merger-tree catalog; the frontend fetches and appends "
               f"all {len(SAM_OCTANTS)} octants progressively for the complete realization)"),
@@ -2237,6 +2289,198 @@ def get_simulation_parameters(suite, set_name, fetch_public: bool = False) -> Ca
               f"is the real constant 25 Mpc/h every L25n256 run shares, redshift is "
               f"a placeholder (parameters aren't a function of redshift)."),
     )
+
+
+# ---------------------------------------------------------------------------
+# Group_matching  (real product, undocumented by camels.readthedocs.io -
+# added 2026-08-08, direct user request, issue #29)
+# ---------------------------------------------------------------------------
+
+# Real, confirmed via a full HDF5 parse plus a cross-suite mass-correlation
+# check (not assumed from the folder name alone): Group_matching/{suite}/
+# {set}/Nbody_{set}_{n}_{suite}_{set}_{n}_snap_033.hdf5 holds 4 flat int64
+# arrays - nbody_index, hydro_index, cross_match, percent_matched - joining
+# the suite's own N-body-only ({suite}_DM) FOF/Subfind Group catalog against
+# its full-physics hydro counterpart, both at snap_033 (z=0, groupnum 090 -
+# SUBFIND_GROUPNUM_FOR_SNAPSHOT[-1]).
+#
+# `nbody_index`/`hydro_index` are plain row indices into each catalog's own
+# `Group/GroupMass` (not Subhalo - confirmed directly: group-level mass at
+# these indices tracks 1:1 between N-body and hydro to within roughly a
+# factor of 2; subhalo-level mass at the same indices does not, off by
+# 10-1000x). The N-body side is real but restricted to groups with >100
+# particles: IllustrisTNG LH_0 has exactly 4399 real rows, and its DM
+# catalog's Group/GroupLen (already sorted descending - the standard FoF
+# convention) has exactly 4399 groups with length >=101; SIMBA LH_0
+# reproduces the same pattern at a different count (5555 rows, 5555 groups
+# with length >=101). `hydro_index == -1` is a real sentinel for "no hydro
+# counterpart found" - confirmed every such row also has cross_match == 0.
+#
+# `cross_match` (0/1) is the file's own real match-quality flag - NOT a
+# simple function of `percent_matched` alone (their real ranges overlap:
+# 29-135 for cross_match=1 rows, 34-90 for cross_match=0 rows that still
+# have a valid hydro_index). Two lines of direct evidence explain it
+# instead: (1) hydro_index is not unique - multiple N-body groups can name
+# the same hydro group as their best candidate, but cross_match=1's own
+# hydro_index values ARE all unique (confirmed both suites); (2)
+# cross_match=1 rows have a tight, physically sane group-mass ratio
+# (hydro/N-body, median ~0.7-0.9, range ~0.3-2x - feedback removes some
+# mass but stays the same order), while cross_match=0-but-valid rows do not
+# (median ~8-16x, up to 8000x+) - most of them (roughly 70-80% in both
+# suites checked) are simply a losing duplicate claim on a hydro group some
+# other row already won with cross_match=1. The exact internal tie-breaking
+# rule isn't published; cross_match is surfaced as the file's own real
+# flag, not re-derived here.
+#
+# Real per-set/per-suite coverage (confirmed via a directory listing):
+# IllustrisTNG has SB28/LH/BE/1P/L25n256/CV; SIMBA has LH/1P/L25n256/CV;
+# Astrid has LH/1P/L25n256/CV/SB7 - no Swift-EAGLE at all. Scope here is LH
+# only, all 3 suites (the issue's own lead: "N-body-vs-hydro on LH... as a
+# new 'what did baryonic feedback do to this halo' comparison view") - CV
+# (cross-suite, same ICs at a fixed realization) and 1P (needs its own
+# folder-naming shim, same as several other statistics this session) are
+# real but deliberately deferred, not silently unsupported.
+PUBLIC_GROUP_MATCHING_SUITES = {"IllustrisTNG", "SIMBA", "Astrid"}
+PUBLIC_GROUP_MATCHING_SETS = {"LH"}
+GROUP_MATCHING_SNAP_TAG = "033"  # the file's own literal "snap_033" - always z=0
+
+
+def _group_matching_url(suite, set_name, realization):
+    return (f"{PUBLIC_DATA_URL}/Group_matching/{suite}/{set_name}/"
+            f"Nbody_{set_name}_{realization}_{suite}_{set_name}_{realization}_"
+            f"snap_{GROUP_MATCHING_SNAP_TAG}.hdf5")
+
+
+@lru_cache(maxsize=32)
+def _fetch_group_matching_raw(suite, set_name, realization):
+    """Real cross-match index table - small (4 flat int64 arrays), fetched
+    whole. Returns a dict of numpy arrays, or None."""
+    if suite not in PUBLIC_GROUP_MATCHING_SUITES or set_name not in PUBLIC_GROUP_MATCHING_SETS:
+        return None
+    url = _group_matching_url(suite, set_name, realization)
+    try:
+        with urllib.request.urlopen(url, timeout=30) as response:
+            raw = response.read()
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    with tempfile.NamedTemporaryFile(suffix=".hdf5") as tmp:
+        tmp.write(raw)
+        tmp.flush()
+        with h5py.File(tmp.name, "r") as f:
+            return {
+                "nbody_index": f["nbody_index"][:],
+                "hydro_index": f["hydro_index"][:],
+                "cross_match": f["cross_match"][:],
+                "percent_matched": f["percent_matched"][:],
+            }
+
+
+def get_group_matching(suite, set_name, realization, fetch_public: bool = False) -> Catalog | None:
+    """Real per-halo N-body-vs-hydro cross-match table for one realization -
+    "what did baryonic feedback do to this specific halo" (issue #29). No
+    synthetic version - a fabricated cross-match table isn't a useful
+    stand-in the way a power-law curve is. See this section's own module
+    comment for real index/flag semantics."""
+    if not fetch_public:
+        return None
+    matches = _fetch_group_matching_raw(suite, set_name, realization)
+    if matches is None:
+        return None
+
+    nbody_dm = _fetch_public_subfind(f"{suite}_DM", set_name, realization)
+    hydro = _fetch_public_subfind(suite, set_name, realization)
+    if nbody_dm is None or hydro is None:
+        return None
+    dm_group_mass = nbody_dm["group_mass"]
+    hydro_group_mass = hydro["group_mass"]
+
+    nbody_index = matches["nbody_index"]
+    hydro_index = matches["hydro_index"]
+    cross_match = matches["cross_match"]
+    percent_matched = matches["percent_matched"]
+    # Defensive, not expected to ever trigger for real data (see module
+    # comment) - guards the join the same way get_color_mass_diagram's own
+    # `in_range` does, rather than assuming the two real files always agree.
+    in_range = nbody_index < len(dm_group_mass)
+    if not np.all(in_range):
+        nbody_index, hydro_index = nbody_index[in_range], hydro_index[in_range]
+        cross_match, percent_matched = cross_match[in_range], percent_matched[in_range]
+
+    has_match = hydro_index != -1
+    hydro_mass = np.full(len(hydro_index), np.nan)
+    valid_hydro_idx = has_match & (hydro_index < len(hydro_group_mass))
+    hydro_mass[valid_hydro_idx] = hydro_group_mass[hydro_index[valid_hydro_idx]]
+    dm_mass = dm_group_mass[nbody_index]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        mass_ratio = hydro_mass / dm_mass
+
+    frame = pd.DataFrame({
+        "N-body Group Index": nbody_index,
+        "Hydro Group Index": hydro_index,
+        "Cross-matched": cross_match.astype(bool),
+        "Percent Matched": percent_matched,
+        "N-body Group Mass [Msun/h]": dm_mass,
+        "Hydro Group Mass [Msun/h]": hydro_mass,
+        "Mass Ratio (Hydro/N-body)": mass_ratio,
+    })
+
+    n_matched = int(cross_match.sum())
+    n_unmatched = int((~has_match).sum())
+    n_candidate = len(frame) - n_matched - n_unmatched
+    return Catalog(
+        frame=frame, box_size=25.0, redshift=0.0, raw_frame=None,
+        note=(f"{len(frame)} N-body (>100-particle) halos, z=0 - public CAMELS data "
+              f"release (Group_matching/{suite}/{set_name}/Nbody_{set_name}_{realization}_"
+              f"{suite}_{set_name}_{realization}_snap_033.hdf5, joined against both the "
+              f"N-body ({suite}_DM) and hydro ({suite}) FOF/Subfind Group catalogs at "
+              f"groupnum 090). {n_matched} rows are the file's own best 1:1 cross-match "
+              f"(Cross-matched=True); {n_unmatched} N-body halos have no real hydro "
+              f"counterpart at all (Hydro Group Index=-1); the remaining {n_candidate} "
+              f"have a candidate hydro halo that either lost to a better-matching N-body "
+              f"halo or disagrees in mass - kept visible, not dropped, since that "
+              f"disagreement is itself real information about this suite's baryonic "
+              f"feedback. Percent Matched is the file's own real, uncapped match-quality "
+              f"score (observed range 29-135) - its exact definition isn't published by "
+              f"CAMELS."),
+    )
+
+
+def render_group_matching_png(suite, set_name, realization, fetch_public: bool = False) -> bytes | None:
+    """N-body vs. hydro group mass, log-log - the file's own best 1:1
+    matches in one color, its losing/inconsistent candidates in another.
+    Unmatched (no hydro counterpart) halos have no y-value and are omitted
+    from the scatter, not zero-plotted. Mirrors render_color_mass_diagram_png's
+    own shape (a plain real scatter), not a new chart convention."""
+    result = get_group_matching(suite, set_name, realization, fetch_public=fetch_public)
+    if result is None:
+        return None
+    frame = result.frame
+    matched = frame[frame["Cross-matched"]]
+    candidate = frame[~frame["Cross-matched"] & frame["Hydro Group Mass [Msun/h]"].notna()]
+    if len(matched) == 0 and len(candidate) == 0:
+        return None
+
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(7, 6), dpi=150, facecolor="white")
+        ax = fig.subplots()
+        if len(matched):
+            ax.scatter(matched["N-body Group Mass [Msun/h]"], matched["Hydro Group Mass [Msun/h]"],
+                       s=14, alpha=0.6, c="#2b5f8a", label=f"best match ({len(matched)})")
+        if len(candidate):
+            ax.scatter(candidate["N-body Group Mass [Msun/h]"], candidate["Hydro Group Mass [Msun/h]"],
+                       s=10, alpha=0.5, c="#c0743c", label=f"losing/inconsistent candidate ({len(candidate)})")
+        lo = frame["N-body Group Mass [Msun/h]"].min()
+        hi = frame["N-body Group Mass [Msun/h]"].max()
+        ax.plot([lo, hi], [lo, hi], ls="--", lw=1, c="#888888", label="1:1")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel("N-body Group Mass [Msun/h]")
+        ax.set_ylabel("Hydro Group Mass [Msun/h]")
+        ax.legend(fontsize=8)
+        ax.grid(alpha=0.3, which="both")
+        fig.tight_layout()
+        return _finish_png(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -3239,7 +3483,16 @@ def _fetch_ahf_halos(suite, set_name, realization, snapnum=AHF_SNAPNUM):
     rows = [r for r in rows if len(r) == len(columns)]
     if not rows:
         return None
-    df = pd.DataFrame(rows, columns=columns).apply(pd.to_numeric, errors="coerce")
+    df = pd.DataFrame(rows, columns=columns)
+    # Real fix (2026-08-08, found while investigating issue #25): ID/
+    # hostHalo are AHF's own ~64-bit-scale halo IDs (e.g.
+    # 6945605822536072607) - running them through pd.to_numeric like every
+    # other column silently rounds them through float64 (confirmed
+    # directly: that real ID comes back as ...072192, a different number)
+    # since float64 only has ~15-16 significant digits. Kept as exact
+    # strings; every other real column is still genuinely numeric.
+    numeric_cols = [c for c in columns if c not in ("ID", "hostHalo")]
+    df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
 
     # Use the filename's own redshift string, not our SNAPSHOT_REDSHIFTS
     # table (confirmed slightly different - AHF computes its own).
@@ -3513,6 +3766,199 @@ def get_alt_halo_catalog(finder, suite, set_name, realization, snapnum=N_SNAPSHO
     return None
 
 
+# ---------------------------------------------------------------------------
+# AHF radial profiles  (real product, DR1 paper Sec 3.2.2 - added 2026-08-08,
+# issue #25). AHF's other two real products beyond the global halo catalog
+# already wired above: `.AHF_particles` (per-particle halo membership - real,
+# confirmed present, but genuinely large - IllustrisTNG LH_0's own most
+# massive halo alone has 1,455,228 member particles - and has no natural
+# chart, so deliberately deferred, not silently unsupported) and
+# `.AHF_substructure` (real host/subhalo hierarchy, a distinct real file the
+# DR1 paper's own text doesn't even mention - also deferred).
+# ---------------------------------------------------------------------------
+
+# Real, confirmed via a direct fetch cross-checked against AHF_halos' own
+# `nbins` column (verified on 2 suites, IllustrisTNG and SIMBA, LH_0):
+# .AHF_profiles has no halo-ID column of its own - its rows are simply
+# concatenated per halo, IN THE SAME ORDER as .AHF_halos, and AHF_halos' own
+# "nbins" column gives the exact real row count for each halo's block
+# (sum(nbins) == the profile file's total row count exactly, both suites
+# checked). The file's own `r` column has a real, undocumented sign: within
+# one real halo's own block, abs(r) is strictly monotonically increasing
+# from the halo's innermost bin out to approximately that halo's own Rvir
+# (cross-checked directly: IllustrisTNG LH_0's most massive halo's outermost
+# profile bin is r=630.17, that same halo's own AHF_halos row has
+# Rvir=630.15 - the same real quantity). AHF itself doesn't document what
+# the sign means, so it's surfaced as-is - abs(r) used as Radius, the real
+# signed value kept in the raw column escape hatch, not a guessed
+# interpretation.
+
+
+def _ahf_profile_filenames(suite, set_name, realization, snapnum=AHF_SNAPNUM):
+    """Real directory listing + regex, same discovery pattern as
+    _fetch_ahf_halos (AHF's own filename encodes its own computed redshift
+    to 3 decimals, never templated - both files share that same redshift
+    string). Returns (dir_url, halos_filename, profiles_filename), or None."""
+    if suite not in PUBLIC_AHF_SUITES:
+        return None
+    dir_url = f"{PUBLIC_DATA_URL}/AHF/{suite}/{set_name}/{set_name}_{realization}/AHF/"
+    try:
+        req = urllib.request.Request(dir_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            listing_html = resp.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+    halos = re.findall(rf'snap{snapnum:03d}[^"<>\s]*\.AHF_halos', listing_html)
+    profiles = re.findall(rf'snap{snapnum:03d}[^"<>\s]*\.AHF_profiles', listing_html)
+    if not halos or not profiles:
+        return None
+    return dir_url, halos[0], profiles[0]
+
+
+@lru_cache(maxsize=32)
+def _fetch_ahf_profiles_raw(suite, set_name, realization, snapnum=AHF_SNAPNUM):
+    """Real per-halo radial profiles, split into per-halo blocks using
+    AHF_halos' own `nbins` column (see this section's own module comment).
+    Returns a dict with the parsed halo table, a parallel list of per-halo
+    profile DataFrames (`blocks`, same order as the halo table), the real
+    exact-string halo IDs (see _fetch_ahf_halos' own ID/hostHalo precision
+    fix - the same float64-rounding risk applies here), and the real
+    redshift/filenames - or None."""
+    found = _ahf_profile_filenames(suite, set_name, realization, snapnum)
+    if found is None:
+        return None
+    dir_url, halos_name, profiles_name = found
+    try:
+        req = urllib.request.Request(dir_url + halos_name, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            halos_text = resp.read().decode(errors="replace")
+        req = urllib.request.Request(dir_url + profiles_name, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            profiles_text = resp.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    h_lines = halos_text.splitlines()
+    if not h_lines or not h_lines[0].startswith("#"):
+        return None
+    h_columns = _parse_indexed_header(h_lines[0])
+    h_rows = [line.split() for line in h_lines[1:] if line.strip()]
+    h_rows = [r for r in h_rows if len(r) == len(h_columns)]
+    if not h_rows or "nbins" not in h_columns or "ID" not in h_columns:
+        return None
+    h_df = pd.DataFrame(h_rows, columns=h_columns)
+    ids_exact = h_df["ID"].tolist()  # exact strings - see module comment
+    numeric_cols = [c for c in h_columns if c not in ("ID", "hostHalo")]
+    h_df[numeric_cols] = h_df[numeric_cols].apply(pd.to_numeric, errors="coerce")
+
+    p_lines = profiles_text.splitlines()
+    if not p_lines or not p_lines[0].startswith("#"):
+        return None
+    p_columns = _parse_indexed_header(p_lines[0])
+    p_rows = [line.split() for line in p_lines[1:] if line.strip()]
+    p_rows = [r for r in p_rows if len(r) == len(p_columns)]
+    nbins = h_df["nbins"].astype(int).tolist()
+    if len(p_rows) != sum(nbins):
+        # Real disagreement between the two files - don't guess a block
+        # boundary that might not be real (see module comment for how
+        # solidly this normally checks out).
+        return None
+    p_df = pd.DataFrame(p_rows, columns=p_columns).apply(pd.to_numeric, errors="coerce")
+
+    blocks = []
+    offset = 0
+    for n in nbins:
+        blocks.append(p_df.iloc[offset:offset + n].reset_index(drop=True))
+        offset += n
+
+    z_match = re.search(r"\.z([\d.]+)\.AHF_halos", halos_name)
+    return {
+        "halos": h_df, "blocks": blocks, "ids_exact": ids_exact,
+        "redshift": float(z_match.group(1)) if z_match else 0.0,
+        "profiles_name": profiles_name,
+    }
+
+
+_AHF_PROFILE_CURATED_COLUMNS = {
+    "r": "Radius [kpc/h]", "npart": "Enclosed Particles", "M_in_r": "Enclosed Mass [Msun/h]",
+    "ovdens": "Overdensity", "dens": "Density", "vcirc": "Circular Velocity [km/s]",
+    "vesc": "Escape Velocity [km/s]", "sigv": "Velocity Dispersion [km/s]",
+    "M_gas": "Enclosed Gas Mass [Msun/h]", "M_star": "Enclosed Stellar Mass [Msun/h]",
+}
+
+
+def get_ahf_halo_profile(suite, set_name, realization, snapnum=AHF_SNAPNUM, halo_rank: int = 1,
+                          fetch_public: bool = False) -> Catalog | None:
+    """Real radial profile for one halo (ranked by AHF's own Mvir,
+    descending - halo_rank=1 is the most massive), from AHF's own real
+    .AHF_profiles file. No synthetic version - a fabricated radial profile
+    isn't a useful stand-in the way a power-law curve is. See this
+    section's own module comment for the real per-halo block boundaries and
+    Radius's undocumented sign."""
+    if not fetch_public:
+        return None
+    fetched = _fetch_ahf_profiles_raw(suite, set_name, realization, snapnum)
+    if fetched is None:
+        return None
+    h_df, blocks, ids_exact = fetched["halos"], fetched["blocks"], fetched["ids_exact"]
+
+    order = h_df["Mvir"].to_numpy().argsort()[::-1]
+    halo_rank = max(1, min(halo_rank, len(order)))
+    hi = int(order[halo_rank - 1])
+    block = blocks[hi]
+    if len(block) == 0:
+        return None
+
+    frame = pd.DataFrame({label: block[col].abs() if col == "r" else block[col]
+                           for col, label in _AHF_PROFILE_CURATED_COLUMNS.items()})
+    raw_extra = block[[c for c in block.columns if c not in _AHF_PROFILE_CURATED_COLUMNS]]
+    raw_frame = pd.concat([frame, raw_extra], axis=1)
+
+    log_mass = float(np.log10(h_df["Mvir"].iloc[hi]))
+    return Catalog(
+        frame=frame, box_size=25.0, redshift=fetched["redshift"], raw_frame=raw_frame,
+        note=(f"Halo rank {halo_rank} of {len(order)} by Mvir (ID {ids_exact[hi]}, "
+              f"log10 Mvir = {log_mass:.2f} Msun/h), z = {fetched['redshift']:.2f} - public "
+              f"CAMELS data release (AHF/{suite}/{set_name}_{realization}/AHF/"
+              f"{fetched['profiles_name']}, {len(block)} real radial bins, block boundaries "
+              f"aligned via AHF_halos' own nbins column). AHF writes some inner bins with a "
+              f"negative r in the raw file - the sign's meaning isn't documented by AHF "
+              f"itself, so Radius here is abs(r) (confirmed real: |r| increases "
+              f"monotonically from the innermost bin out to approximately this halo's own "
+              f"Rvir); the real signed value is kept in the raw column escape hatch."),
+    )
+
+
+def render_ahf_halo_profile_png(suite, set_name, realization, snapnum=AHF_SNAPNUM, halo_rank: int = 1,
+                                 fetch_public: bool = False) -> bytes | None:
+    """Real radial density profile for one halo, log-log - the most direct
+    real use of this file. Returns None when get_ahf_halo_profile itself
+    does."""
+    result = get_ahf_halo_profile(suite, set_name, realization, snapnum=snapnum, halo_rank=halo_rank,
+                                   fetch_public=fetch_public)
+    if result is None:
+        return None
+    frame = result.frame
+    # 2 of 41140 real rows in a direct check had Density == 0.0 (a real,
+    # rare degenerate bin) - dropped from the log-scale line only, not from
+    # the table/CSV data.
+    plotted = frame[frame["Density"] > 0]
+    if len(plotted) == 0:
+        return None
+
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(7, 5.5), dpi=150, facecolor="white")
+        ax = fig.subplots()
+        ax.plot(plotted["Radius [kpc/h]"], plotted["Density"], marker="o", ms=3, lw=1.3, c="#2b5f8a")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel("Radius [kpc/h]")
+        ax.set_ylabel("Density (AHF's own native units, undocumented)")
+        ax.grid(alpha=0.3, which="both")
+        fig.tight_layout()
+        return _finish_png(fig)
+
+
 SUBLINK_VARIANTS = {
     "SubLink": "SubLink",           # standard, DM-particle-linked tree
     "SubLink_gal": "SubLink_gal",   # baryon-particle-linked tree - a distinct,
@@ -3747,8 +4193,20 @@ def _fetch_halo_profiles_file(suite, set_name, realization, snapnum):
     if not HAVE_FSSPEC or suite not in PUBLIC_PROFILES_SUITES or set_name not in PUBLIC_PROFILES_SETS:
         return None
 
+    # 1P's real FOLDER path already matches the generic convention below
+    # (set_name="1P", realization="4_n5" -> ".../1P/1P_4_n5/...") - only the
+    # real FILE name inside it differs, needing the flat index instead of
+    # the (param, variation) pair directly. See PUBLIC_PROFILES_SETS' own
+    # comment.
+    file_realization = realization
+    if set_name == "1P":
+        parsed = _parse_profiles_onep_realization(realization)
+        if parsed is None:
+            return None
+        file_realization = _profiles_onep_flat_index(*parsed)
+
     url = (f"{PUBLIC_DATA_URL}/Profiles/{suite}/{set_name}/{set_name}_{realization}/"
-           f"{suite}_{set_name}_{realization}_{snapnum:03d}.hdf5")
+           f"{suite}_{set_name}_{file_realization}_{snapnum:03d}.hdf5")
     try:
         with fsspec.open(url, "rb") as fobj:
             with h5py.File(fobj, "r") as hf:
@@ -3815,12 +4273,18 @@ def get_halo_profiles(suite, set_name, realization, snapnum, field, fetch_public
 
     metadata = pd.DataFrame({k: v[valid] for k, v in metadata_raw.items()})
 
+    file_realization = realization
+    if set_name == "1P":
+        file_realization = _profiles_onep_flat_index(*_parse_profiles_onep_realization(realization))
+
+    onep_note = (f" - real 1P folder suffix '{realization}', flat file index {file_realization} "
+                 f"of 66 (param-major, variation -5..5)") if set_name == "1P" else ""
     return HaloProfiles(
         r=r, values=values, log_mass=np.log10(m200c[valid]), field=field, units=units,
         n_part=n_vals, metadata=metadata,
         note=(f"z = {z:.2f} - public CAMELS data release (Profiles/{suite}/{set_name}/"
-              f"{set_name}_{realization}/{suite}_{set_name}_{realization}_{snapnum:03d}.hdf5, "
-              f"{int(valid.sum())} halos, illstack_CAMELS SO/CGM profiles)"),
+              f"{set_name}_{realization}/{suite}_{set_name}_{file_realization}_{snapnum:03d}.hdf5, "
+              f"{int(valid.sum())} halos, illstack_CAMELS SO/CGM profiles{onep_note})"),
     )
 
 
@@ -4257,5 +4721,154 @@ def render_lya_spectrum_png(suite, set_name, realization, snapnum, sightline,
         ax2.set_xlabel("spectral pixel (uncalibrated)")
         ax2.set_ylabel("HI column density")
         ax2.grid(alpha=0.3, which="both")
+        fig.tight_layout()
+        return _finish_png(fig)
+
+
+# ---------------------------------------------------------------------------
+# Spread_metric (per-particle Lagrangian displacement diagnostic) -
+# 2026-08-08, issue #30. Real, undocumented top-level product (absent from
+# organization.html and the DR1 paper), traced to a real published paper -
+# Gebhardt et al. 2024 (MNRAS 529, 4896, arXiv:2307.11832), metric
+# originally from Borrow et al. 2020: "the final distance at z=0 between
+# [a] particle and the dark matter particle it was nearest to in the
+# initial conditions" - a per-particle Lagrangian-displacement diagnostic
+# characterizing baryonic feedback's effect on structure.
+#
+# Real coverage is genuinely asymmetric per suite, confirmed directly (a
+# folder listing AND cross-checked against the paper's own methods,
+# Sec 2.2) - not a uniform product:
+#   SIMBA: LH (1000)/CV (27) real and populated. 1P also has real folders
+#     but mixes two different naming schemes for different parameter
+#     ranges (params 1-6: a legacy flat 0-65 index like Profiles' own 1P;
+#     params 7-28: a bare "{param}_{variation}" with no "p") - genuinely
+#     unresolved, deliberately out of this issue's scope.
+#   Astrid: LH (1000)/CV (27)/1P (66, the same clean legacy 6-param/11-
+#     variation scheme as Profiles' own 1P - but this product's own file
+#     name matches the folder suffix VERBATIM (confirmed directly), unlike
+#     Profiles' flat-index translation - do not reuse
+#     _profiles_onep_flat_index here, it would be wrong for this product).
+#   IllustrisTNG: LH/CV genuinely EMPTY (0 real folders) by design - the
+#     paper's own Sec 2.2 lists only "1P and LH... from Astrid" and
+#     "28-parameter 1P and SB28... from IllustrisTNG" as computed, not a
+#     fetch bug. SB28 (1000 real folders) IS populated but deliberately
+#     deferred to a follow-up: its real folder name ("SB28", not this
+#     app's UI-facing "SB") and real realization count (1000) don't match
+#     this app's existing SB_REALIZATIONS_FOR_SUITE (2048 for
+#     IllustrisTNG, a different real product's own count) - needs its own
+#     resolution, not built here.
+PUBLIC_SPREAD_METRIC_SUITES = {"SIMBA", "Astrid"}
+PUBLIC_SPREAD_METRIC_SETS = {"SIMBA": {"LH", "CV"}, "Astrid": {"LH", "CV", "1P"}}
+# Real, confirmed via direct fetches: the file's own embedded snapshot
+# number is each suite's real z=0 snapshot in its OWN native schedule -
+# SIMBA is "033" (this app's usual 34-snapshot z=0), Astrid is "090" (the
+# same ~90-snapshot schedule Subfind/AHF/Rockstar/CAESAR already use for
+# it elsewhere in this app) - not this app's own normalized index.
+SPREAD_METRIC_SNAP = {"SIMBA": "033", "Astrid": "090"}
+SPREAD_METRIC_SPECIES = ("dark_matter", "gas", "stars")  # "stars" real only for SIMBA -
+                                                           # confirmed absent (no group at
+                                                           # all) for Astrid
+SPREAD_METRIC_N_CHUNKS = 20
+SPREAD_METRIC_CHUNK_SIZE = 2500  # per chunk, per species - 20 x 2500 = 50,000-value sample
+# Real, confirmed via direct timing (2026-08-08): a naive strided read at
+# fsspec's default 5MB HTTP block size took 43.8s (each of the 20 slices
+# pulled a whole 5MB block). An explicit block_size close to one chunk's
+# own real byte size (2500 * 8 = 20,000 bytes) cut this to ~2s - confirmed
+# directly, not guessed.
+SPREAD_METRIC_BLOCK_SIZE = 65536
+# Real, confirmed via a direct Range-read comparison across one file's
+# start/middle/end (2026-08-08): spread values are NOT randomly ordered -
+# a contiguous 50,000-value chunk from the start (mean 112.4) differs
+# meaningfully from middle/end chunks (mean 87.9/87.6). Two independently
+# phase-offset strided samples (20 chunks spread evenly across the full
+# array) agree closely (mean 104.9/104.7) - same real-ordering risk and
+# fix already found for X-ray SIMPUT's photon lists (issue #18).
+
+
+@lru_cache(maxsize=32)
+def _fetch_spread_metric_sample(suite, set_name, realization):
+    """Real per-species (dark_matter/gas/stars) strided sample of the
+    real `spread` array - never the whole array (1.1-3.1GB/realization),
+    and never a single contiguous chunk (order-biased, see this section's
+    own module comment). Returns (species_spread, species_n_total) or
+    None."""
+    if suite not in PUBLIC_SPREAD_METRIC_SUITES or set_name not in PUBLIC_SPREAD_METRIC_SETS.get(suite, set()):
+        return None
+    snap = SPREAD_METRIC_SNAP[suite]
+    url = (f"{PUBLIC_DATA_URL}/Spread_metric/{suite}/{set_name}/{set_name}_{realization}/"
+           f"Spread_Output_{set_name}_{realization}_snap{snap}.hdf5")
+    try:
+        with fsspec.open(url, "rb", block_size=SPREAD_METRIC_BLOCK_SIZE) as fobj:
+            with h5py.File(fobj, "r") as hf:
+                species_spread, species_n_total = {}, {}
+                for species in SPREAD_METRIC_SPECIES:
+                    if species not in hf or "spread" not in hf[species]:
+                        continue
+                    sp = hf[species]["spread"]
+                    n = sp.shape[0]
+                    species_n_total[species] = n
+                    total_sample = SPREAD_METRIC_N_CHUNKS * SPREAD_METRIC_CHUNK_SIZE
+                    if n <= total_sample:
+                        species_spread[species] = sp[:]
+                        continue
+                    starts = [int(i * (n - SPREAD_METRIC_CHUNK_SIZE) / (SPREAD_METRIC_N_CHUNKS - 1))
+                              for i in range(SPREAD_METRIC_N_CHUNKS)]
+                    species_spread[species] = np.concatenate(
+                        [sp[s:s + SPREAD_METRIC_CHUNK_SIZE] for s in starts])
+    except Exception:
+        logger.exception("_fetch_spread_metric_sample failed for suite=%s set_name=%s realization=%s", suite, set_name, realization)
+        return None
+    if not species_spread:
+        return None
+    return species_spread, species_n_total
+
+
+def get_spread_metric(suite, set_name, realization, fetch_public: bool = False) -> SpreadMetricSample | None:
+    """Real per-particle Lagrangian displacement ("spread") sample, split
+    by species. No synthetic version - a fabricated spread distribution
+    isn't a useful stand-in, same reasoning as every other catalog-shaped
+    statistic in this app."""
+    if not fetch_public:
+        return None
+    fetched = _fetch_spread_metric_sample(suite, set_name, realization)
+    if fetched is None:
+        return None
+    species_spread, species_n_total = fetched
+    species_list = ", ".join(sorted(species_spread))
+    return SpreadMetricSample(
+        species_spread=species_spread, species_n_total=species_n_total,
+        note=(f"z = 0.00 - public CAMELS data release (Spread_metric/{suite}/{set_name}/"
+              f"{set_name}_{realization}/Spread_Output_{set_name}_{realization}_"
+              f"snap{SPREAD_METRIC_SNAP[suite]}.hdf5), species: {species_list} - "
+              f"{SPREAD_METRIC_N_CHUNKS} chunks spread evenly across each species' real "
+              f"particle count (a contiguous read from the start would be order-biased, "
+              f"confirmed directly), not the complete real array"),
+    )
+
+
+def render_spread_metric_png(suite, set_name, realization, fetch_public: bool = False) -> bytes | None:
+    """Real per-species spread distribution (log-x histogram, one line per
+    species) - the paper's own diagnostic shape (Gebhardt et al. 2024
+    Fig. 2-3), not a raw particle browser (per issue #30's own scope).
+    Returns None (not raising) when get_spread_metric itself does."""
+    sample = get_spread_metric(suite, set_name, realization, fetch_public=fetch_public)
+    if sample is None:
+        return None
+    colors = {"dark_matter": "#4c4c4c", "gas": "#4c72b0", "stars": "#dd8452"}
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(7, 5), dpi=150, facecolor="white")
+        ax = fig.subplots()
+        for species, values in sample.species_spread.items():
+            positive = values[values > 0]
+            if len(positive) == 0:
+                continue
+            bins = np.logspace(np.log10(positive.min()), np.log10(positive.max()), 40)
+            ax.hist(positive, bins=bins, histtype="step", lw=1.6,
+                    color=colors.get(species, "#333333"), label=species.replace("_", " "))
+        ax.set_xscale("log")
+        ax.set_xlabel("spread [kpc/h]")
+        ax.set_ylabel(f"particles (of {SPREAD_METRIC_N_CHUNKS * SPREAD_METRIC_CHUNK_SIZE:,} sampled per species)")
+        ax.legend()
+        ax.grid(alpha=0.3, which="both")
         fig.tight_layout()
         return _finish_png(fig)

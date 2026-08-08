@@ -41,6 +41,13 @@ export type Catalog = {
   // has no real restriction narrower than "every suite"/"every set".
   statistic_suites: Record<string, string[]>;
   statistic_sets: Record<string, string[]>;
+  // Real per-suite SET coverage (2026-08-08, issue #30) - for statistics
+  // whose real set coverage genuinely differs BY SUITE (Spread Metric:
+  // SIMBA has no real 1P here, Astrid does), which statistic_sets' one
+  // flat list can't express. A statistic missing here has no such per-
+  // suite variation. See SingleRealizationFields' own allowedSetsForSuite
+  // prop, which reads this.
+  statistic_sets_for_suite: Record<string, Record<string, string[]>>;
   sfrh_symbolic_model: {
     fiducial: { Om: number; s8: number; A1: number; A3: number };
     om_range: [number, number];
@@ -104,6 +111,32 @@ export function parseOnepRealizationId(id: string): { paramIndex: number; variat
   if (!m) return null;
   const variation = ONEP_SUFFIX_TO_VARIATION[m[2]];
   if (variation === undefined) return null;
+  return { paramIndex: Number(m[1]), variation };
+}
+
+// Real LEGACY 1P folder-naming scheme (2026-08-08, issue #26) - a SEPARATE
+// real convention from ONEP_VARIATION_SUFFIX/onepRealizationId above: no
+// "p" prefix, 6 params (not 28), 11 variations -5..5 (not 5). Confirmed via
+// direct fetches across both suites this scheme is real for (IllustrisTNG,
+// SIMBA) - all 66 real param x variation folders exist for each, no gaps.
+// Used by Halo Gas Profiles (this app's first real caller) - AHF/Lyman-
+// alpha would need the same scheme if ever wired for 1P (see backend.py's
+// own PUBLIC_PROFILES_SETS comment), not built here.
+export const LEGACY_ONEP_VARIATIONS = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
+export const LEGACY_ONEP_PARAM_COUNT = 6;
+
+export function legacyOnepRealizationId(paramIndex: number, variation: number): string {
+  return `${paramIndex}_${variation < 0 ? `n${-variation}` : variation}`;
+}
+
+/** Parses a legacy 1P realization id (e.g. "3_n2") back into {paramIndex,
+ * variation} - same reasoning as parseOnepRealizationId. Returns `null`
+ * for anything that isn't a real legacy 1P id (no "p" prefix here, unlike
+ * the modern scheme, so this only ever matches legacy ids). */
+export function parseLegacyOnepRealizationId(id: string): { paramIndex: number; variation: number } | null {
+  const m = /^(\d+)_(n?\d+)$/.exec(id);
+  if (!m) return null;
+  const variation = m[2].startsWith('n') ? -Number(m[2].slice(1)) : Number(m[2]);
   return { paramIndex: Number(m[1]), variation };
 }
 
