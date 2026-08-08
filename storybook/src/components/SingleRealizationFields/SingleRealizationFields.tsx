@@ -58,11 +58,19 @@ export type SingleRealizationFieldsProps = {
   hideRealizationValueControls?: boolean;
   /** Which real 1P folder-naming scheme this statistic's own real 1P data
    * uses - 'modern' (default, "1P_p{index}_{variation}", 28 params, 5
-   * variations) or 'legacy' ("1P_{index}_{variation}", no "p", 6 params,
-   * 11 variations -5..5). Added 2026-08-08, issue #26, for Halo Gas
-   * Profiles - the two schemes are genuinely different real conventions
-   * (see backend.py's own comment), not a UI preference. */
-  onepScheme?: 'modern' | 'legacy';
+   * variations), 'legacy' ("1P_{index}_{variation}", no "p", 6 params, 11
+   * variations -5..5), or 'flat' (a bare "1P_{N}" real flat index, added
+   * 2026-08-08, issue #51, for X-ray Halo Profiles - the real file has no
+   * per-parameter/variation structure exposed at all, just a real flat
+   * 0-65 index, and no independently-confirmed mapping from that index
+   * back to a specific parameter/variation - unlike 'legacy', which at
+   * least knows its own real parameter COUNT even without real physical
+   * identities, 'flat' skips the whole 1P Parameter/Variation UI entirely
+   * and falls through to the plain Realization stepper below, since
+   * showing a fabricated parameter/variation split here would be a guess,
+   * not a fact). The two schemes above are genuinely different real
+   * conventions (see backend.py's own comment), not a UI preference. */
+  onepScheme?: 'modern' | 'legacy' | 'flat';
 };
 
 // Real 1P variation steps (app.py's own select_slider options) - 0 is the
@@ -89,7 +97,8 @@ export function SingleRealizationFields({
 }: SingleRealizationFieldsProps) {
   const activeSet = catalog?.sets.find((s) => s.name === value.setName);
   const realizationCount = realizationCountFor(catalog, value.setName, value.suite);
-  const isOnep = value.setName === '1P';
+  const isFlatOnep = onepScheme === 'flat';
+  const isOnep = value.setName === '1P' && !isFlatOnep;
   const isLegacyOnep = onepScheme === 'legacy';
 
   const effectiveAllowedSets = allowedSetsForSuite ? (allowedSetsForSuite[value.suite] ?? []) : allowedSets;
@@ -98,7 +107,7 @@ export function SingleRealizationFields({
   const applySet = (setName: string) =>
     onChange({
       ...value, setName,
-      realization: setName === '1P' ? (isLegacyOnep ? legacyOnepRealizationId(1, 0) : onepRealizationId(1, 0)) : 0,
+      realization: setName === '1P' && !isFlatOnep ? (isLegacyOnep ? legacyOnepRealizationId(1, 0) : onepRealizationId(1, 0)) : 0,
     });
 
   // Auto-correct: a narrower allowlist can appear after the value was
@@ -218,7 +227,9 @@ export function SingleRealizationFields({
           caption={
             value.setName === 'SB' && realizationCount === null
               ? `⚠️ SB isn't published for ${value.suite} - only IllustrisTNG (SB28) and Astrid (SB7) have an SB set.`
-              : realizationCount !== null ? `0–${realizationCount - 1}` : undefined
+              : isFlatOnep && value.setName === '1P'
+                ? `0–${realizationCount !== null ? realizationCount - 1 : '?'} - this product's own real flat index; the exact parameter/variation it maps to isn't independently confirmed.`
+                : realizationCount !== null ? `0–${realizationCount - 1}` : undefined
           }
         />
       ) : null}
