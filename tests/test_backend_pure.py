@@ -278,6 +278,90 @@ class TestGroupMatchingJoin:
         assert B.get_group_matching("IllustrisTNG", "LH", 0, fetch_public=False) is None
 
 
+class _FakeAhfResponse:
+    """Minimal stand-in for urllib.request.urlopen's context-manager
+    response, keyed by URL - see TestAhfProfilesJoin's own docstring for why
+    a full network mock (not just an internal-function monkeypatch) is
+    needed here."""
+
+    def __init__(self, text):
+        self._body = text.encode()
+
+    def read(self):
+        return self._body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+class TestAhfProfilesJoin:
+    """Real-code-path test for get_ahf_halo_profile()'s block-splitting
+    logic (issue #25) - _fetch_ahf_profiles_raw does two sequential real
+    HTTP fetches (AHF_halos, then AHF_profiles) with no intermediate
+    mockable function, so this fakes urllib.request.urlopen itself (keyed by
+    URL) rather than a backend.py internal, matching TestGroupMatchingJoin's
+    own "fake data, real code path" approach. The synthetic AHF_halos header
+    only has the 4 columns the real join logic actually looks up by name
+    (ID/hostHalo/Mvir/nbins) - the real file has ~86, but every other column
+    is untouched by this join. Reproduces the real ambiguity found directly
+    against IllustrisTNG LH_0 (see backend.py's own AHF module comment): a
+    negative `r` in a halo's own early bins, real IDs beyond float64's exact
+    range, and a block boundary that must land exactly on `nbins`."""
+
+    def _urls(self):
+        return {
+            "http://fake/halos.AHF_halos": (
+                "#ID(1)\thostHalo(2)\tMvir(4)\tnbins(37)\n"
+                "10000000000000000001\t-1\t5.0e13\t3\n"
+                "10000000000000000002\t-1\t2.0e13\t2\n"
+            ),
+            "http://fake/profiles.AHF_profiles": (
+                "#r(1)\tnpart(2)\tM_in_r(3)\tovdens(4)\tdens(5)\tvcirc(6)\tvesc(7)\tsigv(8)\tM_gas(25)\tM_star(26)\n"
+                "-0.1\t10\t1e9\t1\t100\t1\t1\t1\t0\t0\n"
+                "0.2\t20\t2e9\t1\t80\t1\t1\t1\t0\t0\n"
+                "0.3\t30\t3e9\t1\t60\t1\t1\t1\t0\t0\n"
+                "-0.05\t5\t5e8\t1\t40\t1\t1\t1\t0\t0\n"
+                "0.15\t15\t1.5e9\t1\t20\t1\t1\t1\t0\t0\n"
+            ),
+        }
+
+    def _patch(self, monkeypatch):
+        monkeypatch.setattr(
+            B, "_ahf_profile_filenames",
+            lambda suite, set_name, realization, snapnum=B.AHF_SNAPNUM: (
+                "http://fake/", "halos.AHF_halos", "profiles.AHF_profiles",
+            ),
+        )
+        urls = self._urls()
+
+        def fake_urlopen(req, timeout=None):
+            return _FakeAhfResponse(urls[req.full_url])
+
+        monkeypatch.setattr(B.urllib.request, "urlopen", fake_urlopen)
+
+    def test_block_boundaries_follow_nbins_and_radius_uses_abs(self, monkeypatch):
+        self._patch(monkeypatch)
+        # rank 1 = highest Mvir = halo 0 (5.0e13), whose block is the FIRST
+        # 3 profile rows (its own real nbins) - rank 2 gets the remaining 2.
+        result = B.get_ahf_halo_profile("IllustrisTNG", "LH", 0, halo_rank=1, fetch_public=True)
+        assert list(result.frame["Radius [kpc/h]"]) == pytest.approx([0.1, 0.2, 0.3])
+        assert "10000000000000000001" in result.note  # exact ID, not float64-rounded
+
+        result2 = B.get_ahf_halo_profile("IllustrisTNG", "LH", 0, halo_rank=2, fetch_public=True)
+        assert list(result2.frame["Radius [kpc/h]"]) == pytest.approx([0.05, 0.15])
+        assert "10000000000000000002" in result2.note
+
+    def test_fetch_public_off_returns_none_without_fetching(self, monkeypatch):
+        def boom(*args, **kwargs):
+            raise AssertionError("should not fetch when fetch_public is False")
+
+        monkeypatch.setattr(B, "_ahf_profile_filenames", boom)
+        assert B.get_ahf_halo_profile("IllustrisTNG", "LH", 0, fetch_public=False) is None
+
+
 class TestPngRenderConcurrency:
     """Real regression test for the matplotlib thread-safety bug found and
     fixed in this same pass (render_field_map_2d_png and 7 other

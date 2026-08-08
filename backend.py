@@ -903,7 +903,7 @@ STATISTICS = ["Power Spectrum", "Halo Mass Function", "Stellar Mass Function", "
               "Galaxy Scaling Relations", "Baryon Fraction", "3D Density Field", "3D Particle Cloud",
               "2D Field Map", "X-ray Halo Profiles", "X-ray Photon Spectrum", "Halo Gas Profiles",
               "Color-Mass Diagram", "Bispectrum", "Field PDF", "Lyman-alpha Spectrum", "Spread Metric",
-              "Group Matching"]
+              "Group Matching", "AHF Radial Profiles"]
 
 
 @dataclass
@@ -3483,7 +3483,16 @@ def _fetch_ahf_halos(suite, set_name, realization, snapnum=AHF_SNAPNUM):
     rows = [r for r in rows if len(r) == len(columns)]
     if not rows:
         return None
-    df = pd.DataFrame(rows, columns=columns).apply(pd.to_numeric, errors="coerce")
+    df = pd.DataFrame(rows, columns=columns)
+    # Real fix (2026-08-08, found while investigating issue #25): ID/
+    # hostHalo are AHF's own ~64-bit-scale halo IDs (e.g.
+    # 6945605822536072607) - running them through pd.to_numeric like every
+    # other column silently rounds them through float64 (confirmed
+    # directly: that real ID comes back as ...072192, a different number)
+    # since float64 only has ~15-16 significant digits. Kept as exact
+    # strings; every other real column is still genuinely numeric.
+    numeric_cols = [c for c in columns if c not in ("ID", "hostHalo")]
+    df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
 
     # Use the filename's own redshift string, not our SNAPSHOT_REDSHIFTS
     # table (confirmed slightly different - AHF computes its own).
@@ -3755,6 +3764,199 @@ def get_alt_halo_catalog(finder, suite, set_name, realization, snapnum=N_SNAPSHO
     if finder == "CAESAR Galaxies":
         return _fetch_caesar_galaxies(suite, set_name, realization, snapnum)
     return None
+
+
+# ---------------------------------------------------------------------------
+# AHF radial profiles  (real product, DR1 paper Sec 3.2.2 - added 2026-08-08,
+# issue #25). AHF's other two real products beyond the global halo catalog
+# already wired above: `.AHF_particles` (per-particle halo membership - real,
+# confirmed present, but genuinely large - IllustrisTNG LH_0's own most
+# massive halo alone has 1,455,228 member particles - and has no natural
+# chart, so deliberately deferred, not silently unsupported) and
+# `.AHF_substructure` (real host/subhalo hierarchy, a distinct real file the
+# DR1 paper's own text doesn't even mention - also deferred).
+# ---------------------------------------------------------------------------
+
+# Real, confirmed via a direct fetch cross-checked against AHF_halos' own
+# `nbins` column (verified on 2 suites, IllustrisTNG and SIMBA, LH_0):
+# .AHF_profiles has no halo-ID column of its own - its rows are simply
+# concatenated per halo, IN THE SAME ORDER as .AHF_halos, and AHF_halos' own
+# "nbins" column gives the exact real row count for each halo's block
+# (sum(nbins) == the profile file's total row count exactly, both suites
+# checked). The file's own `r` column has a real, undocumented sign: within
+# one real halo's own block, abs(r) is strictly monotonically increasing
+# from the halo's innermost bin out to approximately that halo's own Rvir
+# (cross-checked directly: IllustrisTNG LH_0's most massive halo's outermost
+# profile bin is r=630.17, that same halo's own AHF_halos row has
+# Rvir=630.15 - the same real quantity). AHF itself doesn't document what
+# the sign means, so it's surfaced as-is - abs(r) used as Radius, the real
+# signed value kept in the raw column escape hatch, not a guessed
+# interpretation.
+
+
+def _ahf_profile_filenames(suite, set_name, realization, snapnum=AHF_SNAPNUM):
+    """Real directory listing + regex, same discovery pattern as
+    _fetch_ahf_halos (AHF's own filename encodes its own computed redshift
+    to 3 decimals, never templated - both files share that same redshift
+    string). Returns (dir_url, halos_filename, profiles_filename), or None."""
+    if suite not in PUBLIC_AHF_SUITES:
+        return None
+    dir_url = f"{PUBLIC_DATA_URL}/AHF/{suite}/{set_name}/{set_name}_{realization}/AHF/"
+    try:
+        req = urllib.request.Request(dir_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            listing_html = resp.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+    halos = re.findall(rf'snap{snapnum:03d}[^"<>\s]*\.AHF_halos', listing_html)
+    profiles = re.findall(rf'snap{snapnum:03d}[^"<>\s]*\.AHF_profiles', listing_html)
+    if not halos or not profiles:
+        return None
+    return dir_url, halos[0], profiles[0]
+
+
+@lru_cache(maxsize=32)
+def _fetch_ahf_profiles_raw(suite, set_name, realization, snapnum=AHF_SNAPNUM):
+    """Real per-halo radial profiles, split into per-halo blocks using
+    AHF_halos' own `nbins` column (see this section's own module comment).
+    Returns a dict with the parsed halo table, a parallel list of per-halo
+    profile DataFrames (`blocks`, same order as the halo table), the real
+    exact-string halo IDs (see _fetch_ahf_halos' own ID/hostHalo precision
+    fix - the same float64-rounding risk applies here), and the real
+    redshift/filenames - or None."""
+    found = _ahf_profile_filenames(suite, set_name, realization, snapnum)
+    if found is None:
+        return None
+    dir_url, halos_name, profiles_name = found
+    try:
+        req = urllib.request.Request(dir_url + halos_name, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            halos_text = resp.read().decode(errors="replace")
+        req = urllib.request.Request(dir_url + profiles_name, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            profiles_text = resp.read().decode(errors="replace")
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        return None
+
+    h_lines = halos_text.splitlines()
+    if not h_lines or not h_lines[0].startswith("#"):
+        return None
+    h_columns = _parse_indexed_header(h_lines[0])
+    h_rows = [line.split() for line in h_lines[1:] if line.strip()]
+    h_rows = [r for r in h_rows if len(r) == len(h_columns)]
+    if not h_rows or "nbins" not in h_columns or "ID" not in h_columns:
+        return None
+    h_df = pd.DataFrame(h_rows, columns=h_columns)
+    ids_exact = h_df["ID"].tolist()  # exact strings - see module comment
+    numeric_cols = [c for c in h_columns if c not in ("ID", "hostHalo")]
+    h_df[numeric_cols] = h_df[numeric_cols].apply(pd.to_numeric, errors="coerce")
+
+    p_lines = profiles_text.splitlines()
+    if not p_lines or not p_lines[0].startswith("#"):
+        return None
+    p_columns = _parse_indexed_header(p_lines[0])
+    p_rows = [line.split() for line in p_lines[1:] if line.strip()]
+    p_rows = [r for r in p_rows if len(r) == len(p_columns)]
+    nbins = h_df["nbins"].astype(int).tolist()
+    if len(p_rows) != sum(nbins):
+        # Real disagreement between the two files - don't guess a block
+        # boundary that might not be real (see module comment for how
+        # solidly this normally checks out).
+        return None
+    p_df = pd.DataFrame(p_rows, columns=p_columns).apply(pd.to_numeric, errors="coerce")
+
+    blocks = []
+    offset = 0
+    for n in nbins:
+        blocks.append(p_df.iloc[offset:offset + n].reset_index(drop=True))
+        offset += n
+
+    z_match = re.search(r"\.z([\d.]+)\.AHF_halos", halos_name)
+    return {
+        "halos": h_df, "blocks": blocks, "ids_exact": ids_exact,
+        "redshift": float(z_match.group(1)) if z_match else 0.0,
+        "profiles_name": profiles_name,
+    }
+
+
+_AHF_PROFILE_CURATED_COLUMNS = {
+    "r": "Radius [kpc/h]", "npart": "Enclosed Particles", "M_in_r": "Enclosed Mass [Msun/h]",
+    "ovdens": "Overdensity", "dens": "Density", "vcirc": "Circular Velocity [km/s]",
+    "vesc": "Escape Velocity [km/s]", "sigv": "Velocity Dispersion [km/s]",
+    "M_gas": "Enclosed Gas Mass [Msun/h]", "M_star": "Enclosed Stellar Mass [Msun/h]",
+}
+
+
+def get_ahf_halo_profile(suite, set_name, realization, snapnum=AHF_SNAPNUM, halo_rank: int = 1,
+                          fetch_public: bool = False) -> Catalog | None:
+    """Real radial profile for one halo (ranked by AHF's own Mvir,
+    descending - halo_rank=1 is the most massive), from AHF's own real
+    .AHF_profiles file. No synthetic version - a fabricated radial profile
+    isn't a useful stand-in the way a power-law curve is. See this
+    section's own module comment for the real per-halo block boundaries and
+    Radius's undocumented sign."""
+    if not fetch_public:
+        return None
+    fetched = _fetch_ahf_profiles_raw(suite, set_name, realization, snapnum)
+    if fetched is None:
+        return None
+    h_df, blocks, ids_exact = fetched["halos"], fetched["blocks"], fetched["ids_exact"]
+
+    order = h_df["Mvir"].to_numpy().argsort()[::-1]
+    halo_rank = max(1, min(halo_rank, len(order)))
+    hi = int(order[halo_rank - 1])
+    block = blocks[hi]
+    if len(block) == 0:
+        return None
+
+    frame = pd.DataFrame({label: block[col].abs() if col == "r" else block[col]
+                           for col, label in _AHF_PROFILE_CURATED_COLUMNS.items()})
+    raw_extra = block[[c for c in block.columns if c not in _AHF_PROFILE_CURATED_COLUMNS]]
+    raw_frame = pd.concat([frame, raw_extra], axis=1)
+
+    log_mass = float(np.log10(h_df["Mvir"].iloc[hi]))
+    return Catalog(
+        frame=frame, box_size=25.0, redshift=fetched["redshift"], raw_frame=raw_frame,
+        note=(f"Halo rank {halo_rank} of {len(order)} by Mvir (ID {ids_exact[hi]}, "
+              f"log10 Mvir = {log_mass:.2f} Msun/h), z = {fetched['redshift']:.2f} - public "
+              f"CAMELS data release (AHF/{suite}/{set_name}_{realization}/AHF/"
+              f"{fetched['profiles_name']}, {len(block)} real radial bins, block boundaries "
+              f"aligned via AHF_halos' own nbins column). AHF writes some inner bins with a "
+              f"negative r in the raw file - the sign's meaning isn't documented by AHF "
+              f"itself, so Radius here is abs(r) (confirmed real: |r| increases "
+              f"monotonically from the innermost bin out to approximately this halo's own "
+              f"Rvir); the real signed value is kept in the raw column escape hatch."),
+    )
+
+
+def render_ahf_halo_profile_png(suite, set_name, realization, snapnum=AHF_SNAPNUM, halo_rank: int = 1,
+                                 fetch_public: bool = False) -> bytes | None:
+    """Real radial density profile for one halo, log-log - the most direct
+    real use of this file. Returns None when get_ahf_halo_profile itself
+    does."""
+    result = get_ahf_halo_profile(suite, set_name, realization, snapnum=snapnum, halo_rank=halo_rank,
+                                   fetch_public=fetch_public)
+    if result is None:
+        return None
+    frame = result.frame
+    # 2 of 41140 real rows in a direct check had Density == 0.0 (a real,
+    # rare degenerate bin) - dropped from the log-scale line only, not from
+    # the table/CSV data.
+    plotted = frame[frame["Density"] > 0]
+    if len(plotted) == 0:
+        return None
+
+    with _PNG_RENDER_LOCK:
+        fig = Figure(figsize=(7, 5.5), dpi=150, facecolor="white")
+        ax = fig.subplots()
+        ax.plot(plotted["Radius [kpc/h]"], plotted["Density"], marker="o", ms=3, lw=1.3, c="#2b5f8a")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel("Radius [kpc/h]")
+        ax.set_ylabel("Density (AHF's own native units, undocumented)")
+        ax.grid(alpha=0.3, which="both")
+        fig.tight_layout()
+        return _finish_png(fig)
 
 
 SUBLINK_VARIANTS = {

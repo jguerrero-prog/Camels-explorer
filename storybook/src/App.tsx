@@ -46,6 +46,8 @@ import { SpreadMetricSidebar } from './components/SpreadMetricSidebar/SpreadMetr
 import type { SpreadMetricParams } from './components/SpreadMetricSidebar/SpreadMetricSidebar';
 import { GroupMatchingSidebar } from './components/GroupMatchingSidebar/GroupMatchingSidebar';
 import type { GroupMatchingParams } from './components/GroupMatchingSidebar/GroupMatchingSidebar';
+import { AhfHaloProfilesSidebar } from './components/AhfHaloProfilesSidebar/AhfHaloProfilesSidebar';
+import type { AhfHaloProfilesParams } from './components/AhfHaloProfilesSidebar/AhfHaloProfilesSidebar';
 import { HaloGasProfilesSidebar } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
 import type { HaloGasProfilesParams } from './components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
 import { ColorMassDiagramSidebar } from './components/ColorMassDiagramSidebar/ColorMassDiagramSidebar';
@@ -81,6 +83,7 @@ import {
   fetchXrayPhotonSpectrumMeta, xrayPhotonSpectrumImageUrl,
   fetchSpreadMetricMeta, spreadMetricImageUrl,
   fetchGroupMatching, groupMatchingImageUrl,
+  fetchAhfHaloProfile, ahfHaloProfileImageUrl,
   fetchHaloProfilesMeta, haloProfilesImageUrl,
   fetchColorMassDiagramMeta, colorMassDiagramImageUrl,
   fetchFieldPDFMeta, fieldPDFImageUrl,
@@ -112,7 +115,7 @@ const DEFAULT_SNAPNUM = 33;
 const CANVAS_STATS = [
   { value: '1,000', label: 'LH Realizations' },
   { value: '4', label: 'suites' },
-  { value: '18', label: 'Statistics' },
+  { value: '19', label: 'Statistics' },
   { value: '5', label: 'Halo finders' },
 ];
 
@@ -291,6 +294,25 @@ const GROUP_MATCHING_COLUMNS: ColumnDef[] = [
   { key: 'Mass Ratio (Hydro/N-body)', label: 'Mass Ratio (Hydro/N-body)', width: 170, format: (r) => (typeof r['Mass Ratio (Hydro/N-body)'] === 'number' ? (r['Mass Ratio (Hydro/N-body)'] as number).toFixed(3) : '—') },
 ];
 const GROUP_MATCHING_FILTER = { key: 'Percent Matched', label: 'Minimum percent matched', format: (v: number) => String(v) };
+
+/** Real columns backend.py's `get_ahf_halo_profile` returns (2026-08-08,
+ * issue #25) - see AhfHaloProfilesSidebar.mdx for the real block-boundary/
+ * sign semantics these were verified against. Every other real AHF_profiles
+ * column (Lx/Ly/Lz, shape eigenvectors, Ekin/Epot, ...) is available via
+ * UnderlyingHalos's own raw-column escape hatch, not duplicated here. */
+const AHF_PROFILE_COLUMNS: ColumnDef[] = [
+  { key: 'Radius [kpc/h]', label: 'Radius [kpc/h]', width: 120, format: (r) => (r['Radius [kpc/h]'] as number).toFixed(3) },
+  { key: 'Enclosed Particles', label: 'Enclosed Particles', width: 140, format: (r) => String(r['Enclosed Particles']) },
+  massCol('Enclosed Mass [Msun/h]'),
+  { key: 'Overdensity', label: 'Overdensity', width: 120, format: (r) => (r.Overdensity as number).toExponential(2) },
+  { key: 'Density', label: 'Density (AHF native)', width: 150, format: (r) => (r.Density as number).toExponential(2) },
+  { key: 'Circular Velocity [km/s]', label: 'Circular Velocity [km/s]', width: 160, format: (r) => (r['Circular Velocity [km/s]'] as number).toFixed(1) },
+  { key: 'Escape Velocity [km/s]', label: 'Escape Velocity [km/s]', width: 150, format: (r) => (r['Escape Velocity [km/s]'] as number).toFixed(1) },
+  { key: 'Velocity Dispersion [km/s]', label: 'Velocity Dispersion [km/s]', width: 170, format: (r) => (r['Velocity Dispersion [km/s]'] as number).toFixed(1) },
+  massCol('Enclosed Gas Mass [Msun/h]'),
+  massCol('Enclosed Stellar Mass [Msun/h]'),
+];
+const AHF_PROFILE_FILTER = { key: 'Radius [kpc/h]', label: 'Minimum radius [kpc/h]', format: (v: number) => v.toFixed(1) };
 
 /** Real (added 2026-08-07, direct user request: "can black hole mergers
  * have a 3D scatter plot option? Interactive, 3D Scatter, Table") - feeds
@@ -492,6 +514,24 @@ type GroupMatchingTileState = {
   kind: 'group-matching';
   params: GroupMatchingParams;
   rows: GroupMatchingRow[];
+  note: string;
+  loading: boolean;
+  error?: string;
+};
+
+/** AHF Radial Profiles (added 2026-08-08, issue #25) - real-data only, both
+ * a chart (density vs. radius, static PNG) AND a table (this one halo's own
+ * real per-bin values), same two-slot shape as Group Matching above.
+ * `nHalos` (the real halo count for THIS realization) bounds the sidebar's
+ * own halo-rank slider - unlike Halo Gas Profiles, there is no population-
+ * wide array to derive it from client-side, so it comes straight from the
+ * note text's own real count. */
+type AhfHaloProfilesTileState = {
+  id: string;
+  kind: 'ahf-halo-profiles';
+  params: AhfHaloProfilesParams;
+  rows: HaloCatalogRow[];
+  nHalos: number;
   note: string;
   loading: boolean;
   error?: string;
@@ -788,6 +828,7 @@ type CanvasTile =
   | XrayPhotonSpectrumTileState
   | SpreadMetricTileState
   | GroupMatchingTileState
+  | AhfHaloProfilesTileState
   | HaloGasProfilesTileState
   | ColorMassDiagramTileState
   | FieldPDFTileState
@@ -820,6 +861,7 @@ function tileDisplayTitle(tile: CanvasTile): string {
     case 'xray-photon-spectrum': return 'X-ray Photon Spectrum';
     case 'spread-metric': return 'Spread Metric';
     case 'group-matching': return 'Group Matching';
+    case 'ahf-halo-profiles': return 'AHF Radial Profiles';
     case 'halo-gas-profiles': return 'Halo Gas Profiles';
     case 'color-mass-diagram': return 'Color-Mass Diagram';
     case 'field-pdf': return 'Field PDF';
@@ -963,6 +1005,12 @@ function generateTileCode(tile: CanvasTile): string | null {
       const p = tile.params;
       return `${header}catalog = backend.get_group_matching(\n`
         + `    ${py(p.suite)}, ${py(p.setName)}, ${py(p.realization)}, fetch_public=True,\n)\n`;
+    }
+    case 'ahf-halo-profiles': {
+      const p = tile.params;
+      return `${header}profile = backend.get_ahf_halo_profile(\n`
+        + `    ${py(p.suite)}, ${py(p.setName)}, ${py(p.realization)}, snapnum=${p.snapnum},\n`
+        + `    halo_rank=${p.haloRank}, fetch_public=True,\n)\n`;
     }
     case 'halo-gas-profiles': {
       const p = tile.params;
@@ -1268,6 +1316,28 @@ async function loadGroupMatchingTile(id: string, params: GroupMatchingParams): P
     );
   }
   return { id, kind: 'group-matching', params, rows: catalog.frame, note: catalog.note, loading: false };
+}
+
+async function loadAhfHaloProfilesTile(id: string, params: AhfHaloProfilesParams): Promise<AhfHaloProfilesTileState> {
+  const catalog = await fetchAhfHaloProfile({
+    suite: params.suite, setName: params.setName, realization: Number(params.realization),
+    snapnum: params.snapnum, haloRank: params.haloRank,
+  });
+  if (catalog === null) {
+    throw new Error(
+      'No AHF radial profile data available for this suite/set/realization. Try IllustrisTNG or SIMBA, LH set.',
+    );
+  }
+  // backend.py's own note text always states "Halo rank N of TOTAL by
+  // Mvir" - TOTAL is the one real number this response carries for the
+  // realization's own halo count (the Catalog shape has no dedicated field
+  // for it - every bin row here belongs to the ONE selected halo, not the
+  // population), so the halo-rank slider's bound is read from there.
+  const nHalosMatch = /of (\d+) by Mvir/.exec(catalog.note);
+  return {
+    id, kind: 'ahf-halo-profiles', params, rows: catalog.frame,
+    nHalos: nHalosMatch ? Number(nHalosMatch[1]) : 1, note: catalog.note, loading: false,
+  };
 }
 
 async function loadHaloGasProfilesTile(id: string, params: HaloGasProfilesParams): Promise<HaloGasProfilesTileState> {
@@ -2335,6 +2405,24 @@ export function App() {
       });
   };
 
+  const refetchAhfHaloProfilesTile = (id: string, params: AhfHaloProfilesParams) => {
+    const seq = bumpRequestSeq(id);
+    setTiles((prev) =>
+      prev.map((t) => (t.id === id && t.kind === 'ahf-halo-profiles' ? { ...t, params, loading: true } : t)),
+    );
+    loadAhfHaloProfilesTile(id, params)
+      .then((updated) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) => prev.map((t) => (t.id === id ? updated : t)));
+      })
+      .catch((err) => {
+        if (requestSeqRef.current.get(id) !== seq) return;
+        setTiles((prev) =>
+          prev.map((t) => (t.id === id && t.kind === 'ahf-halo-profiles' ? { ...t, loading: false, error: String(err) } : t)),
+        );
+      });
+  };
+
   const refetchHaloGasProfilesTile = (id: string, params: HaloGasProfilesParams) => {
     const current = tiles.find((t) => t.id === id);
     if (
@@ -2797,6 +2885,20 @@ export function App() {
       return;
     }
 
+    if (selection.statistic === 'AHF Radial Profiles') {
+      const params: AhfHaloProfilesParams = {
+        suite: selection.suite, setName: selection.set, realization: selection.realization,
+        snapnum: DEFAULT_SNAPNUM, haloRank: 1,
+      };
+      const placeholder: AhfHaloProfilesTileState = {
+        id, kind: 'ahf-halo-profiles', params, rows: [], nHalos: 1, note: '', loading: true,
+      };
+      replaceTile(placeholder);
+      focusTile(id);
+      refetchAhfHaloProfilesTile(id, params);
+      return;
+    }
+
     if (selection.statistic === 'Halo Gas Profiles') {
       const params: HaloGasProfilesParams = {
         suite: selection.suite, setName: selection.set, realization: selection.realization,
@@ -3029,6 +3131,14 @@ export function App() {
           params={focusedTile.params}
           onChange={(params) => refetchGroupMatchingTile(focusedTile.id, params)}
           onRemove={() => removeTile(focusedTile.id)}
+        />
+      )}
+      {!activePanel && focusedTile?.kind === 'ahf-halo-profiles' && (
+        <AhfHaloProfilesSidebar
+          params={focusedTile.params}
+          onChange={(params) => refetchAhfHaloProfilesTile(focusedTile.id, params)}
+          onRemove={() => removeTile(focusedTile.id)}
+          maxHaloRank={focusedTile.nHalos || 1}
         />
       )}
       {!activePanel && focusedTile?.kind === 'halo-gas-profiles' && (
@@ -3535,6 +3645,41 @@ export function App() {
                         itemNoun: 'halos',
                         footerNoun: 'halos',
                         csvFilename: `${tile.params.suite}_${tile.params.setName}_${tile.params.realization}_group_matching.csv`,
+                      }}
+                      {...commonPlotTileProps(tile)}
+                    />
+                  );
+                }
+
+                if (tile.kind === 'ahf-halo-profiles') {
+                  return (
+                    <PlotTile
+                      key={tile.id}
+                      error={tile.error}
+                      title="AHF Radial Profiles"
+                      chart={{
+                        kind: 'static-image',
+                        imageUrl: ahfHaloProfileImageUrl({
+                          suite: tile.params.suite, setName: tile.params.setName,
+                          realization: Number(tile.params.realization),
+                          snapnum: tile.params.snapnum, haloRank: tile.params.haloRank,
+                        }),
+                        alt: 'AHF radial density profile for one halo, log-log',
+                      }}
+                      readoutGroups={[
+                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        { label: 'Realization', value: String(tile.params.realization) },
+                        { label: 'Halo rank (of total)', value: `${tile.params.haloRank} of ${tile.nHalos}` },
+                        { label: 'Radial bins', value: tile.rows.length.toLocaleString() },
+                      ]}
+                      halos={{
+                        rows: tile.rows,
+                        columns: AHF_PROFILE_COLUMNS,
+                        filter: AHF_PROFILE_FILTER,
+                        label: 'View radial bins',
+                        itemNoun: 'bins',
+                        footerNoun: 'bins',
+                        csvFilename: `${tile.params.suite}_${tile.params.setName}_${tile.params.realization}_ahf_profile_rank${tile.params.haloRank}.csv`,
                       }}
                       {...commonPlotTileProps(tile)}
                     />

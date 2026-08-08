@@ -700,6 +700,48 @@ export function groupMatchingImageUrl(params: { suite: string; setName: string; 
   return `${API_BASE}/group-matching/plot.png?${qs}`;
 }
 
+/** Real (added 2026-08-08, direct user request, issue #25) - backend.py's
+ * `get_ahf_halo_profile()`/`GET /api/ahf-halo-profile`, a genuinely new
+ * statistic (app.py has no precedent either way). AHF's real
+ * `.AHF_profiles` file has no fixed common radial grid across halos (each
+ * halo's own real bin count varies) - unlike Halo Gas Profiles' illstack-
+ * based product, which uses one shared 25-bin grid for every halo - so this
+ * is scoped to one halo at a time (`haloRank`, same rank-by-mass convention
+ * Halo Gas Profiles' own `highlight_rank` uses), not a whole-population
+ * fetch. Same real `Catalog` shape as `fetchHaloCatalog`. */
+export type AhfHaloProfileCatalog = HaloCatalog;
+
+export async function fetchAhfHaloProfile(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  snapnum: number;
+  haloRank: number;
+}): Promise<AhfHaloProfileCatalog> {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    snapnum: String(params.snapnum), halo_rank: String(params.haloRank), fetch_public: 'true',
+  });
+  const res = await fetch(`${API_BASE}/ahf-halo-profile?${qs}`);
+  if (res.status === 404) return null; // real gap: no AHF profile data for this suite/set/realization/rank
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export function ahfHaloProfileImageUrl(params: {
+  suite: string;
+  setName: string;
+  realization: number;
+  snapnum: number;
+  haloRank: number;
+}): string {
+  const qs = new URLSearchParams({
+    suite: params.suite, set_name: params.setName, realization: String(params.realization),
+    snapnum: String(params.snapnum), halo_rank: String(params.haloRank), fetch_public: 'true',
+  });
+  return `${API_BASE}/ahf-halo-profile/plot.png?${qs}`;
+}
+
 /** Runs `fetchChunk(i)` for i in [0, count) with at most `concurrency` in
  * flight at once, calling `onChunk(result, i)` as each settles (arrival
  * order, not index order) - shared by CAMELS-SAM (8 octants) and Initial
