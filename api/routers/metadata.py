@@ -91,6 +91,9 @@ _STATISTIC_SUITES = {
 # restriction at all still applies uniformly across its allowed suites.
 _STATISTIC_SETS_FOR_SUITE = {
     "Spread Metric": {suite: sorted(sets) for suite, sets in B.PUBLIC_SPREAD_METRIC_SETS.items()},
+    # Real (2026-08-08, issue #51): SIMBA's own real collated X-ray file has
+    # no EX entries at all - a genuine per-suite asymmetry, not a fetch gap.
+    "X-ray Halo Profiles": {suite: sorted(sets) for suite, sets in B.PUBLIC_XRAY_PROFILES_SETS.items()},
 }
 
 # Per-statistic real SET coverage, for the two statistics whose real gate

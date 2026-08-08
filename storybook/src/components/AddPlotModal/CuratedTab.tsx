@@ -16,6 +16,9 @@ export type CuratedSelection = {
 // - see SingleRealizationFields' own onepScheme prop. Added 2026-08-08
 // (issue #30, Spread Metric) alongside Halo Gas Profiles (issue #26).
 const LEGACY_ONEP_STATISTICS = new Set(['Halo Gas Profiles', 'Spread Metric']);
+// Real flat "1P_{N}" index, no parameter/variation structure at all - see
+// SingleRealizationFields' own onepScheme prop. Added 2026-08-08, issue #51.
+const FLAT_ONEP_STATISTICS = new Set(['X-ray Halo Profiles']);
 
 export type CuratedTabProps = {
   selection: CuratedSelection;
@@ -118,7 +121,11 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
           }
           allowedSets={catalog.statistic_sets[selection.statistic]}
           allowedSetsForSuite={catalog.statistic_sets_for_suite[selection.statistic]}
-          onepScheme={LEGACY_ONEP_STATISTICS.has(selection.statistic) ? 'legacy' : 'modern'}
+          onepScheme={
+            LEGACY_ONEP_STATISTICS.has(selection.statistic)
+              ? 'legacy'
+              : FLAT_ONEP_STATISTICS.has(selection.statistic) ? 'flat' : 'modern'
+          }
           hideRealizationValueControls
         />
       )}

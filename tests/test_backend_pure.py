@@ -214,6 +214,15 @@ class TestRealDataLookupTables:
         assert "Swift-EAGLE" not in B.PUBLIC_GROUP_MATCHING_SUITES
         assert B.PUBLIC_GROUP_MATCHING_SETS == {"LH"}
 
+    def test_xray_profiles_sets_reflect_simbas_real_missing_ex(self):
+        # Real, confirmed via a direct listing of the collated X-ray file
+        # (issue #51): IllustrisTNG has real "1P"/"EX" flat-index keys;
+        # SIMBA has real "1P" keys but zero real "EX" keys - a genuine
+        # per-suite asymmetry, not a fetch gap.
+        assert B.PUBLIC_XRAY_PROFILES_SETS["IllustrisTNG"] == {"LH", "CV", "1P", "EX"}
+        assert B.PUBLIC_XRAY_PROFILES_SETS["SIMBA"] == {"LH", "CV", "1P"}
+        assert "EX" not in B.PUBLIC_XRAY_PROFILES_SETS["SIMBA"]
+
     def test_group_matching_url_matches_the_real_flat_filename_convention(self):
         # Real files live flat inside the set folder, named
         # Nbody_{set}_{n}_{suite}_{set}_{n}_snap_033.hdf5 - confirmed
