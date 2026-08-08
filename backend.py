@@ -726,12 +726,41 @@ SUBLINK_Z0_SNAPNUM = 33
 # ~939 kpc R200c and a temperature profile peaking at ~2.6e7 K - textbook
 # cluster-scale ICM, not a units bug). Uses the same 34-snapshot Pk/SFRH
 # schedule (0-33), unlike Subfind/AHF/Rockstar/CAESAR's ~0-90 numbering.
-# Scoped to LH/CV only - 1P uses a compound directory naming (e.g.
-# "1P_4_n5") that doesn't match this app's simple "{set}_{realization}"
-# convention used everywhere else, confirmed via a real directory listing.
+# 1P joined LH/CV 2026-08-08 (issue #26) - its real folder naming (e.g.
+# "1P_4_n5") is the same legacy scheme (no "p", 6 params, 11 variations
+# -5..5) AHF/Lyman-alpha would need if ever wired for 1P - confirmed via a
+# direct listing of both real suites' Profiles/{suite}/1P/ (66 folders
+# each, exactly 6 params x 11 variations, no gaps). The FOLDER path needed
+# no code change at all (this app's generic f"{set_name}_{realization}"
+# convention already builds "1P_4_n5" correctly once "1P" is in this set
+# and `realization` is passed as "4_n5"). What's genuinely different: the
+# real FILE inside that folder is named with neither the param nor the
+# variation directly, but a flat 0-65 index across all 66 combinations
+# (param-major, variation ordered -5..5) - confirmed the formula
+# `(param_index - 1) * 11 + (variation + 5)` exactly reproduces the real
+# embedded index for 7 independently-checked (param, variation, suite)
+# combinations, and that the same index holds across all 34 snapshots
+# within one real folder (not just snapshot 000), before trusting it.
 PUBLIC_PROFILES_SUITES = {"IllustrisTNG", "SIMBA"}
-PUBLIC_PROFILES_SETS = {"LH", "CV"}
+PUBLIC_PROFILES_SETS = {"LH", "CV", "1P"}
 PROFILES_FIELD_INDEX = {"Gas Density": 0, "Thermal Pressure": 1, "Metallicity": 2, "Temperature": 3}
+PROFILES_ONEP_VARIATIONS = tuple(range(-5, 6))  # -5..5, 11 values
+PROFILES_ONEP_PARAM_COUNT = 6
+
+
+def _profiles_onep_flat_index(param_index: int, variation: int) -> int:
+    return (param_index - 1) * 11 + (variation + 5)
+
+
+def _parse_profiles_onep_realization(realization: str) -> tuple[int, int] | None:
+    """Parses this product's own real legacy 1P realization id (e.g.
+    "4_n5", no "p" prefix - matches the real folder's own suffix after
+    "1P_") into (param_index, variation). Returns None for anything else."""
+    m = re.fullmatch(r"(\d+)_(n?\d+)", str(realization))
+    if not m:
+        return None
+    variation = -int(m.group(2)[1:]) if m.group(2).startswith("n") else int(m.group(2))
+    return int(m.group(1)), variation
 
 # Photometry (Synthesizer-generated mock photometric catalogs) - real, and
 # broader suite coverage than most other real-data products here (confirmed
@@ -3759,8 +3788,20 @@ def _fetch_halo_profiles_file(suite, set_name, realization, snapnum):
     if not HAVE_FSSPEC or suite not in PUBLIC_PROFILES_SUITES or set_name not in PUBLIC_PROFILES_SETS:
         return None
 
+    # 1P's real FOLDER path already matches the generic convention below
+    # (set_name="1P", realization="4_n5" -> ".../1P/1P_4_n5/...") - only the
+    # real FILE name inside it differs, needing the flat index instead of
+    # the (param, variation) pair directly. See PUBLIC_PROFILES_SETS' own
+    # comment.
+    file_realization = realization
+    if set_name == "1P":
+        parsed = _parse_profiles_onep_realization(realization)
+        if parsed is None:
+            return None
+        file_realization = _profiles_onep_flat_index(*parsed)
+
     url = (f"{PUBLIC_DATA_URL}/Profiles/{suite}/{set_name}/{set_name}_{realization}/"
-           f"{suite}_{set_name}_{realization}_{snapnum:03d}.hdf5")
+           f"{suite}_{set_name}_{file_realization}_{snapnum:03d}.hdf5")
     try:
         with fsspec.open(url, "rb") as fobj:
             with h5py.File(fobj, "r") as hf:
@@ -3827,12 +3868,18 @@ def get_halo_profiles(suite, set_name, realization, snapnum, field, fetch_public
 
     metadata = pd.DataFrame({k: v[valid] for k, v in metadata_raw.items()})
 
+    file_realization = realization
+    if set_name == "1P":
+        file_realization = _profiles_onep_flat_index(*_parse_profiles_onep_realization(realization))
+
+    onep_note = (f" - real 1P folder suffix '{realization}', flat file index {file_realization} "
+                 f"of 66 (param-major, variation -5..5)") if set_name == "1P" else ""
     return HaloProfiles(
         r=r, values=values, log_mass=np.log10(m200c[valid]), field=field, units=units,
         n_part=n_vals, metadata=metadata,
         note=(f"z = {z:.2f} - public CAMELS data release (Profiles/{suite}/{set_name}/"
-              f"{set_name}_{realization}/{suite}_{set_name}_{realization}_{snapnum:03d}.hdf5, "
-              f"{int(valid.sum())} halos, illstack_CAMELS SO/CGM profiles)"),
+              f"{set_name}_{realization}/{suite}_{set_name}_{file_realization}_{snapnum:03d}.hdf5, "
+              f"{int(valid.sum())} halos, illstack_CAMELS SO/CGM profiles{onep_note})"),
     )
 
 
