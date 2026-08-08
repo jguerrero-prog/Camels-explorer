@@ -145,7 +145,7 @@ export function SingleRealizationFields({
   const onepIsTng = value.suite === 'IllustrisTNG';
   const onepMaxIndex = catalog?.onep_max_index_for_suite[value.suite]
     ?? (onepIsTng ? FALLBACK_ONEP_MAX_INDEX : undefined);
-  const legacyParamNames = catalog?.legacy_onep_param_names[value.suite];
+  const legacyParamNames = catalog?.legacy_onep_param_names?.[value.suite];
   const onepParamOptions = isLegacyOnep
     ? Array.from({ length: LEGACY_ONEP_PARAM_COUNT }, (_, i) => {
         const name = legacyParamNames?.[i] ?? `p${i + 1}`;
