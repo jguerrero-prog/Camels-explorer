@@ -26,6 +26,8 @@ A numeric field with increment/decrement buttons. Real source: Figma node `1055:
 
 **Corrected 2026-08-04 — real bug fixed, not a Figma correction:** the value used to be a plain, non-interactive `<span>` — only the +/- buttons could change it. Caught when this component was needed for the Add Plot modal's Realization field and the user pointed out steppers "are meant to be flexible where I can type a number as well." Now a real editable `<input>`: typing commits on blur or Enter, Escape reverts to the last committed value, and invalid/empty text reverts too rather than silently accepting garbage. The +/- buttons and typing are equally valid, real ways to set the value.
 
+**Fixed 2026-08-08 — real bug found in direct QA, a second one after the fix above:** every real caller wires `onChange` straight to a backend refetch (e.g. Realization inside `SingleRealizationFields`/`RealizationFields`, used by 18+ sidebars) — the +/- buttons used to call `onChange` synchronously on every click, so clicking 5 times in a row (say, Realization 4→9) fired 5 separate loads instead of one, confirmed via repeated 404s in the console for each intermediate value. Now debounced 300ms after the last click, same `Slider`-precedented fix as its own `COMMIT_DEBOUNCE_MS` (see that component's docs) — the displayed number still updates instantly per click for responsiveness, only the actual `onChange`/refetch waits for a pause. Typing + blur/Enter was never affected (already committed once, immediately) and needed no change.
+
 <Canvas of={NumberStepperStories.WithCaption} />
 
 **The Canvas above renders "Number label," not "z max."** This story demonstrates the control's mechanics, not confirmed copy — see Usecase below for why "z max" itself isn't confirmed either.
