@@ -3632,6 +3632,9 @@ export function App() {
               tiles.map((tile) => {
                 if (tile.kind === 'mass-range') {
                   const config = MASS_RANGE_CONFIGS[tile.statistic];
+                  // Same suite-axis Static-PNG gap as Power Spectrum's own
+                  // fix - see that block's comment for the full why.
+                  const isSuiteCompare = tile.params.compareMode && tile.params.compareAxis === 'suite';
                   return (
                     <PlotTile
                       key={tile.id}
@@ -3644,18 +3647,22 @@ export function App() {
                         yLabel: tile.yLabel,
                         logX: tile.logX,
                         logY: tile.logY,
-                        imageUrl: massRangeImageUrl(config, {
-                          suite: tile.params.suite,
-                          setName: tile.params.setName,
-                          realizations: tile.params.compareMode ? tile.params.realizations : [tile.params.realizations[0]],
-                          snapnum: tile.params.snapnum,
-                          min: tile.params.min,
-                          max: tile.params.max,
-                          bins: tile.params.bins,
-                        }),
+                        imageUrl: isSuiteCompare
+                          ? undefined
+                          : massRangeImageUrl(config, {
+                              suite: tile.params.suite,
+                              setName: tile.params.setName,
+                              realizations: tile.params.compareMode ? tile.params.realizations : [tile.params.realizations[0]],
+                              snapnum: tile.params.snapnum,
+                              min: tile.params.min,
+                              max: tile.params.max,
+                              bins: tile.params.bins,
+                            }),
                       }}
                       readoutGroups={[
-                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        isSuiteCompare
+                          ? { label: 'Suites (compare)', value: (tile.params.compareSuites ?? []).join(', ') }
+                          : { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
                         { label: 'Realizations (compare)', value: tile.params.realizations.join(', ') },
                         { label: config.rangeLabel, value: `${tile.params.min.toExponential()} – ${tile.params.max.toExponential()}` },
                         { label: 'Bins', value: String(tile.params.bins) },
@@ -3752,6 +3759,22 @@ export function App() {
                 if (tile.kind === 'power-spectrum') {
                   const ptype = PTYPE_OPTIONS[tile.params.ptypeLabel];
                   const realizations = tile.params.compareMode ? tile.params.realizations : [tile.params.realizations[0]];
+                  // Real fix (issue #56 follow-up): this Static-PNG URL
+                  // builder predates the suite axis and only ever knew how
+                  // to plot multiple REALIZATIONS of one fixed suite -
+                  // `render_power_spectrum_png` takes a single `suite` and
+                  // a list of `realizations`, nothing more. Building it
+                  // from `tile.params.suite`/`realizations` regardless of
+                  // axis silently rendered a single-suite, single-line
+                  // Static image while Interactive correctly plotted every
+                  // compared suite - confirmed live (2026-08-10 QA). Omit
+                  // `imageUrl` entirely for suite-axis Compare mode instead
+                  // of shipping a misleading image - same "Interactive-only
+                  // when there's no real static equivalent" pattern this
+                  // component already uses for 3D tiles (see PlotTile's own
+                  // `imageUrl?` doc). Realization-axis Compare mode is
+                  // unaffected - it already worked correctly in both modes.
+                  const isSuiteCompare = tile.params.compareMode && tile.params.compareAxis === 'suite';
                   return (
                     <PlotTile
                       key={tile.id}
@@ -3764,16 +3787,20 @@ export function App() {
                         yLabel: tile.yLabel,
                         logX: tile.logX,
                         logY: tile.logY,
-                        imageUrl: powerSpectrumImageUrl({
-                          suite: tile.params.suite, setName: tile.params.setName, realizations,
-                          snapnum: tile.params.snapnum, grid: tile.params.grid, MAS: tile.params.MAS,
-                          threads: tile.params.threads, ptype,
-                          kRange: tile.params.kRange, rsdAxis: rsdAxisFromLabel(tile.params.rsdLabel),
-                          multipole: tile.params.multipole, showLinearPk: tile.params.showLinearPk,
-                        }),
+                        imageUrl: isSuiteCompare
+                          ? undefined
+                          : powerSpectrumImageUrl({
+                              suite: tile.params.suite, setName: tile.params.setName, realizations,
+                              snapnum: tile.params.snapnum, grid: tile.params.grid, MAS: tile.params.MAS,
+                              threads: tile.params.threads, ptype,
+                              kRange: tile.params.kRange, rsdAxis: rsdAxisFromLabel(tile.params.rsdLabel),
+                              multipole: tile.params.multipole, showLinearPk: tile.params.showLinearPk,
+                            }),
                       }}
                       readoutGroups={[
-                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        isSuiteCompare
+                          ? { label: 'Suites (compare)', value: (tile.params.compareSuites ?? []).join(', ') }
+                          : { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
                         { label: 'Realizations (compare)', value: tile.params.realizations.join(', ') },
                         { label: 'Grid / MAS', value: `${tile.params.grid} · ${tile.params.MAS}` },
                         { label: 'Particle type', value: tile.params.ptypeLabel },
@@ -3786,6 +3813,9 @@ export function App() {
 
                 if (tile.kind === 'bispectrum') {
                   const realizations = tile.params.compareMode ? tile.params.realizations : [tile.params.realizations[0]];
+                  // Same suite-axis Static-PNG gap as Power Spectrum's own
+                  // fix above - see that block's comment for the full why.
+                  const isSuiteCompare = tile.params.compareMode && tile.params.compareAxis === 'suite';
                   return (
                     <PlotTile
                       key={tile.id}
@@ -3798,14 +3828,18 @@ export function App() {
                         yLabel: tile.yLabel,
                         logX: tile.logX,
                         logY: tile.logY,
-                        imageUrl: bispectrumImageUrl({
-                          suite: tile.params.suite, setName: tile.params.setName, realizations,
-                          field: tile.params.field, muIndex: tile.params.muIndex,
-                          kRange: tile.params.kRange, rsdAxis: rsdAxisFromLabel(tile.params.rsdLabel), ell: tile.params.ell,
-                        }),
+                        imageUrl: isSuiteCompare
+                          ? undefined
+                          : bispectrumImageUrl({
+                              suite: tile.params.suite, setName: tile.params.setName, realizations,
+                              field: tile.params.field, muIndex: tile.params.muIndex,
+                              kRange: tile.params.kRange, rsdAxis: rsdAxisFromLabel(tile.params.rsdLabel), ell: tile.params.ell,
+                            }),
                       }}
                       readoutGroups={[
-                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        isSuiteCompare
+                          ? { label: 'Suites (compare)', value: (tile.params.compareSuites ?? []).join(', ') }
+                          : { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
                         { label: 'Realizations (compare)', value: tile.params.realizations.join(', ') },
                         { label: 'Field', value: tile.params.field },
                         { label: 'Triangle shape (mu)', value: String(tile.params.muIndex) },
@@ -3818,6 +3852,9 @@ export function App() {
 
                 if (tile.kind === 'sfr-history') {
                   const realizations = tile.params.compareMode ? tile.params.realizations : [tile.params.realizations[0]];
+                  // Same suite-axis Static-PNG gap as Power Spectrum's own
+                  // fix above - see that block's comment for the full why.
+                  const isSuiteCompare = tile.params.compareMode && tile.params.compareAxis === 'suite';
                   return (
                     <PlotTile
                       key={tile.id}
@@ -3830,15 +3867,19 @@ export function App() {
                         yLabel: tile.yLabel,
                         logX: tile.logX,
                         logY: tile.logY,
-                        imageUrl: sfrHistoryImageUrl({
-                          suite: tile.params.suite, setName: tile.params.setName, realizations,
-                          zMin: tile.params.zMin, zMax: tile.params.zMax, bins: tile.params.bins,
-                          showSymbolicFit: tile.params.showSymbolicFit,
-                          Om: tile.params.Om, s8: tile.params.s8, A1: tile.params.A1, A3: tile.params.A3,
-                        }),
+                        imageUrl: isSuiteCompare
+                          ? undefined
+                          : sfrHistoryImageUrl({
+                              suite: tile.params.suite, setName: tile.params.setName, realizations,
+                              zMin: tile.params.zMin, zMax: tile.params.zMax, bins: tile.params.bins,
+                              showSymbolicFit: tile.params.showSymbolicFit,
+                              Om: tile.params.Om, s8: tile.params.s8, A1: tile.params.A1, A3: tile.params.A3,
+                            }),
                       }}
                       readoutGroups={[
-                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        isSuiteCompare
+                          ? { label: 'Suites (compare)', value: (tile.params.compareSuites ?? []).join(', ') }
+                          : { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
                         { label: 'Realizations (compare)', value: tile.params.realizations.join(', ') },
                         { label: 'Redshift range', value: `${tile.params.zMin.toFixed(1)} – ${tile.params.zMax.toFixed(1)}` },
                         { label: 'Bins', value: String(tile.params.bins) },
