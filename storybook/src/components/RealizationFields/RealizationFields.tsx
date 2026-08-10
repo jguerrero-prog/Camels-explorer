@@ -4,6 +4,7 @@ import { NumberStepper } from '../NumberStepper/NumberStepper';
 import { OptionSlider } from '../OptionSlider/OptionSlider';
 import { Checkbox } from '../Checkbox/Checkbox';
 import { MultiSelect } from '../MultiSelect/MultiSelect';
+import { Radio } from '../Radio/Radio';
 import type { Catalog } from '../../lib/useCatalogMetadata';
 import {
   realizationCountFor, onepRealizationId, parseOnepRealizationId, useOnepParamValue,
@@ -18,6 +19,16 @@ export type RealizationFieldsValue = {
   // are compound-named by parameter+variation (e.g. "p11_2") - see the 1P
   // block below.
   realizations: (number | string)[];
+  /** Which axis Compare mode varies (issue #56) - 'realization' (fixed
+   * suite, multiple realizations - the original, only behavior) or 'suite'
+   * (fixed realization, multiple suites), letting a user check a result
+   * against a different simulation code the way CAMELS' own papers do via
+   * the CV set's shared realizations across suites. Optional and defaults
+   * to 'realization' when omitted, so every existing value/caller keeps
+   * its exact current behavior without needing to set this. */
+  compareAxis?: 'realization' | 'suite';
+  /** Selected suites when compareAxis === 'suite'. Ignored otherwise. */
+  compareSuites?: string[];
 };
 
 // Real 1P variation steps (app.py's own select_slider options) - 0 is the
@@ -117,14 +128,19 @@ export function RealizationFields({ catalog, value, onChange, allowedSuites, all
         : 'Real value not directly readable from any output file for this parameter - only the variation step is shown.'
       : undefined;
 
+  const compareBySuite = value.compareMode && !isOnep && value.compareAxis === 'suite';
+  const compareSuites = value.compareSuites ?? [];
+
   return (
     <>
-      <SelectField
-        label="Suite"
-        value={value.suite}
-        options={suiteOptions}
-        onChange={(suite) => onChange({ ...value, suite })}
-      />
+      {!compareBySuite && (
+        <SelectField
+          label="Suite"
+          value={value.suite}
+          options={suiteOptions}
+          onChange={(suite) => onChange({ ...value, suite })}
+        />
+      )}
       <SelectField
         label="Set"
         value={activeSet?.label ?? value.setName}
@@ -167,23 +183,66 @@ export function RealizationFields({ catalog, value, onChange, allowedSuites, all
           {onepCaption && <p className="number-stepper__caption">{onepCaption}</p>}
         </>
       ) : value.compareMode ? (
-        <MultiSelect
-          label="Realizations to compare"
-          values={value.realizations.map(String)}
-          onAdd={(v) => {
-            const n = Number(v);
-            if (Number.isFinite(n) && !value.realizations.includes(n)) {
-              onChange({ ...value, realizations: [...value.realizations, n] });
-            }
-          }}
-          onRemove={(v) => {
-            const remaining = value.realizations.filter((r) => String(r) !== v);
-            if (remaining.length > 0) onChange({ ...value, realizations: remaining });
-          }}
-          placeholder="Add realization…"
-          caption={realizationCount !== null ? `${realizationCount.toLocaleString()} realizations available` : undefined}
-          options={realizationCount !== null ? Array.from({ length: realizationCount }, (_, i) => String(i)) : undefined}
-        />
+        <>
+          <Radio
+            label="Compare by"
+            value={compareBySuite ? 'Suites' : 'Realizations'}
+            options={['Realizations', 'Suites']}
+            onChange={(label) => {
+              const axis = label === 'Suites' ? 'suite' : 'realization';
+              onChange({
+                ...value,
+                compareAxis: axis,
+                // Seed with the currently-fixed suite the first time someone
+                // switches to suite-axis, so the MultiSelect isn't empty.
+                compareSuites: axis === 'suite' && compareSuites.length === 0 ? [value.suite] : value.compareSuites,
+              });
+            }}
+          />
+          {compareBySuite ? (
+            <>
+              <NumberStepper
+                label="Realization"
+                value={Number(value.realizations[0])}
+                onChange={(realization) => onChange({ ...value, realizations: [realization] })}
+                caption={realizationCount !== null ? `0–${realizationCount - 1}` : undefined}
+              />
+              <MultiSelect
+                label="Suites to compare"
+                values={compareSuites}
+                onAdd={(v) => {
+                  if (suiteOptions.includes(v) && !compareSuites.includes(v)) {
+                    onChange({ ...value, compareSuites: [...compareSuites, v] });
+                  }
+                }}
+                onRemove={(v) => {
+                  const remaining = compareSuites.filter((s) => s !== v);
+                  if (remaining.length > 0) onChange({ ...value, compareSuites: remaining });
+                }}
+                placeholder="Add suite…"
+                options={suiteOptions}
+              />
+            </>
+          ) : (
+            <MultiSelect
+              label="Realizations to compare"
+              values={value.realizations.map(String)}
+              onAdd={(v) => {
+                const n = Number(v);
+                if (Number.isFinite(n) && !value.realizations.includes(n)) {
+                  onChange({ ...value, realizations: [...value.realizations, n] });
+                }
+              }}
+              onRemove={(v) => {
+                const remaining = value.realizations.filter((r) => String(r) !== v);
+                if (remaining.length > 0) onChange({ ...value, realizations: remaining });
+              }}
+              placeholder="Add realization…"
+              caption={realizationCount !== null ? `${realizationCount.toLocaleString()} realizations available` : undefined}
+              options={realizationCount !== null ? Array.from({ length: realizationCount }, (_, i) => String(i)) : undefined}
+            />
+          )}
+        </>
       ) : (
         <NumberStepper
           label="Realization"

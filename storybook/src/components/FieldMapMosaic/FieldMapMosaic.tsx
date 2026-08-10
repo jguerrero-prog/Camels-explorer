@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import './FieldMapMosaic.css';
 
-export type FieldMapMosaicCell = { realization: number; imageUrl: string } | null;
+export type FieldMapMosaicCell =
+  | { realization: number; imageUrl: string }
+  | { suite: string; imageUrl: string }
+  | null;
 
 export type FieldMapMosaicProps = {
   cells: FieldMapMosaicCell[];
@@ -9,6 +12,15 @@ export type FieldMapMosaicProps = {
   cols: number;
   field: string;
 };
+
+// Real (issue #56 follow-up) - a second, additive cell shape alongside the
+// original { realization, imageUrl }: one cell per suite instead of one
+// per consecutive realization, same fixed-realization-vary-suite idea
+// Compare mode's own suite axis uses. The realization variant's own shape/
+// rendering is completely unchanged below.
+function cellTag(cell: NonNullable<FieldMapMosaicCell>): string {
+  return 'suite' in cell ? cell.suite : String(cell.realization);
+}
 
 function MosaicCell({ cell, field }: { cell: FieldMapMosaicCell; field: string }) {
   const [imageError, setImageError] = useState(false);
@@ -21,6 +33,7 @@ function MosaicCell({ cell, field }: { cell: FieldMapMosaicCell; field: string }
     );
   }
 
+  const tag = cellTag(cell);
   return (
     <div className="field-map-mosaic__cell">
       {imageError ? (
@@ -29,11 +42,11 @@ function MosaicCell({ cell, field }: { cell: FieldMapMosaicCell; field: string }
         <img
           className="field-map-mosaic__image"
           src={cell.imageUrl}
-          alt={`${field} 2D map, realization ${cell.realization}`}
+          alt={'suite' in cell ? `${field} 2D map, ${cell.suite}` : `${field} 2D map, realization ${cell.realization}`}
           onError={() => setImageError(true)}
         />
       )}
-      <span className="field-map-mosaic__realization-tag">{cell.realization}</span>
+      <span className="field-map-mosaic__realization-tag">{tag}</span>
     </div>
   );
 }
@@ -62,7 +75,7 @@ export function FieldMapMosaic({ cells, rows, cols, field }: FieldMapMosaicProps
       className="field-map-mosaic"
       style={{ gridTemplateColumns: `repeat(${cols}, 1fr)`, gridTemplateRows: `repeat(${rows}, 1fr)` }}
     >
-      {cells.map((cell, i) => <MosaicCell key={cell?.realization ?? `empty-${i}`} cell={cell} field={field} />)}
+      {cells.map((cell, i) => <MosaicCell key={cell ? cellTag(cell) : `empty-${i}`} cell={cell} field={field} />)}
     </div>
   );
 }

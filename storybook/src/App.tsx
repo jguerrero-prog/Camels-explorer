@@ -607,7 +607,15 @@ type FieldMap2DTileState = {
    * realization with no real published map (out of range, or a suite/
    * field CMD doesn't publish) - PlotTile renders a mosaic instead of the
    * single `imageUrl` image when this is present. */
-  cells?: ({ realization: number; note: string; source: string } | null)[];
+  cells?: (
+    | { realization: number; note: string; source: string }
+    // Real (issue #56 follow-up) - only set when `params.suiteGroup` is
+    // active instead. One entry per selected suite, `null` for a suite
+    // with no real published map for this field/set/realization. The
+    // realization variant above is completely unchanged.
+    | { suite: string; note: string; source: string }
+    | null
+  )[];
   loading: boolean;
   error?: string;
 };
@@ -1149,43 +1157,77 @@ function generateTileCode(tile: CanvasTile): string | null {
   }
 }
 
+// Real (issue #56) - Compare mode's second axis. Every Compare-capable
+// load function below used to hard-code "fixed suite, vary realizations"
+// (`params.compareMode ? params.realizations : [params.realizations[0]]`);
+// this generalizes that one line to also support "fixed realization, vary
+// suites" without touching the realization-axis behavior at all - purely
+// additive, matching RealizationFieldsValue's own compareAxis/compareSuites
+// (undefined compareAxis behaves exactly like before this existed).
+type CompareItem = { suite: string; realization: number | string };
+
+function compareItemsFor(params: {
+  suite: string;
+  compareMode: boolean;
+  compareAxis?: 'realization' | 'suite';
+  compareSuites?: string[];
+  realizations: (number | string)[];
+}): CompareItem[] {
+  if (!params.compareMode) return [{ suite: params.suite, realization: params.realizations[0] }];
+  if (params.compareAxis === 'suite') {
+    const suites = params.compareSuites && params.compareSuites.length > 0 ? params.compareSuites : [params.suite];
+    return suites.map((suite) => ({ suite, realization: params.realizations[0] }));
+  }
+  return params.realizations.map((realization) => ({ suite: params.suite, realization }));
+}
+
+// Suite-axis series read better labeled by suite ("IllustrisTNG") than by
+// the realization-axis convention ("LH_5"), since the realization is fixed
+// and the suite is what's actually varying.
+function compareLabel(item: CompareItem, setName: string, axis?: 'realization' | 'suite'): string {
+  return axis === 'suite' ? item.suite : `${setName}_${item.realization}`;
+}
+
 async function loadMassRangeTile(
   id: string, statistic: MassRangeStatistic, params: MassRangeParams, previous?: PlotTileState,
 ): Promise<PlotTileState> {
   const config = MASS_RANGE_CONFIGS[statistic];
-  const realizations = params.compareMode ? params.realizations : [params.realizations[0]];
+  const items = compareItemsFor(params);
   const fetched = await Promise.all(
-    realizations.map((realization) =>
+    items.map((item) =>
       fetchMassRangeResult(config, {
-        suite: params.suite, setName: params.setName, realization,
+        suite: item.suite, setName: params.setName, realization: item.realization,
         snapnum: params.snapnum, min: params.min, max: params.max, bins: params.bins,
-      }).then((r) => ({ realization, r })),
+      }).then((r) => ({ item, r })),
     ),
   );
   // Real gap, not a bug: no synthetic fallback (removed 2026-08-05), so
   // some (or all) selected realizations can come back null - same
   // filtering pattern as Bispectrum's own load function.
-  const withData = fetched.filter((f): f is { realization: number | string; r: Result } => f.r !== null);
+  const withData = fetched.filter((f): f is { item: CompareItem; r: Result } => f.r !== null);
   if (withData.length === 0) {
     throw new Error(`No data available for this suite/set/realization.`);
   }
   const results = withData.map((f) => f.r);
-  const dataRealizations = withData.map((f) => f.realization);
-  // The halo catalog (Underlying Halos table) depends only on suite/set/
-  // realization[0]/snapnum - min/max/bins only reshape the histogram curve
-  // above, they never change which halos exist. Re-fetching the whole
-  // catalog on every Bins-slider tick was a wasted round-trip; reuse the
-  // previous tile's rows when those fields haven't changed.
+  // The halo catalog (Underlying Halos table) always reflects the tile's
+  // first compared item (suite+realization), same as before this only
+  // ever showed dataRealizations[0] - min/max/bins only reshape the
+  // histogram curve above, they never change which halos exist. Re-
+  // fetching the whole catalog on every Bins-slider tick was a wasted
+  // round-trip; reuse the previous tile's rows when those fields haven't
+  // changed.
+  const primary = withData[0].item;
+  const previousPrimary = previous && previous.kind === 'mass-range' ? compareItemsFor(previous.params)[0] : null;
   const catalogUnchanged = previous
     && previous.kind === 'mass-range'
-    && previous.params.suite === params.suite
+    && previousPrimary?.suite === primary.suite
     && previous.params.setName === params.setName
-    && previous.params.realizations[0] === realizations[0]
+    && previousPrimary?.realization === primary.realization
     && previous.params.snapnum === params.snapnum;
   const catalog = catalogUnchanged
     ? null
     : await fetchHaloCatalog({
-        suite: params.suite, setName: params.setName, realization: dataRealizations[0], snapnum: params.snapnum,
+        suite: primary.suite, setName: params.setName, realization: primary.realization, snapnum: params.snapnum,
       });
   const first = results[0];
   return {
@@ -1193,7 +1235,7 @@ async function loadMassRangeTile(
     kind: 'mass-range',
     statistic,
     params,
-    series: results.map((r, i) => ({ label: `${params.setName}_${dataRealizations[i]}`, x: r.x, y: r.y })),
+    series: results.map((r, i) => ({ label: compareLabel(withData[i].item, params.setName, params.compareAxis), x: r.x, y: r.y })),
     xLabel: first.x_label,
     yLabel: first.y_label,
     logX: first.log_x,
@@ -1218,28 +1260,28 @@ async function loadMassRangeTile(
 }
 
 async function loadPowerSpectrumTile(id: string, params: PowerSpectrumParams): Promise<PowerSpectrumTileState> {
-  const realizations = params.compareMode ? params.realizations : [params.realizations[0]];
+  const items = compareItemsFor(params);
   const ptype = PTYPE_OPTIONS[params.ptypeLabel];
   const rsdAxis = rsdAxisFromLabel(params.rsdLabel);
   const fetched = await Promise.all(
-    realizations.map((realization) =>
+    items.map((item) =>
       fetchPowerSpectrum({
-        suite: params.suite, setName: params.setName, realization, snapnum: params.snapnum,
+        suite: item.suite, setName: params.setName, realization: item.realization, snapnum: params.snapnum,
         grid: params.grid, MAS: params.MAS, threads: params.threads, ptype,
         kRange: params.kRange, rsdAxis, multipole: params.multipole,
-      }).then((r) => ({ realization, r })),
+      }).then((r) => ({ item, r })),
     ),
   );
   // Real gap, not a bug: no synthetic fallback (removed 2026-08-05), so
   // some (or all) selected realizations can come back null.
-  const withData = fetched.filter((f): f is { realization: number | string; r: Result } => f.r !== null);
+  const withData = fetched.filter((f): f is { item: CompareItem; r: Result } => f.r !== null);
   if (withData.length === 0) {
     throw new Error('No data available for this suite/set/realization.');
   }
   const first = withData[0].r;
   return {
     id, kind: 'power-spectrum', params,
-    series: withData.map(({ realization, r }) => ({ label: `${params.setName}_${realization}`, x: r.x, y: r.y })),
+    series: withData.map(({ item, r }) => ({ label: compareLabel(item, params.setName, params.compareAxis), x: r.x, y: r.y })),
     xLabel: first.x_label, yLabel: first.y_label, logX: first.log_x, logY: first.log_y,
     note: first.note,
     loading: false,
@@ -1247,27 +1289,27 @@ async function loadPowerSpectrumTile(id: string, params: PowerSpectrumParams): P
 }
 
 async function loadBispectrumTile(id: string, params: BispectrumParams): Promise<BispectrumTileState> {
-  const realizations = params.compareMode ? params.realizations : [params.realizations[0]];
+  const items = compareItemsFor(params);
   const fetched = await Promise.all(
-    realizations.map((realization) =>
+    items.map((item) =>
       fetchBispectrum({
-        suite: params.suite, setName: params.setName, realization,
+        suite: item.suite, setName: params.setName, realization: item.realization,
         field: params.field, muIndex: params.muIndex,
         kRange: params.kRange, rsdAxis: rsdAxisFromLabel(params.rsdLabel), ell: params.ell,
-      }).then((r) => ({ realization, r })),
+      }).then((r) => ({ item, r })),
     ),
   );
   // Real gap, not a bug: some (or all) selected realizations can come back
   // null - matches app.py's own generic block filtering None results
   // before plotting.
-  const withData = fetched.filter((f): f is { realization: number; r: Result } => f.r !== null);
+  const withData = fetched.filter((f): f is { item: CompareItem; r: Result } => f.r !== null);
   if (withData.length === 0) {
     throw new Error('No data available for this suite/set/realization. Try IllustrisTNG or SIMBA, LH set.');
   }
   const first = withData[0].r;
   return {
     id, kind: 'bispectrum', params,
-    series: withData.map(({ realization, r }) => ({ label: `${params.setName}_${realization}`, x: r.x, y: r.y })),
+    series: withData.map(({ item, r }) => ({ label: compareLabel(item, params.setName, params.compareAxis), x: r.x, y: r.y })),
     xLabel: first.x_label, yLabel: first.y_label, logX: first.log_x, logY: first.log_y,
     note: first.note,
     loading: false,
@@ -1275,25 +1317,25 @@ async function loadBispectrumTile(id: string, params: BispectrumParams): Promise
 }
 
 async function loadSFRHistoryTile(id: string, params: SFRHistoryParams): Promise<SFRHistoryTileState> {
-  const realizations = params.compareMode ? params.realizations : [params.realizations[0]];
+  const items = compareItemsFor(params);
   const fetched = await Promise.all(
-    realizations.map((realization) =>
+    items.map((item) =>
       fetchSFRHistory({
-        suite: params.suite, setName: params.setName, realization,
+        suite: item.suite, setName: params.setName, realization: item.realization,
         zMin: params.zMin, zMax: params.zMax, bins: params.bins,
-      }).then((r) => ({ realization, r })),
+      }).then((r) => ({ item, r })),
     ),
   );
   // Real gap, not a bug: no synthetic fallback (removed 2026-08-05), so
   // some (or all) selected realizations can come back null.
-  const withData = fetched.filter((f): f is { realization: number | string; r: Result } => f.r !== null);
+  const withData = fetched.filter((f): f is { item: CompareItem; r: Result } => f.r !== null);
   if (withData.length === 0) {
     throw new Error('No data available for this suite/set/realization.');
   }
   const first = withData[0].r;
   return {
     id, kind: 'sfr-history', params,
-    series: withData.map(({ realization, r }) => ({ label: `${params.setName}_${realization}`, x: r.x, y: r.y })),
+    series: withData.map(({ item, r }) => ({ label: compareLabel(item, params.setName, params.compareAxis), x: r.x, y: r.y })),
     xLabel: first.x_label, yLabel: first.y_label, logX: first.log_x, logY: first.log_y,
     note: first.note,
     loading: false,
@@ -1455,7 +1497,30 @@ async function loadFieldMap2DGroupTile(id: string, params: FieldMap2DParams): Pr
   return { id, kind: 'field-map-2d', params, note: firstReal.note, source: firstReal.source, cells, loading: false };
 }
 
+// Real (issue #56 follow-up) - the mosaic's second, additive axis: one
+// cell per selected suite instead of per consecutive realization, fixing
+// realization/set/field the same way Compare mode's own suite axis does.
+// Same zero-backend-changes, parallel-fetch, null-cell-on-missing-data
+// shape as loadFieldMap2DGroupTile above - only the loop variable changes.
+async function loadFieldMap2DSuiteGroupTile(id: string, params: FieldMap2DParams): Promise<FieldMap2DTileState> {
+  const suites = params.suiteGroup!;
+  const fetched = await Promise.all(
+    suites.map((suite) =>
+      fetchFieldMap2DMeta({ ...params, suite }).then((meta) => ({ suite, meta })),
+    ),
+  );
+  const cells = fetched.map(({ suite, meta }) => (meta ? { suite, note: meta.note, source: meta.source } : null));
+  const firstReal = cells.find((c) => c !== null);
+  if (!firstReal) {
+    throw new Error(
+      `No CMD 2D maps available for any of ${suites.join(', ')} at this set/realization/field.`,
+    );
+  }
+  return { id, kind: 'field-map-2d', params, note: firstReal.note, source: firstReal.source, cells, loading: false };
+}
+
 async function loadFieldMap2DTile(id: string, params: FieldMap2DParams): Promise<FieldMap2DTileState> {
+  if (params.suiteGroup && params.suiteGroup.length > 0) return loadFieldMap2DSuiteGroupTile(id, params);
   if (params.groupSize) return loadFieldMap2DGroupTile(id, params);
   const meta = await fetchFieldMap2DMeta(params);
   if (meta === null) {
@@ -3567,6 +3632,9 @@ export function App() {
               tiles.map((tile) => {
                 if (tile.kind === 'mass-range') {
                   const config = MASS_RANGE_CONFIGS[tile.statistic];
+                  // Same suite-axis Static-PNG gap as Power Spectrum's own
+                  // fix - see that block's comment for the full why.
+                  const isSuiteCompare = tile.params.compareMode && tile.params.compareAxis === 'suite';
                   return (
                     <PlotTile
                       key={tile.id}
@@ -3579,18 +3647,22 @@ export function App() {
                         yLabel: tile.yLabel,
                         logX: tile.logX,
                         logY: tile.logY,
-                        imageUrl: massRangeImageUrl(config, {
-                          suite: tile.params.suite,
-                          setName: tile.params.setName,
-                          realizations: tile.params.compareMode ? tile.params.realizations : [tile.params.realizations[0]],
-                          snapnum: tile.params.snapnum,
-                          min: tile.params.min,
-                          max: tile.params.max,
-                          bins: tile.params.bins,
-                        }),
+                        imageUrl: isSuiteCompare
+                          ? undefined
+                          : massRangeImageUrl(config, {
+                              suite: tile.params.suite,
+                              setName: tile.params.setName,
+                              realizations: tile.params.compareMode ? tile.params.realizations : [tile.params.realizations[0]],
+                              snapnum: tile.params.snapnum,
+                              min: tile.params.min,
+                              max: tile.params.max,
+                              bins: tile.params.bins,
+                            }),
                       }}
                       readoutGroups={[
-                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        isSuiteCompare
+                          ? { label: 'Suites (compare)', value: (tile.params.compareSuites ?? []).join(', ') }
+                          : { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
                         { label: 'Realizations (compare)', value: tile.params.realizations.join(', ') },
                         { label: config.rangeLabel, value: `${tile.params.min.toExponential()} – ${tile.params.max.toExponential()}` },
                         { label: 'Bins', value: String(tile.params.bins) },
@@ -3687,6 +3759,22 @@ export function App() {
                 if (tile.kind === 'power-spectrum') {
                   const ptype = PTYPE_OPTIONS[tile.params.ptypeLabel];
                   const realizations = tile.params.compareMode ? tile.params.realizations : [tile.params.realizations[0]];
+                  // Real fix (issue #56 follow-up): this Static-PNG URL
+                  // builder predates the suite axis and only ever knew how
+                  // to plot multiple REALIZATIONS of one fixed suite -
+                  // `render_power_spectrum_png` takes a single `suite` and
+                  // a list of `realizations`, nothing more. Building it
+                  // from `tile.params.suite`/`realizations` regardless of
+                  // axis silently rendered a single-suite, single-line
+                  // Static image while Interactive correctly plotted every
+                  // compared suite - confirmed live (2026-08-10 QA). Omit
+                  // `imageUrl` entirely for suite-axis Compare mode instead
+                  // of shipping a misleading image - same "Interactive-only
+                  // when there's no real static equivalent" pattern this
+                  // component already uses for 3D tiles (see PlotTile's own
+                  // `imageUrl?` doc). Realization-axis Compare mode is
+                  // unaffected - it already worked correctly in both modes.
+                  const isSuiteCompare = tile.params.compareMode && tile.params.compareAxis === 'suite';
                   return (
                     <PlotTile
                       key={tile.id}
@@ -3699,16 +3787,20 @@ export function App() {
                         yLabel: tile.yLabel,
                         logX: tile.logX,
                         logY: tile.logY,
-                        imageUrl: powerSpectrumImageUrl({
-                          suite: tile.params.suite, setName: tile.params.setName, realizations,
-                          snapnum: tile.params.snapnum, grid: tile.params.grid, MAS: tile.params.MAS,
-                          threads: tile.params.threads, ptype,
-                          kRange: tile.params.kRange, rsdAxis: rsdAxisFromLabel(tile.params.rsdLabel),
-                          multipole: tile.params.multipole, showLinearPk: tile.params.showLinearPk,
-                        }),
+                        imageUrl: isSuiteCompare
+                          ? undefined
+                          : powerSpectrumImageUrl({
+                              suite: tile.params.suite, setName: tile.params.setName, realizations,
+                              snapnum: tile.params.snapnum, grid: tile.params.grid, MAS: tile.params.MAS,
+                              threads: tile.params.threads, ptype,
+                              kRange: tile.params.kRange, rsdAxis: rsdAxisFromLabel(tile.params.rsdLabel),
+                              multipole: tile.params.multipole, showLinearPk: tile.params.showLinearPk,
+                            }),
                       }}
                       readoutGroups={[
-                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        isSuiteCompare
+                          ? { label: 'Suites (compare)', value: (tile.params.compareSuites ?? []).join(', ') }
+                          : { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
                         { label: 'Realizations (compare)', value: tile.params.realizations.join(', ') },
                         { label: 'Grid / MAS', value: `${tile.params.grid} · ${tile.params.MAS}` },
                         { label: 'Particle type', value: tile.params.ptypeLabel },
@@ -3721,6 +3813,9 @@ export function App() {
 
                 if (tile.kind === 'bispectrum') {
                   const realizations = tile.params.compareMode ? tile.params.realizations : [tile.params.realizations[0]];
+                  // Same suite-axis Static-PNG gap as Power Spectrum's own
+                  // fix above - see that block's comment for the full why.
+                  const isSuiteCompare = tile.params.compareMode && tile.params.compareAxis === 'suite';
                   return (
                     <PlotTile
                       key={tile.id}
@@ -3733,14 +3828,18 @@ export function App() {
                         yLabel: tile.yLabel,
                         logX: tile.logX,
                         logY: tile.logY,
-                        imageUrl: bispectrumImageUrl({
-                          suite: tile.params.suite, setName: tile.params.setName, realizations,
-                          field: tile.params.field, muIndex: tile.params.muIndex,
-                          kRange: tile.params.kRange, rsdAxis: rsdAxisFromLabel(tile.params.rsdLabel), ell: tile.params.ell,
-                        }),
+                        imageUrl: isSuiteCompare
+                          ? undefined
+                          : bispectrumImageUrl({
+                              suite: tile.params.suite, setName: tile.params.setName, realizations,
+                              field: tile.params.field, muIndex: tile.params.muIndex,
+                              kRange: tile.params.kRange, rsdAxis: rsdAxisFromLabel(tile.params.rsdLabel), ell: tile.params.ell,
+                            }),
                       }}
                       readoutGroups={[
-                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        isSuiteCompare
+                          ? { label: 'Suites (compare)', value: (tile.params.compareSuites ?? []).join(', ') }
+                          : { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
                         { label: 'Realizations (compare)', value: tile.params.realizations.join(', ') },
                         { label: 'Field', value: tile.params.field },
                         { label: 'Triangle shape (mu)', value: String(tile.params.muIndex) },
@@ -3753,6 +3852,9 @@ export function App() {
 
                 if (tile.kind === 'sfr-history') {
                   const realizations = tile.params.compareMode ? tile.params.realizations : [tile.params.realizations[0]];
+                  // Same suite-axis Static-PNG gap as Power Spectrum's own
+                  // fix above - see that block's comment for the full why.
+                  const isSuiteCompare = tile.params.compareMode && tile.params.compareAxis === 'suite';
                   return (
                     <PlotTile
                       key={tile.id}
@@ -3765,15 +3867,19 @@ export function App() {
                         yLabel: tile.yLabel,
                         logX: tile.logX,
                         logY: tile.logY,
-                        imageUrl: sfrHistoryImageUrl({
-                          suite: tile.params.suite, setName: tile.params.setName, realizations,
-                          zMin: tile.params.zMin, zMax: tile.params.zMax, bins: tile.params.bins,
-                          showSymbolicFit: tile.params.showSymbolicFit,
-                          Om: tile.params.Om, s8: tile.params.s8, A1: tile.params.A1, A3: tile.params.A3,
-                        }),
+                        imageUrl: isSuiteCompare
+                          ? undefined
+                          : sfrHistoryImageUrl({
+                              suite: tile.params.suite, setName: tile.params.setName, realizations,
+                              zMin: tile.params.zMin, zMax: tile.params.zMax, bins: tile.params.bins,
+                              showSymbolicFit: tile.params.showSymbolicFit,
+                              Om: tile.params.Om, s8: tile.params.s8, A1: tile.params.A1, A3: tile.params.A3,
+                            }),
                       }}
                       readoutGroups={[
-                        { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                        isSuiteCompare
+                          ? { label: 'Suites (compare)', value: (tile.params.compareSuites ?? []).join(', ') }
+                          : { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
                         { label: 'Realizations (compare)', value: tile.params.realizations.join(', ') },
                         { label: 'Redshift range', value: `${tile.params.zMin.toFixed(1)} – ${tile.params.zMax.toFixed(1)}` },
                         { label: 'Bins', value: String(tile.params.bins) },
@@ -4041,44 +4147,75 @@ export function App() {
 
                 if (tile.kind === 'field-map-2d') {
                   const group = tile.params.groupSize;
+                  // Real (issue #56 follow-up) - the mosaic's second,
+                  // additive axis. suiteGroup's own layout is computed
+                  // (not stored) since it's a pure function of how many
+                  // suites are selected - unlike groupSize, there's no
+                  // user-chosen rows×cols to preserve. The realization-grid
+                  // (group) branch below is completely unchanged.
+                  const suiteGroup = tile.params.suiteGroup;
+                  const suiteCols = suiteGroup ? Math.ceil(Math.sqrt(suiteGroup.length)) : 0;
+                  const suiteRows = suiteGroup ? Math.ceil(suiteGroup.length / suiteCols) : 0;
+                  const isSuiteMosaic = !!suiteGroup && suiteGroup.length > 0 && !!tile.cells;
+                  const isRealizationMosaic = !isSuiteMosaic && !!group && !!tile.cells;
                   return (
                     <PlotTile
                       key={tile.id}
                       error={tile.error}
                       title="2D Field Map"
                       chart={
-                        group && tile.cells
+                        isSuiteMosaic
                           ? {
                               kind: 'plotly-3d',
                               content: (
                                 <FieldMapMosaic
-                                  rows={group.rows}
-                                  cols={group.cols}
+                                  rows={suiteRows}
+                                  cols={suiteCols}
                                   field={tile.params.field}
-                                  cells={tile.cells.map((cell) => (cell
-                                    ? { realization: cell.realization, imageUrl: fieldMap2DImageUrl({ ...tile.params, realization: cell.realization }) }
+                                  cells={tile.cells!.map((cell) => (cell && 'suite' in cell
+                                    ? { suite: cell.suite, imageUrl: fieldMap2DImageUrl({ ...tile.params, suite: cell.suite }) }
                                     : null))}
                                 />
                               ),
                             }
-                          : {
-                              kind: 'static-image',
-                              imageUrl: fieldMap2DImageUrl(tile.params),
-                              alt: `${tile.params.field} 2D column-density-style projection`,
-                            }
+                          : isRealizationMosaic
+                            ? {
+                                kind: 'plotly-3d',
+                                content: (
+                                  <FieldMapMosaic
+                                    rows={group!.rows}
+                                    cols={group!.cols}
+                                    field={tile.params.field}
+                                    cells={tile.cells!.map((cell) => (cell && 'realization' in cell
+                                      ? { realization: cell.realization, imageUrl: fieldMap2DImageUrl({ ...tile.params, realization: cell.realization }) }
+                                      : null))}
+                                  />
+                                ),
+                              }
+                            : {
+                                kind: 'static-image',
+                                imageUrl: fieldMap2DImageUrl(tile.params),
+                                alt: `${tile.params.field} 2D column-density-style projection`,
+                              }
                       }
                       readoutGroups={
-                        group && tile.cells
+                        isSuiteMosaic
                           ? [
-                              { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
-                              { label: 'Realizations', value: `${Number(tile.params.realization)}–${Number(tile.params.realization) + group.rows * group.cols - 1} (${group.rows} × ${group.cols})` },
+                              { label: 'Suites', value: suiteGroup!.join(', ') },
+                              { label: 'Set / Realization', value: `${tile.params.setName} · ${String(tile.params.realization)}` },
                               { label: 'Field', value: tile.params.field },
                             ]
-                          : [
-                              { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
-                              { label: 'Realization', value: String(tile.params.realization) },
-                              { label: 'Field', value: tile.params.field },
-                            ]
+                          : isRealizationMosaic
+                            ? [
+                                { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                                { label: 'Realizations', value: `${Number(tile.params.realization)}–${Number(tile.params.realization) + group!.rows * group!.cols - 1} (${group!.rows} × ${group!.cols})` },
+                                { label: 'Field', value: tile.params.field },
+                              ]
+                            : [
+                                { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                                { label: 'Realization', value: String(tile.params.realization) },
+                                { label: 'Field', value: tile.params.field },
+                              ]
                       }
                       halos={null}
                       {...commonPlotTileProps(tile)}

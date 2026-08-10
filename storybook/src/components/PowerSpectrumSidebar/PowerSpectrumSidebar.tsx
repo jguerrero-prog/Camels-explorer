@@ -42,6 +42,8 @@ export type PowerSpectrumParams = {
   setName: string;
   compareMode: boolean;
   realizations: (number | string)[];
+  compareAxis?: 'realization' | 'suite';
+  compareSuites?: string[];
   snapnum: number;
   grid: number;
   MAS: string;
