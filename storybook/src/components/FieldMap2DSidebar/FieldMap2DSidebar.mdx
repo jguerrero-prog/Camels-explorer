@@ -19,11 +19,14 @@ Composed entirely from `SingleRealizationFields`/`SelectField`/`Button` — no t
 - Suite/Set/Realization: `SingleRealizationFields` — one of `app.py`'s own `SINGLE_REALIZATION_STATISTICS`.
 - Field: `SelectField`, options from `GET /api/metadata`'s `cmd_fields` (all 13 real CMD field names).
 - **No Snapshot control** — CMD only publishes `z=0.00` for 2D maps (unlike the 3D grids, which have 5 real redshifts), confirmed directly from `backend.py`'s own `get_field_map_2d` docstring. Matches `XrayHaloProfilesSidebar`'s same reasoning for omitting a control with nothing real behind it.
-- **Group view** (`FieldMapGroupControl`, real addition 2026-08-06, ticket #12): only rendered when `realization` is a plain number. Lets a user mosaic several realizations of the same suite/set/field together in one tile — see `FieldMapGroupControl.mdx`/`FieldMapMosaic.mdx` for the picker UI and the mosaic render respectively.
+- **Group by** (`Radio`, real addition - issue #56 follow-up): chooses which axis the mosaic below varies.
+  - **Realizations** (the original, only behavior until now): `FieldMapGroupControl`, real addition 2026-08-06, ticket #12. Mosaics several consecutive realizations of the same fixed suite/set/field together in one tile — see `FieldMapGroupControl.mdx`/`FieldMapMosaic.mdx` for the picker UI and the mosaic render respectively.
+  - **Suites**: a `MultiSelect` "Suites to compare" — fixes realization/set/field and mosaics one cell per selected suite instead, the same fixed-realization-vary-suite idea Compare mode's own suite axis (`RealizationFields.mdx`) uses. Mosaic layout is computed (square-ish) from the suite count, not user-chosen. Switching axis clears the other's param (`groupSize`/`suiteGroup`) so only one is ever active.
+  - Both are only rendered when `realization` is a plain number (see the 1P gap below) - `groupSize`/`suiteGroup` are otherwise fully independent, optional, additive fields on `FieldMap2DParams`.
 
 <Canvas of={FieldMap2DSidebarStories.GroupViewActive} />
 
-**Real, deliberate gap:** switching Set to `1P` (or already on `1P`) hides the Group view control entirely and resets any active `groupSize` to `null` — 1P's `realization` is a compound string id (e.g. `"p11_2"`), which has no real "next realization" to sequentially fill a grid with.
+**Real, deliberate gap:** switching Set to `1P` (or already on `1P`) hides the Group by control entirely and resets any active `groupSize`/`suiteGroup` to `null` — 1P's `realization` is a compound string id (e.g. `"p11_2"`) that's also suite-specific in meaning (see `RealizationFields.mdx`'s own 1P notes), so it has no real "next realization" to sequentially fill a grid with, and comparing the same literal id across suites wouldn't be meaningful either.
 
 <Canvas of={FieldMap2DSidebarStories.OnepHidesGroupControl} />
 

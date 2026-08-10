@@ -607,7 +607,15 @@ type FieldMap2DTileState = {
    * realization with no real published map (out of range, or a suite/
    * field CMD doesn't publish) - PlotTile renders a mosaic instead of the
    * single `imageUrl` image when this is present. */
-  cells?: ({ realization: number; note: string; source: string } | null)[];
+  cells?: (
+    | { realization: number; note: string; source: string }
+    // Real (issue #56 follow-up) - only set when `params.suiteGroup` is
+    // active instead. One entry per selected suite, `null` for a suite
+    // with no real published map for this field/set/realization. The
+    // realization variant above is completely unchanged.
+    | { suite: string; note: string; source: string }
+    | null
+  )[];
   loading: boolean;
   error?: string;
 };
@@ -1489,7 +1497,30 @@ async function loadFieldMap2DGroupTile(id: string, params: FieldMap2DParams): Pr
   return { id, kind: 'field-map-2d', params, note: firstReal.note, source: firstReal.source, cells, loading: false };
 }
 
+// Real (issue #56 follow-up) - the mosaic's second, additive axis: one
+// cell per selected suite instead of per consecutive realization, fixing
+// realization/set/field the same way Compare mode's own suite axis does.
+// Same zero-backend-changes, parallel-fetch, null-cell-on-missing-data
+// shape as loadFieldMap2DGroupTile above - only the loop variable changes.
+async function loadFieldMap2DSuiteGroupTile(id: string, params: FieldMap2DParams): Promise<FieldMap2DTileState> {
+  const suites = params.suiteGroup!;
+  const fetched = await Promise.all(
+    suites.map((suite) =>
+      fetchFieldMap2DMeta({ ...params, suite }).then((meta) => ({ suite, meta })),
+    ),
+  );
+  const cells = fetched.map(({ suite, meta }) => (meta ? { suite, note: meta.note, source: meta.source } : null));
+  const firstReal = cells.find((c) => c !== null);
+  if (!firstReal) {
+    throw new Error(
+      `No CMD 2D maps available for any of ${suites.join(', ')} at this set/realization/field.`,
+    );
+  }
+  return { id, kind: 'field-map-2d', params, note: firstReal.note, source: firstReal.source, cells, loading: false };
+}
+
 async function loadFieldMap2DTile(id: string, params: FieldMap2DParams): Promise<FieldMap2DTileState> {
+  if (params.suiteGroup && params.suiteGroup.length > 0) return loadFieldMap2DSuiteGroupTile(id, params);
   if (params.groupSize) return loadFieldMap2DGroupTile(id, params);
   const meta = await fetchFieldMap2DMeta(params);
   if (meta === null) {
@@ -4075,44 +4106,75 @@ export function App() {
 
                 if (tile.kind === 'field-map-2d') {
                   const group = tile.params.groupSize;
+                  // Real (issue #56 follow-up) - the mosaic's second,
+                  // additive axis. suiteGroup's own layout is computed
+                  // (not stored) since it's a pure function of how many
+                  // suites are selected - unlike groupSize, there's no
+                  // user-chosen rows×cols to preserve. The realization-grid
+                  // (group) branch below is completely unchanged.
+                  const suiteGroup = tile.params.suiteGroup;
+                  const suiteCols = suiteGroup ? Math.ceil(Math.sqrt(suiteGroup.length)) : 0;
+                  const suiteRows = suiteGroup ? Math.ceil(suiteGroup.length / suiteCols) : 0;
+                  const isSuiteMosaic = !!suiteGroup && suiteGroup.length > 0 && !!tile.cells;
+                  const isRealizationMosaic = !isSuiteMosaic && !!group && !!tile.cells;
                   return (
                     <PlotTile
                       key={tile.id}
                       error={tile.error}
                       title="2D Field Map"
                       chart={
-                        group && tile.cells
+                        isSuiteMosaic
                           ? {
                               kind: 'plotly-3d',
                               content: (
                                 <FieldMapMosaic
-                                  rows={group.rows}
-                                  cols={group.cols}
+                                  rows={suiteRows}
+                                  cols={suiteCols}
                                   field={tile.params.field}
-                                  cells={tile.cells.map((cell) => (cell
-                                    ? { realization: cell.realization, imageUrl: fieldMap2DImageUrl({ ...tile.params, realization: cell.realization }) }
+                                  cells={tile.cells!.map((cell) => (cell && 'suite' in cell
+                                    ? { suite: cell.suite, imageUrl: fieldMap2DImageUrl({ ...tile.params, suite: cell.suite }) }
                                     : null))}
                                 />
                               ),
                             }
-                          : {
-                              kind: 'static-image',
-                              imageUrl: fieldMap2DImageUrl(tile.params),
-                              alt: `${tile.params.field} 2D column-density-style projection`,
-                            }
+                          : isRealizationMosaic
+                            ? {
+                                kind: 'plotly-3d',
+                                content: (
+                                  <FieldMapMosaic
+                                    rows={group!.rows}
+                                    cols={group!.cols}
+                                    field={tile.params.field}
+                                    cells={tile.cells!.map((cell) => (cell && 'realization' in cell
+                                      ? { realization: cell.realization, imageUrl: fieldMap2DImageUrl({ ...tile.params, realization: cell.realization }) }
+                                      : null))}
+                                  />
+                                ),
+                              }
+                            : {
+                                kind: 'static-image',
+                                imageUrl: fieldMap2DImageUrl(tile.params),
+                                alt: `${tile.params.field} 2D column-density-style projection`,
+                              }
                       }
                       readoutGroups={
-                        group && tile.cells
+                        isSuiteMosaic
                           ? [
-                              { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
-                              { label: 'Realizations', value: `${Number(tile.params.realization)}–${Number(tile.params.realization) + group.rows * group.cols - 1} (${group.rows} × ${group.cols})` },
+                              { label: 'Suites', value: suiteGroup!.join(', ') },
+                              { label: 'Set / Realization', value: `${tile.params.setName} · ${String(tile.params.realization)}` },
                               { label: 'Field', value: tile.params.field },
                             ]
-                          : [
-                              { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
-                              { label: 'Realization', value: String(tile.params.realization) },
-                              { label: 'Field', value: tile.params.field },
-                            ]
+                          : isRealizationMosaic
+                            ? [
+                                { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                                { label: 'Realizations', value: `${Number(tile.params.realization)}–${Number(tile.params.realization) + group!.rows * group!.cols - 1} (${group!.rows} × ${group!.cols})` },
+                                { label: 'Field', value: tile.params.field },
+                              ]
+                            : [
+                                { label: 'Suite / Set', value: `${tile.params.suite} · ${tile.params.setName}` },
+                                { label: 'Realization', value: String(tile.params.realization) },
+                                { label: 'Field', value: tile.params.field },
+                              ]
                       }
                       halos={null}
                       {...commonPlotTileProps(tile)}

@@ -20,7 +20,7 @@ Real (added 2026-08-06, ticket #12 — *"2D Field Map currently shows one realiz
 <Controls />
 
 - CSS grid, `rows`/`cols` set the track counts directly (supports non-square grids). Each cell is its own bordered box with `object-fit: contain` so a real matplotlib PNG's own aspect ratio is preserved rather than stretched to fill a differently-shaped cell.
-- A small realization-number tag sits in each cell's top-left corner (the mosaic's own always-visible label, distinct from `PlotTile`'s single "Realization" readout, which only makes sense for the single-map view).
+- A small tag sits in each cell's top-left corner — a realization number, or (real addition, issue #56 follow-up) a suite name when the mosaic is varying suites instead. `FieldMapMosaicCell` is a union of `{ realization, imageUrl }` and `{ suite, imageUrl }` (plus `null`) - the realization variant's own shape/rendering is completely unchanged by the suite variant's addition. Distinct from `PlotTile`'s single "Realization" readout, which only makes sense for the single-map view.
 
 <Canvas of={FieldMapMosaicStories.SomeCellsMissing} />
 
@@ -33,6 +33,7 @@ Real (added 2026-08-06, ticket #12 — *"2D Field Map currently shows one realiz
 - Rendered via `PlotTile`'s `chart.kind: 'plotly-3d'` escape hatch (`content: ReactNode`) — the closest existing fit for "more than one image in the chart area," since `'plotly'` and `'static-image'` both assume exactly one series/image. `availableChartModes` treats `'plotly-3d'` as Interactive-only (no Static/Table), matching 3D Density Field/3D Particle Cloud's own single-mode behavior — correct here too, since there's no single-image "static" equivalent of a mosaic.
 - `App.tsx`'s `loadFieldMap2DTile` builds `cells` via `Promise.all` over every realization in the grid (`FieldMapGroupControl`'s row-major sequential fill, starting from the tile's own `Realization` field) — N real `fetchFieldMap2DMeta` calls to the existing single-realization endpoint, no backend changes. Each cell's `imageUrl` comes from the same existing `fieldMap2DImageUrl` helper, just called once per realization instead of once per tile.
 - Entry point: `FieldMapGroupControl` inside `FieldMap2DSidebar` — see that component's own docs for the trigger/picker UI that produces the `rows`/`cols` this component renders.
+- **Suite axis (issue #56 follow-up)**: `loadFieldMap2DSuiteGroupTile` (App.tsx) builds `cells` the same way but loops over `params.suiteGroup` instead of consecutive realizations - same zero-backend-changes, per-item-independent-failure shape. `rows`/`cols` for this axis are computed at render time (square-ish from the suite count), not stored, since there's no user-chosen shape to preserve the way `groupSize` has. Entry point: the "Group by" `Radio` inside `FieldMap2DSidebar`.
 
 ## Code
 
