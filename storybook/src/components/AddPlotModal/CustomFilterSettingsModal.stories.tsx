@@ -83,7 +83,7 @@ export const WithFieldsAlreadyAdded: Story = {
 };
 
 /** Real, honest state: no Type picked yet in the underlying form - the
- * modal still opens (a user can reach "Filter settings…" before choosing a
+ * modal still opens (a user can reach "Filter settings" before choosing a
  * Type) but shows a prompt instead of a tree, since `filterTreeForType`
  * has nothing to filter. */
 export const NoTypeSelectedYet: Story = {

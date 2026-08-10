@@ -27,7 +27,7 @@ export function CustomFilterSettings({ tree, treeError, selection, onChange }: C
     <div className="custom-tab__filter-settings">
       <div className="custom-tab__divider" />
       <button type="button" className="custom-tab__filter-settings-header" onClick={() => setOpen(true)}>
-        <span className="custom-tab__label">Filter settings…</span>
+        <span className="custom-tab__label">Filter settings</span>
         {fieldCount > 0 && (
           <span className="custom-tab__filter-settings-count">
             {fieldCount} field{fieldCount === 1 ? '' : 's'}

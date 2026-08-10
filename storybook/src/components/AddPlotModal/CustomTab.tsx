@@ -46,7 +46,7 @@ export function CustomTab({ selection, onChange }: CustomTabProps) {
       <CustomFieldsForm fields={fields} selection={selection} onChange={onChange} />
       {/* Real fix (2026-08-06, direct user feedback): the inline Filters
           tree this used to render (CustomFieldsForm's own `showFilterTree`
-          default) is gone - same "Filter settings…" modal trigger
+          default) is gone - same "Filter settings" modal trigger
           CustomSidebar already uses post-creation, so both places share
           one real experience instead of two differently-cramped ones. */}
       <CustomFilterSettings tree={tree} treeError={treeError} selection={selection} onChange={onChange} />
