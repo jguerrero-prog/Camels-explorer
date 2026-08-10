@@ -357,6 +357,55 @@ function BlackholeMergers3DScatter({ rows }: { rows: HaloCatalogRow[] }) {
   );
 }
 
+/** Real (added 2026-08-10, direct user request - same "does X support a 3D
+ * scatter" question BlackholeMergers3DScatter's own docs describe) - feeds
+ * PlotTile's `chart3d` slot. Group Matching's existing 2D static image
+ * already plots N-body vs. hydro group mass log-log; Percent Matched is
+ * the one genuinely independent third continuous field the real
+ * get_group_matching output has - Mass Ratio is exactly Hydro/N-body, so
+ * it's derived from the two mass axes already here, not a real third
+ * dimension. Used as the color channel instead, same "derived quantity as
+ * color, real fields as spatial axes" approach BlackholeMergers3DScatter
+ * already uses for its own combined-mass color channel.
+ *
+ * Rows with no hydro counterpart (real Hydro Group Index -1, Hydro Group
+ * Mass null - see GROUP_MATCHING_COLUMNS' own comment) are excluded
+ * rather than plotted at some fabricated mass - matches this project's
+ * own real-gap-not-a-bug handling of missing data elsewhere, not a
+ * synthetic stand-in. */
+function GroupMatching3DScatter({ rows }: { rows: GroupMatchingRow[] }) {
+  const matched = rows.filter((r) => typeof r['Hydro Group Mass [Msun/h]'] === 'number');
+  const nbodyMass = matched.map((r) => r['N-body Group Mass [Msun/h]'] as number);
+  const hydroMass = matched.map((r) => r['Hydro Group Mass [Msun/h]'] as number);
+  const percentMatched = matched.map((r) => r['Percent Matched'] as number);
+  const logMassRatio = matched.map((_, i) => Math.log10(hydroMass[i] / nbodyMass[i]));
+  return (
+    <Plotly3DChart
+      xLabel="log10(N-body Group Mass [Msun/h])"
+      yLabel="log10(Hydro Group Mass [Msun/h])"
+      zLabel="Percent Matched"
+      pinEnabled={false}
+      data={[{
+        type: 'scatter3d',
+        mode: 'markers',
+        x: nbodyMass.map(Math.log10),
+        y: hydroMass.map(Math.log10),
+        z: percentMatched,
+        marker: {
+          size: 4,
+          color: logMassRatio,
+          colorscale: 'Inferno',
+          showscale: true,
+          colorbar: { title: { text: 'log10 mass ratio (hydro/N-body)', font: { color: '#e5e7eb' } }, tickfont: { color: '#e5e7eb' } },
+        },
+        text: matched.map((_, i) =>
+          `N-body M = ${nbodyMass[i].toExponential(2)} Msun/h<br>Hydro M = ${hydroMass[i].toExponential(2)} Msun/h<br>Matched = ${percentMatched[i].toFixed(1)}%`),
+        hoverinfo: 'text',
+      }]}
+    />
+  );
+}
+
 type PlotTileState = {
   id: string;
   kind: 'mass-range';
@@ -4025,6 +4074,7 @@ export function App() {
                         footerNoun: 'halos',
                         csvFilename: `${tile.params.suite}_${tile.params.setName}_${tile.params.realization}_group_matching.csv`,
                       }}
+                      chart3d={tile.rows.length > 0 ? <GroupMatching3DScatter rows={tile.rows} /> : null}
                       {...commonPlotTileProps(tile)}
                     />
                   );
