@@ -357,6 +357,55 @@ function BlackholeMergers3DScatter({ rows }: { rows: HaloCatalogRow[] }) {
   );
 }
 
+/** Real (added 2026-08-10, direct user request - same "does X support a 3D
+ * scatter" question BlackholeMergers3DScatter's own docs describe) - feeds
+ * PlotTile's `chart3d` slot. Group Matching's existing 2D static image
+ * already plots N-body vs. hydro group mass log-log; Percent Matched is
+ * the one genuinely independent third continuous field the real
+ * get_group_matching output has - Mass Ratio is exactly Hydro/N-body, so
+ * it's derived from the two mass axes already here, not a real third
+ * dimension. Used as the color channel instead, same "derived quantity as
+ * color, real fields as spatial axes" approach BlackholeMergers3DScatter
+ * already uses for its own combined-mass color channel.
+ *
+ * Rows with no hydro counterpart (real Hydro Group Index -1, Hydro Group
+ * Mass null - see GROUP_MATCHING_COLUMNS' own comment) are excluded
+ * rather than plotted at some fabricated mass - matches this project's
+ * own real-gap-not-a-bug handling of missing data elsewhere, not a
+ * synthetic stand-in. */
+function GroupMatching3DScatter({ rows }: { rows: GroupMatchingRow[] }) {
+  const matched = rows.filter((r) => typeof r['Hydro Group Mass [Msun/h]'] === 'number');
+  const nbodyMass = matched.map((r) => r['N-body Group Mass [Msun/h]'] as number);
+  const hydroMass = matched.map((r) => r['Hydro Group Mass [Msun/h]'] as number);
+  const percentMatched = matched.map((r) => r['Percent Matched'] as number);
+  const logMassRatio = matched.map((_, i) => Math.log10(hydroMass[i] / nbodyMass[i]));
+  return (
+    <Plotly3DChart
+      xLabel="log10(N-body Group Mass [Msun/h])"
+      yLabel="log10(Hydro Group Mass [Msun/h])"
+      zLabel="Percent Matched"
+      pinEnabled={false}
+      data={[{
+        type: 'scatter3d',
+        mode: 'markers',
+        x: nbodyMass.map(Math.log10),
+        y: hydroMass.map(Math.log10),
+        z: percentMatched,
+        marker: {
+          size: 4,
+          color: logMassRatio,
+          colorscale: 'Inferno',
+          showscale: true,
+          colorbar: { title: { text: 'log10 mass ratio (hydro/N-body)', font: { color: '#e5e7eb' } }, tickfont: { color: '#e5e7eb' } },
+        },
+        text: matched.map((_, i) =>
+          `N-body M = ${nbodyMass[i].toExponential(2)} Msun/h<br>Hydro M = ${hydroMass[i].toExponential(2)} Msun/h<br>Matched = ${percentMatched[i].toFixed(1)}%`),
+        hoverinfo: 'text',
+      }]}
+    />
+  );
+}
+
 type PlotTileState = {
   id: string;
   kind: 'mass-range';
@@ -2252,8 +2301,21 @@ export function App() {
     setFocusedTileId(tileId);
   };
 
+  // Real fix (2026-08-10, direct user report - a duplicate-key console
+  // warning on a restored tile): this used to append unconditionally
+  // whenever nothing was pending, with no guard against a tile whose id
+  // already exists in `prev`. crypto.randomUUID() (issue #47) guarantees a
+  // NEW tile's id can't collide with anything, but it says nothing about
+  // this function being called twice for the SAME already-existing id -
+  // which the localStorage-restore effect below did under StrictMode's
+  // double-invoke-on-mount semantics. Treating an existing-id call as a
+  // replace (not a second append) fixes that at the source, and is a safe
+  // general guard regardless of what else might call this with a stale id.
   const replaceTile = (tile: CanvasTile) => {
-    setTiles((prev) => (pendingTileId ? prev.map((t) => (t.id === pendingTileId ? tile : t)) : [...prev, tile]));
+    setTiles((prev) => {
+      const targetId = pendingTileId ?? (prev.some((t) => t.id === tile.id) ? tile.id : null);
+      return targetId ? prev.map((t) => (t.id === targetId ? tile : t)) : [...prev, tile];
+    });
   };
 
   const refetchMassRangeTile = (id: string, statistic: MassRangeStatistic, params: MassRangeParams) => {
@@ -3329,7 +3391,23 @@ export function App() {
   // Runs before the user can interact with the modal, so `pendingTileId`
   // is still null and `replaceTile` appends (its own normal behavior when
   // nothing is pending), same as a sequence of "add tile" clicks would.
+  //
+  // Real fix (2026-08-10, direct user report - duplicate-key console
+  // warning, confirmed 4 copies of one tile after several reloads):
+  // React.StrictMode (main.tsx) double-invokes a mount effect with no
+  // cleanup, in dev only - this effect had both, so its whole forEach ran
+  // twice per mount, restoring every saved tile twice. `replaceTile`'s own
+  // fix (above) stops that from duplicating going forward, but the persist
+  // effect had already written the duplicated array back to
+  // localStorage - and since it did that on every reload, duplicates kept
+  // compounding across this session. `restoredOnceRef` stops the double-
+  // invoke at the source; deduping `saved` by id before restoring self-
+  // heals whatever's already sitting duplicated in localStorage right now,
+  // rather than requiring the user to manually clear it.
+  const restoredOnceRef = useRef(false);
   useEffect(() => {
+    if (restoredOnceRef.current) return;
+    restoredOnceRef.current = true;
     let raw: string | null;
     try {
       raw = localStorage.getItem(CANVAS_STORAGE_KEY);
@@ -3344,7 +3422,13 @@ export function App() {
       return;
     }
     if (!Array.isArray(saved)) return;
-    (saved as SavedTile[]).forEach(restoreSavedTile);
+    const seenIds = new Set<string>();
+    const deduped = (saved as SavedTile[]).filter((s) => {
+      if (seenIds.has(s.id)) return false;
+      seenIds.add(s.id);
+      return true;
+    });
+    deduped.forEach(restoreSavedTile);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -3990,6 +4074,7 @@ export function App() {
                         footerNoun: 'halos',
                         csvFilename: `${tile.params.suite}_${tile.params.setName}_${tile.params.realization}_group_matching.csv`,
                       }}
+                      chart3d={tile.rows.length > 0 ? <GroupMatching3DScatter rows={tile.rows} /> : null}
                       {...commonPlotTileProps(tile)}
                     />
                   );
