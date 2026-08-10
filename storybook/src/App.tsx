@@ -2252,8 +2252,21 @@ export function App() {
     setFocusedTileId(tileId);
   };
 
+  // Real fix (2026-08-10, direct user report - a duplicate-key console
+  // warning on a restored tile): this used to append unconditionally
+  // whenever nothing was pending, with no guard against a tile whose id
+  // already exists in `prev`. crypto.randomUUID() (issue #47) guarantees a
+  // NEW tile's id can't collide with anything, but it says nothing about
+  // this function being called twice for the SAME already-existing id -
+  // which the localStorage-restore effect below did under StrictMode's
+  // double-invoke-on-mount semantics. Treating an existing-id call as a
+  // replace (not a second append) fixes that at the source, and is a safe
+  // general guard regardless of what else might call this with a stale id.
   const replaceTile = (tile: CanvasTile) => {
-    setTiles((prev) => (pendingTileId ? prev.map((t) => (t.id === pendingTileId ? tile : t)) : [...prev, tile]));
+    setTiles((prev) => {
+      const targetId = pendingTileId ?? (prev.some((t) => t.id === tile.id) ? tile.id : null);
+      return targetId ? prev.map((t) => (t.id === targetId ? tile : t)) : [...prev, tile];
+    });
   };
 
   const refetchMassRangeTile = (id: string, statistic: MassRangeStatistic, params: MassRangeParams) => {
@@ -3329,7 +3342,23 @@ export function App() {
   // Runs before the user can interact with the modal, so `pendingTileId`
   // is still null and `replaceTile` appends (its own normal behavior when
   // nothing is pending), same as a sequence of "add tile" clicks would.
+  //
+  // Real fix (2026-08-10, direct user report - duplicate-key console
+  // warning, confirmed 4 copies of one tile after several reloads):
+  // React.StrictMode (main.tsx) double-invokes a mount effect with no
+  // cleanup, in dev only - this effect had both, so its whole forEach ran
+  // twice per mount, restoring every saved tile twice. `replaceTile`'s own
+  // fix (above) stops that from duplicating going forward, but the persist
+  // effect had already written the duplicated array back to
+  // localStorage - and since it did that on every reload, duplicates kept
+  // compounding across this session. `restoredOnceRef` stops the double-
+  // invoke at the source; deduping `saved` by id before restoring self-
+  // heals whatever's already sitting duplicated in localStorage right now,
+  // rather than requiring the user to manually clear it.
+  const restoredOnceRef = useRef(false);
   useEffect(() => {
+    if (restoredOnceRef.current) return;
+    restoredOnceRef.current = true;
     let raw: string | null;
     try {
       raw = localStorage.getItem(CANVAS_STORAGE_KEY);
@@ -3344,7 +3373,13 @@ export function App() {
       return;
     }
     if (!Array.isArray(saved)) return;
-    (saved as SavedTile[]).forEach(restoreSavedTile);
+    const seenIds = new Set<string>();
+    const deduped = (saved as SavedTile[]).filter((s) => {
+      if (seenIds.has(s.id)) return false;
+      seenIds.add(s.id);
+      return true;
+    });
+    deduped.forEach(restoreSavedTile);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
