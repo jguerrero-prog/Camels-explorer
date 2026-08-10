@@ -1149,43 +1149,77 @@ function generateTileCode(tile: CanvasTile): string | null {
   }
 }
 
+// Real (issue #56) - Compare mode's second axis. Every Compare-capable
+// load function below used to hard-code "fixed suite, vary realizations"
+// (`params.compareMode ? params.realizations : [params.realizations[0]]`);
+// this generalizes that one line to also support "fixed realization, vary
+// suites" without touching the realization-axis behavior at all - purely
+// additive, matching RealizationFieldsValue's own compareAxis/compareSuites
+// (undefined compareAxis behaves exactly like before this existed).
+type CompareItem = { suite: string; realization: number | string };
+
+function compareItemsFor(params: {
+  suite: string;
+  compareMode: boolean;
+  compareAxis?: 'realization' | 'suite';
+  compareSuites?: string[];
+  realizations: (number | string)[];
+}): CompareItem[] {
+  if (!params.compareMode) return [{ suite: params.suite, realization: params.realizations[0] }];
+  if (params.compareAxis === 'suite') {
+    const suites = params.compareSuites && params.compareSuites.length > 0 ? params.compareSuites : [params.suite];
+    return suites.map((suite) => ({ suite, realization: params.realizations[0] }));
+  }
+  return params.realizations.map((realization) => ({ suite: params.suite, realization }));
+}
+
+// Suite-axis series read better labeled by suite ("IllustrisTNG") than by
+// the realization-axis convention ("LH_5"), since the realization is fixed
+// and the suite is what's actually varying.
+function compareLabel(item: CompareItem, setName: string, axis?: 'realization' | 'suite'): string {
+  return axis === 'suite' ? item.suite : `${setName}_${item.realization}`;
+}
+
 async function loadMassRangeTile(
   id: string, statistic: MassRangeStatistic, params: MassRangeParams, previous?: PlotTileState,
 ): Promise<PlotTileState> {
   const config = MASS_RANGE_CONFIGS[statistic];
-  const realizations = params.compareMode ? params.realizations : [params.realizations[0]];
+  const items = compareItemsFor(params);
   const fetched = await Promise.all(
-    realizations.map((realization) =>
+    items.map((item) =>
       fetchMassRangeResult(config, {
-        suite: params.suite, setName: params.setName, realization,
+        suite: item.suite, setName: params.setName, realization: item.realization,
         snapnum: params.snapnum, min: params.min, max: params.max, bins: params.bins,
-      }).then((r) => ({ realization, r })),
+      }).then((r) => ({ item, r })),
     ),
   );
   // Real gap, not a bug: no synthetic fallback (removed 2026-08-05), so
   // some (or all) selected realizations can come back null - same
   // filtering pattern as Bispectrum's own load function.
-  const withData = fetched.filter((f): f is { realization: number | string; r: Result } => f.r !== null);
+  const withData = fetched.filter((f): f is { item: CompareItem; r: Result } => f.r !== null);
   if (withData.length === 0) {
     throw new Error(`No data available for this suite/set/realization.`);
   }
   const results = withData.map((f) => f.r);
-  const dataRealizations = withData.map((f) => f.realization);
-  // The halo catalog (Underlying Halos table) depends only on suite/set/
-  // realization[0]/snapnum - min/max/bins only reshape the histogram curve
-  // above, they never change which halos exist. Re-fetching the whole
-  // catalog on every Bins-slider tick was a wasted round-trip; reuse the
-  // previous tile's rows when those fields haven't changed.
+  // The halo catalog (Underlying Halos table) always reflects the tile's
+  // first compared item (suite+realization), same as before this only
+  // ever showed dataRealizations[0] - min/max/bins only reshape the
+  // histogram curve above, they never change which halos exist. Re-
+  // fetching the whole catalog on every Bins-slider tick was a wasted
+  // round-trip; reuse the previous tile's rows when those fields haven't
+  // changed.
+  const primary = withData[0].item;
+  const previousPrimary = previous && previous.kind === 'mass-range' ? compareItemsFor(previous.params)[0] : null;
   const catalogUnchanged = previous
     && previous.kind === 'mass-range'
-    && previous.params.suite === params.suite
+    && previousPrimary?.suite === primary.suite
     && previous.params.setName === params.setName
-    && previous.params.realizations[0] === realizations[0]
+    && previousPrimary?.realization === primary.realization
     && previous.params.snapnum === params.snapnum;
   const catalog = catalogUnchanged
     ? null
     : await fetchHaloCatalog({
-        suite: params.suite, setName: params.setName, realization: dataRealizations[0], snapnum: params.snapnum,
+        suite: primary.suite, setName: params.setName, realization: primary.realization, snapnum: params.snapnum,
       });
   const first = results[0];
   return {
@@ -1193,7 +1227,7 @@ async function loadMassRangeTile(
     kind: 'mass-range',
     statistic,
     params,
-    series: results.map((r, i) => ({ label: `${params.setName}_${dataRealizations[i]}`, x: r.x, y: r.y })),
+    series: results.map((r, i) => ({ label: compareLabel(withData[i].item, params.setName, params.compareAxis), x: r.x, y: r.y })),
     xLabel: first.x_label,
     yLabel: first.y_label,
     logX: first.log_x,
@@ -1218,28 +1252,28 @@ async function loadMassRangeTile(
 }
 
 async function loadPowerSpectrumTile(id: string, params: PowerSpectrumParams): Promise<PowerSpectrumTileState> {
-  const realizations = params.compareMode ? params.realizations : [params.realizations[0]];
+  const items = compareItemsFor(params);
   const ptype = PTYPE_OPTIONS[params.ptypeLabel];
   const rsdAxis = rsdAxisFromLabel(params.rsdLabel);
   const fetched = await Promise.all(
-    realizations.map((realization) =>
+    items.map((item) =>
       fetchPowerSpectrum({
-        suite: params.suite, setName: params.setName, realization, snapnum: params.snapnum,
+        suite: item.suite, setName: params.setName, realization: item.realization, snapnum: params.snapnum,
         grid: params.grid, MAS: params.MAS, threads: params.threads, ptype,
         kRange: params.kRange, rsdAxis, multipole: params.multipole,
-      }).then((r) => ({ realization, r })),
+      }).then((r) => ({ item, r })),
     ),
   );
   // Real gap, not a bug: no synthetic fallback (removed 2026-08-05), so
   // some (or all) selected realizations can come back null.
-  const withData = fetched.filter((f): f is { realization: number | string; r: Result } => f.r !== null);
+  const withData = fetched.filter((f): f is { item: CompareItem; r: Result } => f.r !== null);
   if (withData.length === 0) {
     throw new Error('No data available for this suite/set/realization.');
   }
   const first = withData[0].r;
   return {
     id, kind: 'power-spectrum', params,
-    series: withData.map(({ realization, r }) => ({ label: `${params.setName}_${realization}`, x: r.x, y: r.y })),
+    series: withData.map(({ item, r }) => ({ label: compareLabel(item, params.setName, params.compareAxis), x: r.x, y: r.y })),
     xLabel: first.x_label, yLabel: first.y_label, logX: first.log_x, logY: first.log_y,
     note: first.note,
     loading: false,
@@ -1247,27 +1281,27 @@ async function loadPowerSpectrumTile(id: string, params: PowerSpectrumParams): P
 }
 
 async function loadBispectrumTile(id: string, params: BispectrumParams): Promise<BispectrumTileState> {
-  const realizations = params.compareMode ? params.realizations : [params.realizations[0]];
+  const items = compareItemsFor(params);
   const fetched = await Promise.all(
-    realizations.map((realization) =>
+    items.map((item) =>
       fetchBispectrum({
-        suite: params.suite, setName: params.setName, realization,
+        suite: item.suite, setName: params.setName, realization: item.realization,
         field: params.field, muIndex: params.muIndex,
         kRange: params.kRange, rsdAxis: rsdAxisFromLabel(params.rsdLabel), ell: params.ell,
-      }).then((r) => ({ realization, r })),
+      }).then((r) => ({ item, r })),
     ),
   );
   // Real gap, not a bug: some (or all) selected realizations can come back
   // null - matches app.py's own generic block filtering None results
   // before plotting.
-  const withData = fetched.filter((f): f is { realization: number; r: Result } => f.r !== null);
+  const withData = fetched.filter((f): f is { item: CompareItem; r: Result } => f.r !== null);
   if (withData.length === 0) {
     throw new Error('No data available for this suite/set/realization. Try IllustrisTNG or SIMBA, LH set.');
   }
   const first = withData[0].r;
   return {
     id, kind: 'bispectrum', params,
-    series: withData.map(({ realization, r }) => ({ label: `${params.setName}_${realization}`, x: r.x, y: r.y })),
+    series: withData.map(({ item, r }) => ({ label: compareLabel(item, params.setName, params.compareAxis), x: r.x, y: r.y })),
     xLabel: first.x_label, yLabel: first.y_label, logX: first.log_x, logY: first.log_y,
     note: first.note,
     loading: false,
@@ -1275,25 +1309,25 @@ async function loadBispectrumTile(id: string, params: BispectrumParams): Promise
 }
 
 async function loadSFRHistoryTile(id: string, params: SFRHistoryParams): Promise<SFRHistoryTileState> {
-  const realizations = params.compareMode ? params.realizations : [params.realizations[0]];
+  const items = compareItemsFor(params);
   const fetched = await Promise.all(
-    realizations.map((realization) =>
+    items.map((item) =>
       fetchSFRHistory({
-        suite: params.suite, setName: params.setName, realization,
+        suite: item.suite, setName: params.setName, realization: item.realization,
         zMin: params.zMin, zMax: params.zMax, bins: params.bins,
-      }).then((r) => ({ realization, r })),
+      }).then((r) => ({ item, r })),
     ),
   );
   // Real gap, not a bug: no synthetic fallback (removed 2026-08-05), so
   // some (or all) selected realizations can come back null.
-  const withData = fetched.filter((f): f is { realization: number | string; r: Result } => f.r !== null);
+  const withData = fetched.filter((f): f is { item: CompareItem; r: Result } => f.r !== null);
   if (withData.length === 0) {
     throw new Error('No data available for this suite/set/realization.');
   }
   const first = withData[0].r;
   return {
     id, kind: 'sfr-history', params,
-    series: withData.map(({ realization, r }) => ({ label: `${params.setName}_${realization}`, x: r.x, y: r.y })),
+    series: withData.map(({ item, r }) => ({ label: compareLabel(item, params.setName, params.compareAxis), x: r.x, y: r.y })),
     xLabel: first.x_label, yLabel: first.y_label, logX: first.log_x, logY: first.log_y,
     note: first.note,
     loading: false,

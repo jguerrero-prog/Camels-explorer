@@ -12,6 +12,8 @@ export type SFRHistoryParams = {
   setName: string;
   compareMode: boolean;
   realizations: (number | string)[];
+  compareAxis?: 'realization' | 'suite';
+  compareSuites?: string[];
   zMin: number;
   zMax: number;
   bins: number;
