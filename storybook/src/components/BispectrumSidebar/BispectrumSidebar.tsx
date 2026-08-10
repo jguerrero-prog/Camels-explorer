@@ -24,6 +24,8 @@ export type BispectrumParams = {
   setName: string;
   compareMode: boolean;
   realizations: (number | string)[];
+  compareAxis?: 'realization' | 'suite';
+  compareSuites?: string[];
   field: string;
   /** Index into GET /api/metadata's bispectrum.mu_values - matches
    * get_bispectrum's own real `mu_index` param directly (not the mu value

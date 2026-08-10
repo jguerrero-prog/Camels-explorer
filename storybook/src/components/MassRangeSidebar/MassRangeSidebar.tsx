@@ -12,6 +12,8 @@ export type MassRangeParams = {
   setName: string;
   compareMode: boolean;
   realizations: (number | string)[];
+  compareAxis?: 'realization' | 'suite';
+  compareSuites?: string[];
   snapnum: number;
   min: number;
   max: number;
