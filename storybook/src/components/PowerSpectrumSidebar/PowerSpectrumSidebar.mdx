@@ -18,9 +18,9 @@ Composed entirely from existing fields — see `RealizationFields.mdx`, `OptionS
 
 - Suite/Set/Compare mode/Realization(s): `RealizationFields`.
 - **Real bug fixed 2026-08-05: Snapshot slider was missing entirely.** `App.tsx` hardcoded `snapnum: DEFAULT_SNAPNUM` (33, z≈0), even though `app.py`'s own `get_power_spectrum` call takes `snapnum` as a real parameter (found during a full param-wiring audit against `app.py`, prompted by direct user report). Added a `Slider` "Snapshot" (`0` to `n_snapshots - 1`) right after `RealizationFields`.
-- Grid size: `OptionSlider` over `[128, 256, 512, 1024]`, default 512.
-- Mass Assignment Scheme: `SelectField` over `NGP`/`CIC`/`TSC`/`PCS`, default `CIC`.
-- Threads: `Slider`, 1–16, default 1.
+- Grid size: `OptionSlider` over `[128, 256, 512, 1024]`, default 512. Same real gap as Mass Assignment Scheme below - not wired.
+- Mass Assignment Scheme: `SelectField` over `NGP`/`CIC`/`TSC`/`PCS`, default `CIC`. **Real, honest gap (caption added 2026-08-12, direct user report - "I don't see anything changing"):** not wired to anything real today. `grid`/`MAS`/`threads` are threaded all the way through `get_power_spectrum`'s own signature, but the only reached code path (`fetch_public=True`, CAMELS' precomputed public Pk files) ignores all three - the public release was computed once with a fixed MAS/grid baked in, no per-MAS/per-grid variant exists to select between. The only path where these would matter - real, on-demand Pk computed from raw snapshot particle data via Pylians - is a stub (`backend.py`'s own `NotImplementedError`), unreached in production. Not a regression: git blame confirms the field and the stub were both part of the very first commit. See issue #72 for the real feature this gap describes.
+- Threads: `Slider`, 1–16, default 1. Same real gap as Mass Assignment Scheme above - not wired.
 - Particle type: `SelectField`, a label-mapped choice (`Gas [0]`/`DM [1]`/`Stars [4]`/`Black holes [5]`/`Total [0,1,4]`) — `PTYPE_OPTIONS` maps each label to the real `ptype` array `get_power_spectrum` expects, matching `app.py`'s own dict exactly.
 - k range: `Radio`, "Standard" vs. "All-k (HIPSTER...)".
 
