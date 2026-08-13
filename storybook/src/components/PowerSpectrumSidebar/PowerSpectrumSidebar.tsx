@@ -101,6 +101,7 @@ export function PowerSpectrumSidebar({ params, onChange, onRemove }: PowerSpectr
         value={params.MAS}
         options={MAS_OPTIONS}
         onChange={(MAS) => onChange({ ...params, MAS })}
+        caption="Not wired yet - only affects computing Pk from a raw snapshot locally (not implemented); the public precomputed Pk this app fetches doesn't vary by MAS."
       />
       <Slider
         label="Threads"
