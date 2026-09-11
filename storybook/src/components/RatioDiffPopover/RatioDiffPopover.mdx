@@ -1,48 +1,95 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as RatioDiffPopoverStories from './RatioDiffPopover.stories';
+import * as Stories from './RatioDiffPopover.stories';
 
-<Meta of={RatioDiffPopoverStories} />
+<Meta of={Stories} />
 
 # RatioDiffPopover
 
-The toolbar's "Ratio / diff overlay" tool (Figma node `989-10`'s "ratio-diff-popover") - "Compare against" a second tile, then overlay the focused tile's series with their ratio or difference.
+Picks another tile to compare the focused tile against, as a ratio or a difference.
 
-## Token
+`Source: code`
 
-- `--color-surface-popover` — the popover's own dark surface
-- `--color-accent-gradient-end` — the selected candidate's checkbox/active mode-toggle tint
+## Anatomy
 
-## Spec
+```
+.ratio-diff-popover              role="dialog", aria-label="Compare against", 260px
+├── __header > __eyebrow         "Compare against"
+├── __row--new                   "New plot" / "Configure a fresh comparison target"
+├── __divider
+├── __candidates                 one __row per other tile: __checkbox + title + caption
+│                                __row--disabled for an incomparable tile
+│                                __empty when there are no other tiles
+├── __divider
+├── __mode-row                   Ratio · Difference, __mode-btn--active on the choice
+└── __footer > __compare-btn     disabled until a target is selected
+```
 
-<Canvas of={RatioDiffPopoverStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-"New plot" row → a divider → the candidate list (checkbox + title + caption per tile) → a divider → a Ratio/Difference mode toggle → a "Compare" button, disabled until a candidate is checked.
+## Variants and states
 
-**Real, decided compatibility rule** (Figma's own frame dims its own "Field PDF" row against a focused "SFR History" tile, not an arbitrary choice): only a tile of the exact same statistic as the focused one has an x-axis that means the same thing, so only same-`kind` tiles are real, selectable candidates. A different-statistic tile still appears in the list (so a user can see why it isn't offered) with `compatible: false` - shown disabled with the caption replaced by "Different statistic - axes aren't comparable", never silently hidden.
+<Canvas of={Stories.NoOtherTiles} />
 
-`NoOtherTiles` shows the real empty state - "No other tiles yet - add one to compare against." - rather than a disabled/empty-looking list.
+Two states matter here, and both are about having nothing valid to compare against:
 
-**Real fix (2026-08-06, code-quality audit): closes on Escape.** Every other popover in the app (`HidePopover`, `CopyAsCodePopover`) could already be dismissed with Escape - this one couldn't, a real inconsistency, not a deliberate omission. No new visible close button was added, though - the sourced Figma frame's own header has none, and inventing one here would be a real visual deviation from that source, not an accessibility fix. `onClose` is optional (App.tsx is this component's one real caller and always provides it).
+- **No other tiles** — the candidate list is replaced by "No other tiles yet", and the New plot row is the
+  way forward.
+- **An incomparable tile** — a tile showing a different statistic is still listed, but disabled, with its
+  caption replaced by "Different statistic, axes aren't comparable". It is shown rather than filtered out so
+  the user can see why it is not on offer.
 
-## Usecase
+## Tokens
 
-- Rendered by `App.tsx` inside `Toolbar`'s `ratioDiffPopover` prop, anchored below the Ratio/diff toolbar button, only while open.
-- `candidates` comes from `App.tsx`'s `ratioDiffCandidates`, computed from every other real (non-empty) tile on the canvas, filtered/flagged against the focused tile's own `kind`.
-- `onCompare` triggers `App.tsx`'s `handleCompare`, which fetches/interpolates the target tile's series onto the focused tile's own x-grid and adds a derived ratio/difference series - see `PlotChart`'s `forceInteractiveSignal` for why that derived series always switches the chart to Interactive mode.
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-content` | Popover fill |
+| `--color-accent-gradient-start` → `--color-accent-gradient-end` | Active mode button, Compare button |
+| `--color-border` / `--color-border-subtle` | Border, dividers, mode row |
+| `--color-text-primary` / `--color-text-muted` | Row titles, captions, eyebrow |
+| `accent-color: --color-accent-gradient-end` | The row checkboxes |
+| `--font-label` / `--font-ui` | Eyebrow, rows |
 
-## Code
+Radius 12 and a single deep shadow, `0 12px 28px -6px rgba(0,0,0,0.45)`. `Source: gap`.
 
-```tsx
-import { RatioDiffPopover } from '@/components/RatioDiffPopover/RatioDiffPopover';
+## Behaviour
 
-<RatioDiffPopover
-  candidates={ratioDiffCandidates}
-  selectedTileId={ratioDiffSelectedId}
-  onSelect={setRatioDiffSelectedId}
-  onNewPlot={() => openAddPlotModal()}
-  onCompare={handleCompare}
-  mode={ratioDiffMode}
-  onModeChange={setRatioDiffMode}
-/>
-```
+- Only a tile showing the same statistic is offerable: two different statistics do not share an x-axis, so a
+  ratio between them would not mean anything. Compatibility is decided by the caller.
+- Selection is single, expressed as `selectedTileId`, even though the rows are checkboxes.
+- Compare stays disabled until a target is selected, so the mode choice alone cannot be submitted.
+- Escape closes it. `onClose` is optional in the type but the application always supplies it; a caller that
+  omits it loses Escape.
+
+## Accessibility
+
+- `role="dialog"` with an `aria-label`, real checkbox inputs inside `label` elements, and Escape to dismiss.
+- `Source: gap`. No `aria-modal`, no focus trap, no initial focus move, and no close button in the header,
+  so Escape is the only way to dismiss it without choosing something.
+
+## Content
+
+- The eyebrow states the question: "Compare against".
+- Modes are named for what they do: "Ratio", "Difference".
+- A disabled row explains itself in its own caption rather than in a tooltip.
+
+## Use it
+
+- Showing how one feedback model departs from another.
+- Comparing a variation against a fiducial run.
+
+## Don't use it
+
+- Across different statistics. The component already prevents this.
+
+## Related
+
+- `Toolbar` — opens it
+- `HidePopover`, `CopyAsCodePopover` — the same popover family
+- `PlotTile` — what the comparison renders into
+
+## Source files
+
+`RatioDiffPopover.tsx` · `RatioDiffPopover.css` · `RatioDiffPopover.stories.tsx`

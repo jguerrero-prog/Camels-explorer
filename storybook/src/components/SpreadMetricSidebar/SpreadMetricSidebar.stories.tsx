@@ -4,7 +4,7 @@ import { SpreadMetricSidebar } from './SpreadMetricSidebar';
 import type { SpreadMetricParams } from './SpreadMetricSidebar';
 
 const meta: Meta<typeof SpreadMetricSidebar> = {
-  title: 'Sections/SpreadMetricSidebar',
+  title: 'Statistic sidebars/SpreadMetricSidebar',
   component: SpreadMetricSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '480px' }}><Story /></div>],

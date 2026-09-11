@@ -1,0 +1,70 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Foundations/Elevation, radius and spacing" />
+
+# Elevation, radius and spacing
+
+`Source: gap`. Colour and typography are tokenised. These three are not: every value below is a literal
+written directly into a component stylesheet. This page is the inventory, so the values are at least visible
+and comparable in one place.
+
+Treat it as a list of what exists, not a scale to design against. Adding a value here means adding it to a
+component; a designer picking from this page is picking from history.
+
+## Radius
+
+| Value | Used by |
+| --- | --- |
+| `999px` | Stat chip, avatar |
+| `16px` | Modal shell, empty-state icon |
+| `12px` | Tile, primary button, popovers |
+| `10px` | Modal buttons, code blocks, toast |
+| `9px` | Nav Add Plot button, icon rail button |
+| `8px` | Inputs, select menus, section headers, secondary button |
+| `7px` | Chart mode dropdown |
+| `6px` | Option rows, segmented options, tree rows, add buttons |
+| `5px` | Checkbox |
+| `4px` | Stepper buttons, realization tag |
+| `2px` | Slider track, tab underline |
+| `0` | Plot tile, note card, annotation callout |
+
+The zero values are deliberate. A plot tile and a note card are flat: they sit on the page rather than above
+it. See Decision log, DR-004.
+
+## Elevation
+
+Eight distinct shadows, roughly forming three levels.
+
+| Level | Shadow | Used by |
+| --- | --- | --- |
+| Raised | `0 2px 6px rgba(0,0,0,0.25)` | Nav Add Plot button |
+| Raised | `0 8px 9px rgba(0,0,0,0.4)` | Primary button |
+| Floating | `0 10px 24px -10px rgba(0,0,0,0.4)` | Tile |
+| Floating | `0 10px 24px -6px rgba(0,0,0,0.5)` | Select menu, chart mode menu |
+| Floating | `0 8px 24px -6px rgba(0,0,0,0.4)` | Toast |
+| Floating | `0 12px 28px -6px rgba(0,0,0,0.45)` | Ratio popover |
+| Modal | `0 20px 40px -8px rgba(0,0,0,0.5)` | Add plot modal, filter settings modal |
+| Modal | `0 6px 8px rgba(0,0,0,0.2), 0 18px 20px rgba(0,0,0,0.4)` | Copy-as-code and hide popovers |
+
+Three shadows for the floating level is two too many. Consolidating them would be a safe change, since no
+design distinguishes them.
+
+## Spacing
+
+Values in use: `2, 3, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 28, 56`.
+
+There is no scale. The recurring ones are worth knowing:
+
+| Value | Meaning in practice |
+| --- | --- |
+| `8px` | Gap between tiles, and the viewer's own padding |
+| `12px` | Gap between a tile's title, body and footer |
+| `18px` | Gap between controls in a sidebar |
+| `20px` / `24px` | Horizontal padding inside a tile and a modal |
+| `6px` | Gap between a field's label and its input |
+
+## If you tokenise these
+
+Do radius first: twelve values collapse to about five, and the mapping is unambiguous. Elevation second,
+using the three levels above. Spacing last, because an 18px sidebar gap and a 16px modal gap are both load
+bearing and a four-point scale would move both.

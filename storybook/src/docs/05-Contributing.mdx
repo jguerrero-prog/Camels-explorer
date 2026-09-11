@@ -1,0 +1,98 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Reference/Contributing" />
+
+# Contributing
+
+## File layout
+
+One folder per component under `src/components/<Name>/`, containing:
+
+```
+Name.tsx          the component
+Name.css          its styles, if it has any of its own
+Name.stories.tsx  every state as a story
+Name.mdx          the documentation page
+assets/           SVGs it owns
+```
+
+A folder with no `Name.css` is usually a pattern rather than a component. It arranges other components and
+contributes no visual decisions of its own. Patterns live under `src/docs/patterns/`.
+
+## Page template
+
+Twelve sections, in this order. Omit a section only when it genuinely does not apply, and say so in one line
+rather than deleting the heading.
+
+1. Title and one-sentence purpose, plus a `Source` line
+2. Anatomy
+3. Playground
+4. Props
+5. Variants and states
+6. Tokens
+7. Behaviour
+8. Accessibility
+9. Content
+10. Use it / don't
+11. Related
+12. Source files
+
+## The Source line
+
+Every page carries one, directly under the title.
+
+| Value | Means |
+| --- | --- |
+| `figma:<node>` | Matches a Figma frame. The node id is the spec. |
+| `figma:<node> adjusted` | Sourced from Figma, deliberately deviates. One clause for the reason. |
+| `code` | No Figma frame exists for this state. The page is the spec. |
+| `gap` | Unspecified and known. Counts as design backlog, not as a caveat. |
+
+## Story naming
+
+| Story | Shows |
+| --- | --- |
+| `Default` | The most common real configuration |
+| `Playground` | Every control exposed |
+| `<VariantValue>` | One per variant, named for the value |
+| `Disabled` / `Loading` / `Error` / `Empty` | The state in isolation |
+| `SampleData` | Plausible values not fetched from the API |
+| `ApiUnavailable` | The inline error path when the backend is down |
+| `LongContent` | The longest realistic value, proving truncation works |
+
+Name the state, never the fixture. If two stories differ only by data, they are one story with a control.
+
+## Prose rules
+
+| Rule | Banned | Write instead |
+| --- | --- | --- |
+| Present tense only | "used to", "originally", "previously" | "The bar is 48px tall." |
+| No dates in a component page | "Real fix (2026-08-06)" | Nothing, or a Decision log entry |
+| No provenance adjectives | "real", "confirmed", "genuine" | The `Source` line |
+| No process artefacts | "issue #82", "STUDIO_PLAN.md" | Nothing. The Decision log may cite an issue. |
+| Rules, not narrative | "we fixed it so it closes on Escape" | "Closes on Escape." |
+| Values, not hedges | "very subtle", "barely perceptible" | "`scale(1.04)` on hover." |
+| Second person | "the user clicks the trigger" | "Click the trigger." |
+
+## Token rules
+
+- A value becomes a token when a second component needs it, or when it expresses a role rather than a measurement.
+- Components reference semantic tokens only. Never a primitive, never a hex.
+- Name by role: `surface/content`, not `grey-925`.
+- Two roles may share one value. Keep them separate tokens.
+- Add the primitive only if none matches, then the semantic alias, then use it.
+- Deprecate by marking, never by repointing a token in place.
+
+## Definition of done
+
+A page is finished when all of these are true.
+
+- [ ] No dates, issue numbers or plan references in the prose
+- [ ] Every sentence is present tense and about the current component
+- [ ] The word "real" does not appear
+- [ ] Every state and variant has a named story
+- [ ] The props table is generated from TypeScript, not written by hand
+- [ ] Tokens listed are semantic, never raw hex
+- [ ] The accessibility section names keyboard, roles and contrast
+- [ ] Every "don't" names an alternative
+- [ ] A stranger could rebuild the component from the page alone

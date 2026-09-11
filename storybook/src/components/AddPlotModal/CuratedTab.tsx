@@ -1,8 +1,18 @@
 import { useEffect, useState } from 'react';
+import { Radio } from '../Radio/Radio';
 import { SelectField } from '../SelectField/SelectField';
 import { SingleRealizationFields } from '../SingleRealizationFields/SingleRealizationFields';
 import type { Catalog } from '../../lib/useCatalogMetadata';
 import { API_BASE } from '../../lib/api';
+
+// Real fix (issue #82) - these 4 are appended to the Statistic list
+// client-side (see below) precisely because none of them is a statistic
+// *computed from* a suite the way Halo Mass Function/Power Spectrum/etc.
+// are: each is its own real dataset/data product. A CAMELS team member
+// flagged CAMELS-SAM specifically (it has no Suite/Set concept at all -
+// see isCamelsSam below), but the same category mismatch applies to all 4,
+// so they're grouped together rather than special-casing just one.
+const DATASET_STATISTICS = ['CAMELS-SAM', 'Black Hole Mergers', 'Initial Conditions', 'Simulation Parameters'];
 
 export type CuratedSelection = {
   suite: string;
@@ -105,9 +115,26 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
   // (Swift-EAGLE's use a different native format) - same restriction
   // pattern as Black Hole Mergers, just a 3-suite list instead of 1.
   const isInitialConditions = selection.statistic === 'Initial Conditions';
+  // Real fix (issue #82) - drives the Category toggle below. Derived from
+  // `selection.statistic` rather than its own state so there's no way for
+  // the toggle to disagree with which field (Statistic vs. Dataset)
+  // actually produced the current selection.
+  const isDataset = DATASET_STATISTICS.includes(selection.statistic);
 
   return (
     <>
+      <Radio
+        label="Category"
+        value={isDataset ? 'Dataset' : 'Summary Statistic'}
+        options={['Summary Statistic', 'Dataset']}
+        onChange={(category) => {
+          if (category === 'Dataset' && !isDataset) {
+            onChange({ ...selection, statistic: DATASET_STATISTICS[0] });
+          } else if (category === 'Summary Statistic' && isDataset) {
+            onChange({ ...selection, statistic: catalog.statistics[0] });
+          }
+        }}
+      />
       {!isCamelsSam && (
         <SingleRealizationFields
           catalog={catalog}
@@ -126,12 +153,21 @@ export function CuratedTab({ selection, onChange }: CuratedTabProps) {
           hideRealizationValueControls
         />
       )}
-      <SelectField
-        label="Statistic"
-        value={selection.statistic}
-        options={[...catalog.statistics, 'CAMELS-SAM', 'Black Hole Mergers', 'Initial Conditions', 'Simulation Parameters']}
-        onChange={(statistic) => onChange({ ...selection, statistic })}
-      />
+      {isDataset ? (
+        <SelectField
+          label="Dataset"
+          value={selection.statistic}
+          options={DATASET_STATISTICS}
+          onChange={(statistic) => onChange({ ...selection, statistic })}
+        />
+      ) : (
+        <SelectField
+          label="Statistic"
+          value={selection.statistic}
+          options={catalog.statistics}
+          onChange={(statistic) => onChange({ ...selection, statistic })}
+        />
+      )}
       {isCamelsSam && (
         <p className="curated-tab__loading">
           CAMELS-SAM is a separate dataset (Santa Cruz Semi-Analytic Model), not tied to a suite/set — real for the LH set only. Realization defaults to 0, adjustable in the tile's own sidebar after adding.

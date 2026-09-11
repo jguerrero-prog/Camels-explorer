@@ -1,56 +1,86 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as RealizationFieldsStories from './RealizationFields.stories';
+import * as Stories from './RealizationFields.stories';
 
-<Meta of={RealizationFieldsStories} />
+<Meta of={Stories} />
 
-# RealizationFields
+# Realization fields
 
-The Suite / Set / Compare mode / Realization(s) block every per-tile sidebar in this app opens with. Extracted 2026-08-05 from `MassRangeSidebar` when `PowerSpectrumSidebar`, `BispectrumSidebar`, and `SFRHistorySidebar` were all about to duplicate the identical block — real duplication crossing this project's own "three strikes" line, not a pre-emptive abstraction.
+The opening block of every statistic sidebar: which simulation you are looking at, before any
+statistic-specific setting. Renders no markup of its own, only other fields.
 
-## Token
+`Source: code`
 
-Inherits everything from its composed fields — see `SelectField.mdx`, `Checkbox.mdx`, `MultiSelect.mdx`, `NumberStepper.mdx`. No tokens of its own.
+## Anatomy
 
-## Spec
+The block is conditional, not a fixed list. What renders depends on the set:
 
-<Canvas of={RealizationFieldsStories.Playground} />
+```
+Suite            SelectField        hidden when comparing by suite
+Set              SelectField        LH · CV · 1P · EX · BE · SB
+Compare mode     Checkbox           hidden for 1P
+  1P             SelectField "1P Parameter" + OptionSlider "Variation"
+  compare off    NumberStepper "Realization"
+  by realization MultiSelect "Realizations to compare"
+  by suite       NumberStepper "Realization" + MultiSelect "Suites to compare"
+```
+
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-- Suite / Set: `SelectField`, options from `GET /api/metadata` (via `useCatalogMetadata`, the extracted fetch hook every statistic sidebar now shares).
-- Compare mode: `Checkbox`. Off → `NumberStepper` "Realization". On → a "Compare by" `Radio` (Realizations / Suites), then either the original `MultiSelect` "Realizations to compare" (suite fixed) or a new `MultiSelect` "Suites to compare" (realization fixed via `NumberStepper`, the top-level "Suite" `SelectField` hidden since it's superseded by the multi-select).
-- Changing Set resets `realizations` to `[0]` — a different set has a different, unrelated realization count, so keeping a stale index risks silently picking an out-of-range realization for the new set.
+## Variants and states
 
-**Real feature added (issue #56): Compare mode's second axis.** CAMELS' own papers (e.g. "CAMELS Environments") exploit the CV set's realizations being shared across suites — fixing a realization and varying suite to check a result isn't an artifact of one team's galaxy-formation model, the opposite of this component's original "fixed suite, vary realizations" axis. `RealizationFieldsValue.compareAxis` (`'realization' | 'suite'`, optional) and `.compareSuites` (`string[]`, optional) are both additive — every existing value/caller that never sets them keeps its exact original behavior, since `compareAxis` defaults to `'realization'` when omitted. Switching to "Suites" for the first time seeds `compareSuites` with the currently-fixed `suite` so the `MultiSelect` isn't empty. `App.tsx`'s `compareItemsFor`/`compareLabel` helpers (shared by Mass Range/Power Spectrum/Bispectrum/SFR History's `load*Tile` functions) turn either axis into the same `{ suite, realization }[]` shape before fetching, so each statistic's fetch/series-building logic only changed by one line, not by axis-specific branches.
+The set drives everything below it, and three cases are worth knowing:
 
-**Real bug fixed 2026-08-05: SB (Sobol sequence) was completely absent from the Set dropdown.** Found during a full param-wiring audit against `app.py` (which has always offered it), prompted by direct user report. `backend.py` already fetches SB data correctly for any statistic whose real files use it (Power Spectrum, FOF/Subfind → HMF/SMF/Baryon Fraction/Galaxy Scaling Relations, Rockstar, SubLink, the raw SFR history file) — the gap was purely that no UI path could select it. Two real complications SB has that no other set does, both handled here:
-- **Its real per-suite folder name differs** (IllustrisTNG → `SB28`, Astrid → `SB7`, confirmed via real directory listings) — resolved server-side now (`api/deps.py`'s `resolved_set_name` FastAPI dependency, applied to every router endpoint's `set_name` param via `Annotated[str, Depends(...)]`), mirroring `app.py`'s own `set_name = sb_folder or "SB"` right after its Set selectbox. The frontend just sends the literal string `"SB"`, same as any other set.
-- **Its realization count is per-suite, not one flat number** — `CatalogSet.realizations` is `null` for the SB entry; the real bound comes from `GET /api/metadata`'s new `sb_realizations_for_suite` map instead, via the shared `realizationCountFor(catalog, setName, suite)` helper. SIMBA/Swift-EAGLE have no real SB set at all (missing from that map) — picking SB with either shows an honest warning caption rather than a fabricated realization bound, matching `app.py`'s own real "⚠️ SB isn't published for {suite}" caption.
+- **1P** replaces the realization stepper with a parameter picker and a variation slider, because a 1P run
+  is identified by which parameter was varied and by how much, not by an index. Compare mode is forced off
+  here: a 1P identifier is compound, and the compare control only carries numbers.
+- **SB** is published for IllustrisTNG and Astrid only. For any other suite the block shows a caption
+  saying so, instead of a stepper with no valid range.
+- **Comparing by suite** hides the Suite picker, because the suite is now the axis rather than a fixed
+  choice, and seeds the compare list with whatever suite was selected so the list is never empty.
 
-**Real bug fixed 2026-08-05: 1P (One-Parameter-at-a-time) was selectable in the Set dropdown but non-functional** — its real public folders are compound-named by parameter+variation (e.g. `1P_p11_2`), not `1P_{realization}` like every other set, so the plain `NumberStepper` this component always rendered could never produce a realization that resolved to real data. `realizations` widened from `number[]` to `(number | string)[]` to hold the compound id; `RealizationFieldsValue` itself is otherwise unchanged (still just "a realization," per set). Mirrors `app.py`'s own `onep_supported` branch:
-- **Compare mode is hidden entirely for 1P** (the `Checkbox` and the `MultiSelect`/`NumberStepper` pair below it) — matches `app.py`'s own `compare_mode = False; compare_realizations = [realization]` for this set. A compound id can't be represented in the number-only "Realizations to compare" `MultiSelect`.
-- **"1P Parameter" `SelectField` + "Variation" `OptionSlider`** (options `[-2, -1, 0, 1, 2]`, 0 = fiducial) replace the `NumberStepper`. IllustrisTNG gets real named parameters (`onep_tng_params` from `GET /api/metadata`, e.g. "p1: Omega_m (cosmological)") — every other suite gets generic "p{N}" labels (`onep_max_index_for_suite`), since most of their parameters aren't exposed in their own output-file metadata either (a real data limitation, not a missing feature — see `backend.py`).
-- **Missing-variation warning** (`onep_tng_missing_variations`, e.g. p15 has no real `-2`/`-1` simulation) and a **real-value caption** (`GET /api/onep-param-value`, IllustrisTNG only — other suites' parameters aren't directly readable this way) — both live fetches via new `useCatalogMetadata.ts` helpers (`parseOnepRealizationId`, `useOnepParamValue`).
-- Server-side, only the 6 real statistics `app.py` itself covers for 1P (Power Spectrum, HMF/SMF/Baryon Fraction, Galaxy Scaling Relations, Color-Mass Diagram) had their `realization`/`realizations` API params widened from `int` to `str`/`list[str]` — deliberately **not** every endpoint. Statistics 1P doesn't cover (Bispectrum, SFR History here; six more behind `SingleRealizationFields`) keep `realization: int` server-side, so picking 1P there fails with a clean 422 rather than corrupting a byte-offset calculation in the CMD-grid-backed paths (`_fetch_npy_stack_slice` reads a realization index as an actual array offset — passing it a string there, not just an unresolved one, was the real risk this scoping avoids).
-- **Known gap, not fixed here**: the "Add Plot" modal's `CuratedTab` has its own separate, simpler Suite/Set/Realization picker (a plain `NumberStepper` regardless of Set) that predates both the SB and 1P fixes above — selecting 1P there before a tile exists still can't produce a valid realization. Once the tile is created, this component's own Set field (used by every per-tile sidebar) is unaffected and works correctly.
+## Tokens
 
-## Usecase
+None directly. Every visible surface belongs to the fields this block composes.
 
-- Real usage: the first four fields inside `MassRangeSidebar`, `PowerSpectrumSidebar`, `BispectrumSidebar`, `SFRHistorySidebar` — every one of them renders this, then appends its own statistic-specific fields (mass range, Power Spectrum's grid/MAS/ptype/k-range, Bispectrum's field/triangle-shape, SFR History's z-range/symbolic-fit) below it.
-- Not every statistic uses this — several (Galaxy Scaling Relations, 3D Density Field, 3D Particle Cloud, 2D Field Map, Halo Gas Profiles, Color-Mass Diagram, Lyman-alpha Spectrum) are real, single-realization-only views per `app.py`'s own `SINGLE_REALIZATION_STATISTICS` tuple — their sidebars use a plain `NumberStepper` "Realization" with no Compare mode `Checkbox` at all, not this component.
+## Behaviour
 
-## Code
+- Changing the set resets the realization, since an index valid in one set may not exist in another.
+- When a statistic offers a narrower range of suites or sets than the catalog, the block snaps to the first
+  allowed option rather than leaving an invalid selection in place.
+- Realization ranges and 1P parameter lists come from `GET /api/metadata`, so they match the published data
+  rather than a hard-coded list.
+- Where a 1P parameter has no published variation at a given step, the caption says so and asks for another
+  step, because that is a gap in the public release and not an error.
 
-```tsx
-import { useState } from 'react';
-import { RealizationFields } from '@/components/RealizationFields/RealizationFields';
-import type { RealizationFieldsValue } from '@/components/RealizationFields/RealizationFields';
-import { useCatalogMetadata } from '@/lib/useCatalogMetadata';
+## Accessibility
 
-function Sidebar() {
-  const catalog = useCatalogMetadata();
-  const [value, setValue] = useState<RealizationFieldsValue>({
-    suite: 'IllustrisTNG', setName: 'LH', compareMode: false, realizations: [42],
-  });
-  return <RealizationFields catalog={catalog} value={value} onChange={setValue} />;
-}
-```
+Inherited from the composed fields. This block adds no controls of its own.
+
+## Content
+
+- The set is shown by its label, not its code.
+- 1P parameters are named for IllustrisTNG, where the names are published, and numbered `p1`, `p2` for
+  other suites where they are not.
+- Captions state ranges as `0–999` and counts as "1,000 realizations available".
+
+## Use it
+
+- At the top of any per-tile sidebar for a curated statistic.
+
+## Don't use it
+
+- Where only one simulation can be selected. Use `Realization fields (single)`.
+- In the custom flow, which selects by filter rather than by realization.
+
+## Related
+
+- `Patterns / Statistic sidebar` — the shell this block opens
+- `Patterns / Realization fields (single)` — the no-compare variant
+- `SelectField`, `Checkbox`, `NumberStepper`, `MultiSelect`, `OptionSlider` — the fields composed here
+
+## Source files
+
+`RealizationFields.tsx` · `RealizationFields.stories.tsx`

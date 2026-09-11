@@ -1,0 +1,49 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Start here" />
+
+# CAMELS Explorer design system
+
+CAMELS Explorer is a browser for the CAMELS simulation dataset. This Storybook is the source of truth for
+every piece of its interface: what exists, what it is built from, and how to use it.
+
+## What this system covers
+
+- **Foundations** — the colour and typography tokens every component draws from.
+- **Primitives** — buttons, inputs and feedback with no knowledge of CAMELS.
+- **Fields** — form controls that select a suite, a set, a realization, a field.
+- **Charts** — the plot surfaces, including the difference between a server-rendered image and an interactive render.
+- **Data display** — the readout, the stats row and the halo table.
+- **Chrome** — the shell: nav, rail, toolbar, canvas, tiles.
+- **Overlays** — annotation, notes, arrows, brushing and popovers that float above a tile.
+- **Patterns** — recurring compositions such as the statistic sidebar, which is one shape with 21 configurations.
+
+## What it does not cover
+
+- **The dataset itself.** Suites, sets, realizations, snapshots and file layout are upstream CAMELS concepts.
+  They are documented in the project's Figma board, not here.
+- **The API.** Endpoint shapes live in `api/` and `backend.py`. Components state which endpoint they need and
+  nothing more.
+- **Analysis.** No component computes a statistic. The backend does that and returns numbers or an image.
+
+## How the app is assembled
+
+One shell holds three regions. `IconRail` and `ParamsSidebar` sit on the left, `TopNav` runs across the top
+carrying `Toolbar` and the Add Plot button, and `Viewer` fills the rest with one or more `PlotTile`s. Adding a
+plot goes through the Add plot flow. Everything else is a control inside one of those regions.
+
+## Two things to know before you read a component page
+
+**Every page states its source.** A `Source` line at the top says whether the component matches a Figma frame,
+was designed in code, or is a known gap. It is the one place provenance is recorded, so no paragraph needs to
+argue for its own authority.
+
+**Stories are the specification.** If a state is not a story, it is not documented. Prose describes rules;
+stories prove them. A page's Playground is for poking, and its named stories are the states worth reviewing.
+
+## Where to file a gap
+
+- A component behaves differently from its page: fix the component or the page, whichever is wrong, in the same pull request.
+- A state exists but has no story: add the story.
+- A value has no token and should have one: see Contributing, Token rules.
+- A decision needs recording: add an entry to the Decision log. Do not put it in a component page.

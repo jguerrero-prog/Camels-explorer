@@ -26,62 +26,36 @@ type PinnedPoint = { x: number; y: number; z: number; text: string };
 type Point3 = { x: number; y: number; z: number };
 
 export type Plotly3DChartProps = {
-  /** Pre-built go.Volume/go.Scatter3d-shaped trace objects - callers
-   * (DensityFieldChart, ParticleCloudChart) build these, this component
-   * only owns the shared scene/layout/resize shell both real statistics
-   * use identically in app.py. Deliberately loosely typed - `plotly.js-
-   * dist-min` doesn't export trace types the way the full `plotly.js`
-   * package does, and PlotChart's own 2D `data` avoids the same problem
-   * only because its one trace shape (`type: 'scatter' as const`) happens
-   * to satisfy structural inference; Volume and Scatter3d are different
-   * enough shapes that forcing one type here isn't worth the friction. */
+  /** Pre-built Plotly traces, volume or 3D scatter. Callers build them;
+   * this component owns only the shared scene, layout and resize shell.
+   * Loosely typed because `plotly.js-dist-min` exports no trace types, and
+   * volume and scatter traces are different enough shapes that forcing one
+   * type here would not help a caller. */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any[];
-  /** Real (Figma node 1059-415's ruler-line/ruler-handle/ruler-readout) -
-   * App.tsx's Ruler toolbar tool. Reuses the exact same `event.points[0].
-   * x/y/z` click payload the existing "pin" feature above already proves
-   * out on a real go.Volume trace - two clicks give two real 3D points, so
-   * the distance readout is a genuine Euclidean distance in this scene's
-   * own Mpc/h units, not a screen-space measurement. Mutually exclusive
-   * with the click-to-pin feature (both are click-driven; only one can
-   * own a given click) - ruler mode takes over clicks entirely while on. */
+  /** Whether the Ruler tool is active. Two clicks give two points in the
+   * scene, so the readout is a Euclidean distance in the scene's own Mpc/h
+   * units rather than a screen measurement. Ruler mode takes over clicks
+   * entirely while it is on. */
   rulerMode?: boolean;
-  /** Real (added 2026-08-06, direct user feedback: click-to-pin was
-   * genuinely useful on 3D Density Field, where a click has a real scalar
-   * `value` worth reading out - but 3D Particle Cloud's points carry no
-   * such value, so the pin only ever showed x/y/z there, and the user
-   * asked to remove it entirely for that caller. Removed again, 2026-08-07,
-   * direct user feedback: 3D Density Field no longer wants it either.
-   * Disabled everywhere, 2026-08-07 (direct user report: pinning a mark
-   * on click in any 3D plot was unwanted, "let's hide that feature for
-   * now, we could rebuild it later with stronger guardrails" - the click-
-   * ignored-once-pinned behavior above was itself a guardrail patch for a
-   * real jank bug, evidence this needs a sturdier redesign before it comes
-   * back, not just a toggle). Defaults to `false`; every call site now
-   * passes that explicitly rather than relying on the default, so a future
-   * caller can't silently re-enable it by omission. */
+  /** Click-to-pin a mark in the scene. Off by default and off at every call
+   * site, which passes `false` explicitly so it cannot be re-enabled by
+   * omission. The feature needs a redesign before it returns. See Decision
+   * log, DR-009. */
   pinEnabled?: boolean;
-  /** Real bug fixed 2026-08-07, direct user report ("the render just shows
-   * x/y/z [Mpc/h] - hardcoded axis labels that do not change even when I
-   * apply a different axis field"): DensityFieldChart/ParticleCloudChart's
-   * axes are always real spatial Mpc/h coordinates, but App.tsx's Custom-tab
-   * 3D Scatterplot lets a user pick *any* field (mass, redshift, whatever)
-   * per axis - this component was labeling every scene axis "x/y/z [Mpc/h]"
-   * regardless, since the strings were hardcoded literals rather than a
-   * prop. Default to the real spatial labels so the two statistic callers
-   * above don't need to pass anything; the Custom-tab caller now passes its
-   * own real field names/units instead. */
+  /** Scene axis titles. They default to the spatial labels, `x [Mpc/h]` and
+   * so on, which suit the two statistic callers. A custom 3D scatter can
+   * put any field on any axis, so it passes its own field names and units
+   * instead. */
   xLabel?: string;
   yLabel?: string;
   zLabel?: string;
 };
 
-/** The shared real Plotly 3D shell for 3D Density Field (go.Volume) and 3D
- * Particle Cloud (go.Scatter3d) - both statistics use the identical real
- * scene/layout config in app.py (xaxis/yaxis/zaxis titles, aspectmode
- * "cube", zero margin, height 650, no displayModeBar chrome - matching
- * every other Interactive chart in this app, which hides Plotly's default
- * toolbar since Toolbar owns that role instead). See Plotly3DChart.mdx. */
+/** The shared Plotly 3D shell: scene, layout and resize handling for 3D
+ * Density Field and 3D Particle Cloud, which use an identical
+ * configuration. Cube aspect, zero margin, and Plotly's own mode bar
+ * hidden, since the application's `Toolbar` owns that role. */
 export function Plotly3DChart({
   data, rulerMode, pinEnabled = false,
   xLabel = 'x [Mpc/h]', yLabel = 'y [Mpc/h]', zLabel = 'z [Mpc/h]',

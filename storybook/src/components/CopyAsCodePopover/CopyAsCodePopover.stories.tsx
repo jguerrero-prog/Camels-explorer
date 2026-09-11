@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { CopyAsCodePopover } from './CopyAsCodePopover';
 
 const meta: Meta<typeof CopyAsCodePopover> = {
-  title: 'Sections/CopyAsCodePopover',
+  title: 'Overlays/CopyAsCodePopover',
   component: CopyAsCodePopover,
   parameters: { layout: 'centered', backgrounds: { default: 'dark' } },
   decorators: [(Story) => <div style={{ background: 'var(--color-surface-chrome)', padding: '48px' }}><Story /></div>],

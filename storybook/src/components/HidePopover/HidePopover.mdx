@@ -1,67 +1,91 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as HidePopoverStories from './HidePopover.stories';
+import * as Stories from './HidePopover.stories';
 
-<Meta of={HidePopoverStories} />
+<Meta of={Stories} />
 
 # HidePopover
 
-Real (added 2026-08-06, direct user feedback: *"I want us to create a hide feature on the toolbar. This hide feature gives users the ability to hide annotations, arrows, notes, or the paramreadouts... could apply across the whole canvas, or per panel"*). Opens below the toolbar's new "Hide" (eye-slash) button, same anchor pattern as `RatioDiffPopover`/`CopyAsCodePopover`.
+Hides annotation layers so a plot can be read, or screenshotted, without them. Four categories, two scopes.
 
-## Token
+`Source: code`
 
-- `--color-surface-popover` — card background
-- `--color-border-subtle` — card border, pointer, checkbox divider
-- `--font-label` (Lato) — title, checkbox labels, caption
+## Anatomy
 
-## Spec
+```
+.hide-popover                role="dialog", aria-label="Hide", 260px
+├── __pointer                the triangle aimed at the toolbar button
+├── __header                 __title "Hide" + __close-btn
+├── Radio "Apply to"         This panel · All panels
+├── __caption                shown only when "This panel" has no focused tile
+└── __checkboxes             Annotations · Arrows · Notes · Param readouts
+```
 
-<Canvas of={HidePopoverStories.Default} />
+## Playground
+
+<Canvas of={Stories.Default} />
 <Controls />
 
-- Same pointer/card shell as `CopyAsCodePopover` (260px wide, narrower — no code block to fit). Header: "Hide" title + `×` close.
-- `Radio` control ("This panel" / "All panels") picks the scope; below it, 4 `Checkbox` rows (Annotations, Arrows, Notes, Param readouts).
-- When scope is "This panel" and no tile is focused, every checkbox disables and a caption explains why — matches `CopyAsCodePopover`'s own honest "click a tile first" gap rather than a click that silently does nothing.
-- **Real fix (2026-08-06, code-quality audit): closes on Escape**, matching `ChartModeDropdown`/`FieldMapGroupControl`/`SelectField` — this popover didn't have that until now, a real inconsistency rather than a deliberate omission (`RatioDiffPopover` had the same gap, fixed the same way — see its own docs).
+## Variants and states
 
-<Canvas of={HidePopoverStories.SomeHiddenAllPanels} />
-<Canvas of={HidePopoverStories.PanelScopeNoTileFocused} />
-<Canvas of={HidePopoverStories.PanelScopeWithTileFocused} />
+<Canvas of={Stories.SomeHiddenAllPanels} />
+<Canvas of={Stories.PanelScopeWithTileFocused} />
+<Canvas of={Stories.PanelScopeNoTileFocused} />
 
-## Usecase
+The last story is the one to understand. "This panel" needs a focused tile to act on. With none, the
+checkboxes are disabled and a caption says to click a tile first, rather than offering controls that would
+silently do nothing.
 
-**Real, deliberate model — hiding is a snapshot action, not a live filter** (see `UI_REFINEMENTS_EPIC.md` ticket #3 for the full decision record):
+## Tokens
 
-- Checking **Annotations** (at whichever scope) calls `onToggle('annotations', true)`, which App.tsx turns into stamping `hidden: true` on every `Annotation` that exists *right now* in that scope (`AnnotationOverlay.tsx`'s own `hidden?: boolean` field) — not a `Set<'annotations'>` checked live at render time. An annotation created afterward, while the box is still checked, starts visible regardless — it wasn't there to be stamped. It only becomes hidden the next time the box goes unchecked→checked again. Same rule for **Arrows** (`ArrowShape.hidden`) and **Notes** (`NoteShape.hidden`).
-- **Param readouts are the one exception** — a tile has no per-item array to stamp, and no "creation moment" distinct from its own readout. So that checkbox is a genuinely *live* gate (`PlotTile`'s `readoutsHidden` prop, computed fresh on every render from `hidePerPanel[tileId]?.readouts ?? hideAllPanels.readouts`) — a brand-new tile added while readouts are globally hidden inherits that immediately, with no fresh-item exemption.
-- This component doesn't know which of the two models is behind a given checkbox — both read/write through the same `values`/`onToggle` shape. The distinction lives entirely in App.tsx's `handleHideToggle`.
-- **Scope independence**: "All panels" and "This panel" track *separate* checkbox state (`hideAllPanels` vs. `hidePerPanel[focusedTileId]`) — switching the `Radio` swaps which one this popover shows, it doesn't merge or reset either.
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-popover` | Popover fill |
+| `--color-surface-content` | Pointer fill |
+| `--color-border-subtle` | Border, and the pointer's two visible edges |
+| `--color-text-primary` / `--color-text-muted` | Title, caption |
+| `--font-label` | Title |
 
-## Code
+Radius 12, and a two-layer shadow: `0 6px 8px rgba(0,0,0,0.2)` with `0 18px 20px rgba(0,0,0,0.4)`.
+The popover family shares this treatment. `Source: gap` for both the shadow and the radius.
 
-```tsx
-import { useState } from 'react';
-import { HidePopover } from '@/components/HidePopover/HidePopover';
-import type { HideCategory, HideScope, HideValues } from '@/components/HidePopover/HidePopover';
+## Behaviour
 
-function HideToolUsage({
-  hideAllPanels, hidePerPanel, focusedTileId, onToggle,
-}: {
-  hideAllPanels: HideValues;
-  hidePerPanel: Record<string, HideValues>;
-  focusedTileId: string | null;
-  onToggle: (scope: HideScope, category: HideCategory, value: boolean) => void;
-}) {
-  const [scope, setScope] = useState<HideScope>('all');
-  const values = scope === 'all' ? hideAllPanels : (hidePerPanel[focusedTileId ?? ''] ?? { annotations: false, arrows: false, notes: false, readouts: false });
-  return (
-    <HidePopover
-      scope={scope}
-      onScopeChange={setScope}
-      values={values}
-      onToggle={(category, value) => onToggle(scope, category, value)}
-      panelDisabled={scope === 'panel' && !focusedTileId}
-      onClose={() => {}}
-    />
-  );
-}
-```
+- Hiding is non-destructive. Annotations, arrows, notes and readouts stay in the tile's state and reappear
+  when unhidden.
+- Scope and values are owned by the caller, so what this popover shows is whatever the application has
+  applied. Closing it does not reset anything.
+- `panelDisabled` disables the categories rather than the scope control, so the reason for the state stays
+  visible.
+- Escape closes it, via a document key listener removed on unmount.
+
+## Accessibility
+
+- `role="dialog"` with an `aria-label`, a labelled close button, and Escape to dismiss.
+- Composed from real `Radio` and `Checkbox` controls, so the whole body is keyboard operable.
+- `Source: gap`. No `aria-modal`, no focus trap, focus is not moved in on open or restored on close, and the
+  disabled-state caption is not tied to the controls it explains.
+
+## Content
+
+Category names match what the tools are called elsewhere: Annotations, Arrows, Notes, Param readouts. The
+scope reads "This panel" and "All panels", matching the word the toolbar uses for a tile.
+
+## Use it
+
+- Reading a dense plot without annotation clutter.
+- Clearing the view before a screenshot.
+
+## Don't use it
+
+- To delete annotations. There is no bulk delete, deliberately.
+- To hide plotted data. Hiding applies to annotation layers, not to curves.
+
+## Related
+
+- `Toolbar` — opens it
+- `AnnotationOverlay`, `ArrowOverlay`, `NoteOverlay`, `ParamsReadout` — the four things it hides
+- `RatioDiffPopover`, `CopyAsCodePopover` — the same popover treatment
+
+## Source files
+
+`HidePopover.tsx` · `HidePopover.css` · `HidePopover.stories.tsx`

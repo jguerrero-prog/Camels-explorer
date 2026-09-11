@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { StaticImageChart } from './StaticImageChart';
 
 const meta: Meta<typeof StaticImageChart> = {
-  title: 'Fields/StaticImageChart',
+  title: 'Charts/StaticImageChart',
   component: StaticImageChart,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '640px', height: '460px' }}><Story /></div>],

@@ -11,15 +11,12 @@ export type AddPlotModalProps = {
   onClose: () => void;
   /** Fires only when confirming from the Curated tab. */
   onSubmitCurated: (selection: CuratedSelection) => void;
-  /** Fires only when confirming from the Custom tab (real, wired
-   * 2026-08-05 - see CustomTab). Two separate callbacks rather than one
-   * discriminated-union callback: App.tsx's dispatch already branches on
-   * `selection.statistic`/tile `kind` per statistic, so a caller needing
-   * to re-discriminate a union here would just be undoing this split. */
+  /** Fires only when confirming from the Custom tab. Curated and custom get
+   * separate callbacks rather than one union, because callers already branch
+   * on tile kind and would only have to re-discriminate a union here. */
   onSubmitCustom: (selection: CustomSelection) => void;
-  /** Which tab shows first - defaults to Curated, matching the real
-   * Figma default. Mainly for Storybook/docs to show the Custom tab
-   * without requiring a click. */
+  /** Which tab opens first. Defaults to Curated. Mainly so documentation can
+   * show the Custom tab without requiring a click. */
   initialTab?: 'curated' | 'custom';
 };
 

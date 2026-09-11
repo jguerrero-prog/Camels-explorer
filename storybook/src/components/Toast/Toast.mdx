@@ -1,41 +1,83 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as ToastStories from './Toast.stories';
+import * as Stories from './Toast.stories';
 
-<Meta of={ToastStories} />
+<Meta of={Stories} />
 
 # Toast
 
-A transient, auto-dismissed confirmation toast (Figma node `1066-10`'s "toast-copy-provenance"). Currently only the toolbar's Copy provenance tool uses this, but it's a standalone component rather than inlined into `Toolbar`/`App.tsx`, since any future tool showing its own confirmation would want the exact same shell.
+A brief confirmation that an action completed, anchored above the canvas.
 
-## Token
+`Source: figma:1066:10`
 
-- `--color-surface-content` — the toast's own card surface
-- `--color-success` — real green checkmark accent (`assets/check.svg`)
-- `--font-mono` — the optional `detail` line, since it's real technical text (a provenance string, a file path), not prose
+## Anatomy
 
-## Spec
+```
+.toast                        role="status", max-width 380, radius 10
+├── .toast__check-wrap        20px circle in success green
+├── .toast__text-col
+│   ├── .toast__title         Lato Bold 13
+│   └── .toast__detail        JetBrains Mono 10.5, optional
+```
 
-<Canvas of={ToastStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-A checkmark badge + a title, with an optional monospace `detail` line below it for the real text a tool just copied/produced - `word-break: break-word` since that text is genuinely variable-length (a full provenance sentence, a file path), not a fixed-width label.
+## Variants and states
 
-`TitleOnly` shows the toast with no `detail` at all (a short confirmation with nothing further to show). `ErrorState` shows the same shell used for a real, actionable failure ("No tile is focused") rather than a second, differently-styled error toast - one shell, any short status.
+<Canvas of={Stories.TitleOnly} />
+<Canvas of={Stories.ErrorState} />
 
-## Usecase
+The detail line is monospace because it echoes back a machine value: the provenance string that was copied.
+Without a detail, the title centres against the check.
 
-- Rendered by `App.tsx` inside `.app-shell__toast-anchor` (top-center of the canvas, absolutely positioned - see `App.css`), only while `toast` state is non-null.
-- `App.tsx`'s `showToast(title, detail?)` sets it and schedules its own dismissal via `toastTimeoutRef` (4s) - this component itself has no internal timer; the caller fully owns the toast's lifetime.
-- Copy provenance's real call: `showToast('Copied provenance to clipboard', provenance)` where `provenance` is `describeTileProvenance(tile)`'s real text - the same string that was just written to the clipboard, not a separate summary of it.
+## Tokens
 
-## Code
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-content` | Card fill |
+| `--color-border` | Card border |
+| `--color-success` | The check circle |
+| `--color-text-primary` | Title |
+| `--color-text-muted` | Detail |
+| `--font-label` | Title |
+| `--font-mono` | Detail |
 
-```tsx
-import { Toast } from '@/components/Toast/Toast';
+## Behaviour
 
-{toast && (
-  <div className="app-shell__toast-anchor">
-    <Toast title={toast.title} detail={toast.detail} />
-  </div>
-)}
-```
+- Positioning is the caller's decision. The component has no fixed placement; the app anchors it to the top
+  centre of the canvas.
+- Width hugs its content up to 380px, then the detail wraps on word boundaries.
+- Dismissal is the caller's responsibility. The component does not time itself out.
+
+## Accessibility
+
+- Carries `role="status"`, so the title is announced without stealing focus. This is the correct pattern and
+  the one `LoadingIndicator` should adopt.
+- `Source: gap`. The check circle is decorative but not marked `aria-hidden`.
+- The `ErrorState` story reuses the success green, which is wrong for a failure. Either give the component a
+  tone prop or stop using it for errors.
+
+## Content
+
+Title states what happened in the past tense: "Copied provenance to clipboard". The detail echoes the exact
+value so the reader can confirm it. No apologies, no exclamation marks.
+
+## Use it
+
+- Confirming a clipboard write or a completed background action.
+
+## Don't use it
+
+- For an error the user must act on. Put that inline, where the action is.
+- For anything requiring a decision. A toast cannot be interacted with.
+
+## Related
+
+- `LoadingIndicator` — the in-flight counterpart
+- `CopyAsCodePopover` — the action that most often raises one
+
+## Source files
+
+`Toast.tsx` · `Toast.css` · `Toast.stories.tsx`

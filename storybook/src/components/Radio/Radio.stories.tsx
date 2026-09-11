@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Radio } from './Radio';
 
 const meta: Meta<typeof Radio> = {
-  title: 'Fields/Radio',
+  title: 'Primitives/Radio',
   component: Radio,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '320px', background: 'var(--color-surface-content)', padding: '16px' }}><Story /></div>],

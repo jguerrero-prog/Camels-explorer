@@ -1,59 +1,35 @@
-import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as FieldMap2DSidebarStories from './FieldMap2DSidebar.stories';
+import { Meta, Canvas } from '@storybook/addon-docs/blocks';
+import * as Stories from './FieldMap2DSidebar.stories';
 
-<Meta of={FieldMap2DSidebarStories} />
+<Meta of={Stories} />
 
 # FieldMap2DSidebar
 
-2D Field Map's real per-tile sidebar, from `app.py`'s own `elif statistic == "2D Field Map":` block — the simplest sidebar with a Field picker in this app.
+A configuration of the **Statistic sidebar** pattern, for 2D Field Map.
 
-## Token
+`Source: code`
 
-Composed entirely from `SingleRealizationFields`/`SelectField`/`Button` — no tokens of its own.
+This component owns no styles. It chooses which controls go inside `ParamsSidebar` and nothing else, so the
+shell, its scroll behaviour, its fade and its pinned footer are all documented once in the pattern rather
+than here.
 
-## Spec
+**Read the pattern first:** Patterns / Statistic sidebar.
 
-<Canvas of={FieldMap2DSidebarStories.Playground} />
-<Controls />
+## Its configuration
 
-- Suite/Set/Realization: `SingleRealizationFields` — one of `app.py`'s own `SINGLE_REALIZATION_STATISTICS`.
-- Field: `SelectField`, options from `GET /api/metadata`'s `cmd_fields` (all 13 real CMD field names).
-- **No Snapshot control** — CMD only publishes `z=0.00` for 2D maps (unlike the 3D grids, which have 5 real redshifts), confirmed directly from `backend.py`'s own `get_field_map_2d` docstring. Matches `XrayHaloProfilesSidebar`'s same reasoning for omitting a control with nothing real behind it.
-- **Group by** (`Radio`, real addition - issue #56 follow-up): chooses which axis the mosaic below varies.
-  - **Realizations** (the original, only behavior until now): `FieldMapGroupControl`, real addition 2026-08-06, ticket #12. Mosaics several consecutive realizations of the same fixed suite/set/field together in one tile — see `FieldMapGroupControl.mdx`/`FieldMapMosaic.mdx` for the picker UI and the mosaic render respectively.
-  - **Suites**: a `MultiSelect` "Suites to compare" — fixes realization/set/field and mosaics one cell per selected suite instead, the same fixed-realization-vary-suite idea Compare mode's own suite axis (`RealizationFields.mdx`) uses. Mosaic layout is computed (square-ish) from the suite count, not user-chosen. Switching axis clears the other's param (`groupSize`/`suiteGroup`) so only one is ever active.
-  - Both are only rendered when `realization` is a plain number (see the 1P gap below) - `groupSize`/`suiteGroup` are otherwise fully independent, optional, additive fields on `FieldMap2DParams`.
+After Suite, Set and Realization it adds:
 
-<Canvas of={FieldMap2DSidebarStories.GroupViewActive} />
+> Field, Group by, Field group control
 
-**Real, deliberate gap:** switching Set to `1P` (or already on `1P`) hides the Group by control entirely and resets any active `groupSize`/`suiteGroup` to `null` — 1P's `realization` is a compound string id (e.g. `"p11_2"`) that's also suite-specific in meaning (see `RealizationFields.mdx`'s own 1P notes), so it has no real "next realization" to sequentially fill a grid with, and comparing the same literal id across suites wouldn't be meaningful either.
+## Live example
 
-<Canvas of={FieldMap2DSidebarStories.OnepHidesGroupControl} />
+<Canvas of={Stories.Playground} />
 
-## Usecase
+## Related
 
-- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/field-map-2d` (JSON) and `/plot.png` (the real log-normed heatmap render).
-- **Always has a value** — `get_field_map_2d()` has a real synthetic fallback (a 2D analogue of the 3D density field's white-noise-to-lognormal recipe) for suites without real CMD 2D maps.
-- Broad real suite coverage: **IllustrisTNG/SIMBA/Astrid/Swift-EAGLE**, all 13 fields.
-- No halos table under this tile — a field map is a per-pixel spatial projection, with no per-halo concept at all.
+- **Patterns / Statistic sidebar** — the shell, the core three, and every configuration in one table
+- `ParamsSidebar` — the shell this renders into
 
-## Code
+## Source files
 
-```tsx
-import { useState } from 'react';
-import { FieldMap2DSidebar } from '@/components/FieldMap2DSidebar/FieldMap2DSidebar';
-import type { FieldMap2DParams } from '@/components/FieldMap2DSidebar/FieldMap2DSidebar';
-
-function FocusedTileSidebar() {
-  const [params, setParams] = useState<FieldMap2DParams>({
-    suite: 'IllustrisTNG', setName: 'LH', realization: 42, field: 'Mtot',
-  });
-  return (
-    <FieldMap2DSidebar
-      params={params}
-      onChange={setParams}
-      onRemove={() => {/* remove this tile from the canvas */}}
-    />
-  );
-}
-```
+`FieldMap2DSidebar.tsx` · `FieldMap2DSidebar.stories.tsx`

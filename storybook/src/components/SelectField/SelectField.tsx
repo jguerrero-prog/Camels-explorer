@@ -4,42 +4,34 @@ import chevron from './assets/chevron.svg';
 import './SelectField.css';
 
 export type SelectFieldProps = {
+  /** Field label, sentence case, units in square brackets if it has any. */
   label: string;
+  /** The currently selected option. Must be one of `options`. */
   value: string;
+  /** The full option list, in the order it should be shown. */
   options: string[];
+  /** Called with the chosen option. Never fires for a disabled option. */
   onChange: (value: string) => void;
-  /** Real field pattern (Figma node 975:869, "field-Set"): a short helper
-   * line under the input, e.g. realization count for a chosen set. */
+  /** A short helper line under the input, for example a realization count. */
   caption?: string;
-  /** Opt-in only - every existing caller omits this and is 100% unchanged.
-   * When true, renders a "Search..." text input pinned to the top of the
-   * open menu (matches FlatHUB's own real search-above-list pattern) that
-   * case-insensitive substring-filters `options` as the user types. Meant
-   * for callers with large option counts where a flat scroll is unusable
-   * (e.g. CustomFieldsForm's X/Y/Color field pickers, ~177 options) - NOT
-   * for the small pickers elsewhere (Suite/Set/statistic pickers), where a
-   * search box would just be visual noise for a 3-5 item list. */
+  /**
+   * Pins a search input to the top of the open menu that substring-filters
+   * `options`. Use for pickers with more than about twenty options, such as the
+   * catalog field pickers. Omit for short lists, where it is noise.
+   */
   searchable?: boolean;
-  /** Options present in the list but not selectable - rendered dimmed with
-   * a "Coming soon" suffix, never fires `onChange`. Opt-in (existing
-   * callers omit this and are unaffected) - built for small, fixed-option
-   * pickers like CustomFieldsForm's Chart type, where some real FlatHUB
-   * chart types are visibly present but not yet implemented (see
-   * CHART_TYPES' own "no silent scope cut" docs) rather than a large
-   * filterable list. */
+  /**
+   * Options shown but not selectable, rendered dimmed with a "Coming soon"
+   * suffix. Use to keep a known option visible rather than dropping it from the
+   * list silently.
+   */
   disabledOptions?: string[];
 };
 
-/** The real open-menu design this component was missing (see Spec) - not
- * sourced from Figma, since no frame has ever shown this state. Built to
- * unblock the Add Plot modal's Curated tab, which needs a real,
- * functioning picker.
- *
- * The menu renders in a portal (document.body), positioned via
- * getBoundingClientRect rather than nested `position: absolute` - a real
- * bug caught inside AddPlotModal: nested absolute positioning gets clipped
- * by the modal's own scrollable fields area, so the last field's menu was
- * invisible until the user scrolled the whole modal. */
+/**
+ * Label plus a trigger that opens an option menu. The menu renders in a
+ * `document.body` portal so a scrollable ancestor can never clip it.
+ */
 export function SelectField({ label, value, options, onChange, caption, searchable, disabledOptions }: SelectFieldProps) {
   const [open, setOpen] = useState(false);
   const [menuRect, setMenuRect] = useState({ top: 0, left: 0, width: 0 });

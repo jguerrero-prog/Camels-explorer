@@ -4,7 +4,7 @@ import { GroupMatchingSidebar } from './GroupMatchingSidebar';
 import type { GroupMatchingParams } from './GroupMatchingSidebar';
 
 const meta: Meta<typeof GroupMatchingSidebar> = {
-  title: 'Sections/GroupMatchingSidebar',
+  title: 'Statistic sidebars/GroupMatchingSidebar',
   component: GroupMatchingSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '480px' }}><Story /></div>],

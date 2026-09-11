@@ -5,7 +5,7 @@ import { EMPTY_CUSTOM_SELECTION } from '../AddPlotModal/CustomFieldsForm';
 import type { CustomSelection } from '../AddPlotModal/CustomFieldsForm';
 
 const meta: Meta<typeof CustomSidebar> = {
-  title: 'Sections/CustomSidebar',
+  title: 'Patterns/Custom plot',
   component: CustomSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '640px' }}><Story /></div>],

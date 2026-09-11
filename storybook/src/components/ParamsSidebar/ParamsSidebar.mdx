@@ -5,59 +5,91 @@ import * as ParamsSidebarStories from './ParamsSidebar.stories';
 
 # ParamsSidebar
 
-The per-tile params panel from Figma node `1068:18` (and identically in `1046:10`) — shown when a tile is focused, occupying the same 280px slot as `IconRail`'s Project/Files panels (mutually exclusive, per `STUDIO_PLAN.md`'s "Left icon rail" section).
+The 280px panel that holds a statistic's controls. It owns the shell only; the caller supplies the fields.
 
-## Token
+`Source: figma:1113:1583`
 
-- `--color-surface-chrome` — background (same as TopNav/IconRail)
-- `--color-border` — right border, and the divider under the title
-- `--color-border-subtle` — the scroll track's own thumb color (see below)
-- `--font-ui` (Inter) — statistic title
+## Anatomy
 
-Individual fields carry their own tokens — see `SelectField.mdx`, `Slider.mdx`, `NumberStepper.mdx`, `Checkbox.mdx`.
+```
+.params-sidebar                280px, surface/chrome, 1px right border, padding 24 0
+├── __header       padding 0 20, gap 18
+│   ├── __title    Inter Semi Bold 18
+│   └── __divider  1px border/default
+├── __scroll-wrap  flex 1, min-height 0
+│   ├── __scroll   gap 18, padding 0 8 0 20, overflow-y auto
+│   └── __fade     48px gradient, only while scrolled short of the end
+└── __footer       padding 0 20, pinned, never scrolls
+```
 
-## Spec
+The asymmetric scroll padding is deliberate: 20px on the left to line up with the title, 8px on the right so
+the scrollbar sits in its own gutter instead of against the controls.
+
+## Playground
 
 <Canvas of={ParamsSidebarStories.Playground} />
 <Controls />
 
-- 280px wide, full height, 24px vertical padding, 18px gap between rows.
-- `title` (the statistic's name) at 18px semibold, then a divider, then whatever field controls the statistic actually needs.
+## Props
 
-**Real fix (2026-08-06, direct user feedback: "the scroll vertical line appears very close to the params... position this to the corner instead and reduce the weight of it").** Horizontal padding used to live on the outer panel itself, which put the scroll area's native scrollbar flush against field controls with zero gap between them. Restructured so `__header`/`__footer` keep their own 20px horizontal inset, while `__scroll` gets an asymmetric `0 8px 0 20px` padding — 20px on the left (matching the header above it), 8px on the right, creating a real gutter the scrollbar renders inside, at the panel's true right edge/corner rather than against the controls. The thumb itself is also thinner and more muted (5px, a translucent `--color-border-subtle`) than a default browser scrollbar — same real precedent as `SelectField`'s own dropdown-list scrollbar, just lighter, since this scrolls a much taller region much more often than one dropdown does.
+Generated from `ParamsSidebarProps`.
 
-**Corrected 2026-08-04: this component no longer owns field rendering.** It originally took a `fields: {label, value}[]` prop and rendered every field as the same dropdown-styled box. Real evidence since then (Figma nodes `1055:28`, `1055:33`, `1055:41`, `1055:75`, `1055:56`) shows the real params panel mixes **heterogeneous field types** — a plain select-styled dropdown (`SelectField`), an actual range slider (`Slider`), a numeric increment field (`NumberStepper`), and checkboxes (`Checkbox`) — not one uniform shape. `ParamsSidebar` now only owns the panel shell (title/divider) and takes `children`; composing the right real field atoms for a given statistic is the caller's job.
+## Variants and states
 
-**Real, upgraded from `STUDIO_PLAN.md`'s plan-level decision:** SFR History's own real fields (Suite, Set, Realization, plus Compare mode and z max — see below) confirm the "only render controls the statistic's real backend call actually uses" rule directly against design, not just against the plan.
+<Canvas of={ParamsSidebarStories.Default} />
+<Canvas of={ParamsSidebarStories.Overflowing} />
+<Canvas of={ParamsSidebarStories.NoFooter} />
 
-**Removed 2026-08-04, real bug fixed: the "PANEL 1 · FOCUSED"-style `panelLabel` eyebrow.** Direct user feedback to remove the panel number + "Focused" label entirely — it was never confirmed against a real frame beyond the original Figma pull, and read as unnecessary chrome once seen in the running app. `title` is now the only structural text this component owns.
+## Tokens
 
-**The Canvas above renders generic field labels ("Select label 1," "Slider label," etc.), not the real Figma copy (Suite, Set, Realization, Compare mode).** `title` is left as real structural context — which statistic — since it describes the panel itself rather than a control's label. The real field names are documented below and in each field component's own doc.
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-chrome` | Panel fill, and the fade's own colour |
+| `--color-border` | Right border, header divider |
+| `--color-border-subtle` | Scrollbar thumb, at 70% |
+| `--color-text-primary` | Title |
+| `--font-ui` | Title |
 
-**Still open:**
-- **"Redshift range" (the combined field in `1068:18`) and "z max" (the separate `NumberStepper` in `1055:56`) are both explicit placeholders, confirmed 2026-08-04** — not a discrepancy to reconcile. Which real input control actually fits z_min/z_max (one combined range field, two separate steppers, a dual-handle range slider, or something else) is intentionally undecided until real data is wired up — the right control depends on how that wiring actually behaves. The `Playground` story includes "z max" as a `NumberStepper` because that's the more recent placeholder, not because it's been confirmed as final.
-- Every field in `SelectField` is closed-state only — there is no real design yet for an open dropdown menu.
+## Behaviour
 
-## Usecase
+- Fixed 280px wide. The panel does not resize with its content.
+- Only `__scroll` scrolls. The title and the footer stay put.
+- The fade renders only when there is more content below, and hides at the end of the list.
+- Overflow detection uses a `MutationObserver` and a `ResizeObserver`, not just scroll events: this wrapper is
+  sized by flexbox, so its own box does not change when content grows. Only `scrollHeight` does.
+- The scrollbar is always visible rather than an overlay. See Decision log, DR-006.
 
-- Mutually exclusive with `IconRail`'s Project/Files panels — only one 280px left panel is ever open at a time.
-- One `ParamsSidebar` per focused tile; `title` should reflect whichever statistic that tile is showing.
-- Compose only the fields the focused statistic's real backend call consumes (see `backend.py`'s actual function signatures) — don't default to a fixed field set across every statistic.
+## Accessibility
 
-## Code
+- The panel is a plain container, so screen-reader order is the control order. Compose fields in the order a
+  reader should meet them.
+- `Source: gap`. The panel has no landmark role and no accessible name, so it is not reachable as a region.
+  Adding `role="region"` with `aria-label={title}` would fix it in one line.
+- The scroll region is keyboard-scrollable because it is focusable content, but it carries no
+  `tabindex`, so an empty panel cannot be scrolled by keyboard alone.
 
-```tsx
-import { ParamsSidebar } from '@/components/ParamsSidebar/ParamsSidebar';
-import { SelectField } from '@/components/SelectField/SelectField';
-import { Slider } from '@/components/Slider/Slider';
-import { NumberStepper } from '@/components/NumberStepper/NumberStepper';
-import { Checkbox } from '@/components/Checkbox/Checkbox';
+## Content
 
-<ParamsSidebar title="SFR History">
-  <SelectField label="Suite" value={suite} options={['IllustrisTNG', 'SIMBA', 'Astrid', 'Swift-EAGLE']} onChange={setSuite} />
-  <SelectField label="Set" value={set} options={['LH — Latin Hypercube', 'CV — Cosmic Variance']} onChange={setSet} />
-  <Slider label="Realization" min={0} max={999} value={278} onChange={setRealization} />
-  <NumberStepper label="z max" value={10.0} step={0.1} onChange={setZMax} formatValue={(v) => v.toFixed(1)} />
-  <Checkbox label="Compare mode" checked={false} onChange={setCompareMode} />
-</ParamsSidebar>
-```
+The title is the statistic's name exactly as it appears in the Add Plot modal, so the two agree. Field
+labels follow Content and units.
+
+## Use it
+
+- One per focused plot tile, showing that statistic's controls.
+- Always pass a footer with Remove plot, so it stays reachable when the controls overflow.
+
+## Don't use it
+
+- For the Custom tab's field pickers. Use the Custom plot pattern.
+- For a panel on the right. This is a left-hand chrome element, with a right border to prove it.
+- As a generic scroll container. It carries a title, a divider and a pinned footer.
+
+## Related
+
+- **Patterns / Statistic sidebar** — the 21 per-statistic configurations that use this shell
+- `SelectField`, `Slider`, `NumberStepper`, `Checkbox`, `Radio` — what goes inside
+- `Button` — the secondary variant in the footer
+
+## Source files
+
+`ParamsSidebar.tsx` · `ParamsSidebar.css` · `ParamsSidebar.stories.tsx`

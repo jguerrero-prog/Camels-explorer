@@ -4,7 +4,7 @@ import { CamelsSamSidebar } from './CamelsSamSidebar';
 import type { CamelsSamParams } from './CamelsSamSidebar';
 
 const meta: Meta<typeof CamelsSamSidebar> = {
-  title: 'Sections/CamelsSamSidebar',
+  title: 'Statistic sidebars/CamelsSamSidebar',
   component: CamelsSamSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '320px' }}><Story /></div>],

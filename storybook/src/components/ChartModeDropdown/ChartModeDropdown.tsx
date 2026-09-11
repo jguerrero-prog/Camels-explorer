@@ -14,30 +14,19 @@ const MODE_LABEL: Record<ChartDisplayMode, string> = {
 
 export type ChartModeDropdownProps = {
   mode: ChartDisplayMode;
-  /** Real, deliberate constraint (2026-08-06 - see PlotTile's own docs for
-   * how this is computed): only ever the modes that are genuinely real for
-   * this tile (e.g. 'static' only when a server-rendered PNG exists,
-   * 'table' only when `halos` is non-null) - never a disabled option, since
-   * every option here is always selectable. A single-option list means
-   * `PlotTile` doesn't render this component at all (see its own docs),
-   * matching the original toggle's "no toggle when nothing to switch to"
-   * behavior. */
+  /** Only the modes available for this tile: `static` when a server-rendered
+   * PNG exists, `table` when halo rows exist, and so on. Every option listed
+   * is selectable, so this list never contains a disabled entry. `PlotTile`
+   * computes it, and renders no dropdown at all when only one mode applies. */
   options: ChartDisplayMode[];
   onChange: (mode: ChartDisplayMode) => void;
 };
 
-/** Real fix (2026-08-06, direct user feedback: "the static/interactive
- * toggle is becoming illegible at times... I think it's because it sits
- * inside the plot... place it to the top right of the plot instead" +
- * "perhaps the static/interactive toggle should be a small dropdown where
- * users could decide between static, interactive, or table"). Replaces
- * the old two-button segmented pill that floated on top of the chart
- * itself (`PlotChart`'s own `.plot-chart__toggle`, removed) - this renders
- * in `PlotTile`'s header row instead, next to the title, always on the
- * tile's own opaque background rather than over plotted content that can
- * visually collide with it. A small, closed-by-default dropdown rather
- * than a segmented toggle, since "Table" is a genuinely different kind of
- * view, not just a style variant of the same chart. */
+/** Chooses how a tile draws its data: static image, interactive chart, 3D
+ * scatter, or table. Renders in `PlotTile`'s header row, on the tile's own
+ * opaque background rather than over the plot, and stays closed until
+ * opened. Table is a different kind of view rather than a style variant of
+ * the same chart, which is why this is a dropdown and not a toggle. */
 export function ChartModeDropdown({ mode, options, onChange }: ChartModeDropdownProps) {
   const [open, setOpen] = useState(false);
   const [menuRect, setMenuRect] = useState({ top: 0, left: 0, width: 0 });

@@ -6,7 +6,7 @@ import type { ViewMode } from '../Toolbar/Toolbar';
 import { LoadingIndicator } from '../LoadingIndicator/LoadingIndicator';
 
 const meta: Meta<typeof TopNav> = {
-  title: 'Sections/TopNav',
+  title: 'Chrome/TopNav',
   component: TopNav,
   parameters: { layout: 'fullscreen' },
   args: {

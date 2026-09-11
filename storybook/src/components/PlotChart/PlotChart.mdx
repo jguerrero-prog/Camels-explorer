@@ -1,69 +1,92 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as PlotChartStories from './PlotChart.stories';
+import * as Stories from './PlotChart.stories';
 
-<Meta of={PlotChartStories} />
+<Meta of={Stories} />
 
 # PlotChart
 
-The rendered-plot card from Figma node `1019:10` ("Stellar Mass Function drill-down"). Renders two genuinely different ways, matching a real precedent already established in `app.py`: a **static, server-rendered matplotlib PNG** (`backend.py`'s `_render_mass_range_png`, served by each statistic's own `.../plot.png` endpoint — see `MassRangeSidebar.mdx`) is the **default**, with an **Interactive** toggle to the same data rendered live via `plotly.js-dist-min` + `react-plotly.js/factory`.
+The plot surface. Renders either a server-made image or an interactive Plotly chart, on the same white card.
 
-**Corrected 2026-08-04, real bug fixed:** an earlier version of this component only ever rendered Plotly, no static option. Direct user feedback: *"It's suppose to render the matplotlib first, with an option to make it interactive with plotly via a toggle perhaps."* Checked against `app.py` directly rather than guessing — its generic 1D-statistics plotting block (the one Stellar Mass Function, Power Spectrum, Baryon Fraction, and SFR History all share) initializes `use_interactive = True` but only *acts* on it `if statistic == "Halo Mass Function"` — every other statistic, Stellar Mass Function included, has always rendered through `st.pyplot()` (static matplotlib). Plotly was only ever an experimental toggle for one statistic. This component now matches that real precedent instead of inventing its own.
+`Source: figma:1019:10`
 
-## Token
+## Anatomy
 
-- `--color-surface-chart` — the white surface both render modes sit on (see `semantic.css`).
-- `--font-ui` (Inter) — Plotly's axis/legend text (`layout.font`, not CSS, since Plotly renders its own SVG/canvas text).
+```
+.plot-chart              surface/chart, 8px padding
+├── .plot-chart__image   the server PNG, when displayMode is static
+└── (Plotly canvas)      when displayMode is interactive
+.plot-chart__error       replaces either when the fetch failed
+```
 
-## Spec
+The card is white on purpose. Every other surface in the app is dark; a scientific line or log plot needs
+axes and data to read against white. See Foundations / Color.
 
-<Canvas of={PlotChartStories.StaticDefault} />
+## Playground
+
+<Canvas of={Stories.StaticDefault} />
 <Controls />
 
-- Fills its container (`width: 100%; height: 100%`), 8px padding, 8px radius.
-- **`displayMode` is a required, externally-controlled prop** — real fix, 2026-08-06, direct user feedback ("the toggle is becoming illegible at times... I think it's because it sits inside the plot"). This component used to own its own display-mode state *and* render a small Static/Interactive toggle `position: absolute` on top of the chart itself - both removed. The toggle moved up to `PlotTile`'s own header row as `ChartModeDropdown` (see that component's own docs), always on the tile's opaque background rather than over plotted content it could visually collide with. `PlotChart` is now a fully controlled, dumb renderer: whatever `displayMode` it's given, it shows - no toggle UI of its own.
-- Static mode is a plain `<img src={imageUrl}>`. A real failure (server not running, non-200 response) is caught via the image's own `onError` and shown as the same honest inline message `AddPlotModal`/`CuratedTab` uses for a dead API server — an `<img>` tag fails silently (broken-image icon) otherwise, which would look like a rendering bug rather than a real, diagnosable server problem.
-- Interactive mode is the original Plotly chart, unchanged: log-log by default (`logX`/`logY`), `displayModeBar: false` (this app's own `Toolbar` owns that role, not Plotly's default chrome), legend only when `series.length > 1`.
+## Variants and states
 
-**Real bug fixed 2026-08-04: Plotly didn't resize when a flex sibling changed this container's size, not just the window.** `react-plotly.js`'s own `useResizeHandler` only listens for `window` resize events. Caught directly: toggle to Interactive, then expand `PlotTile`'s "View underlying halos" — the halos table pushes `PlotChart`'s own flex slot smaller, but no `window` resize ever fires, so Plotly kept rendering at its old, larger size and visually overlapped the table below. Fixed with a `ResizeObserver` on this component's own container (captured via `onInitialized`/`onUpdate`'s `graphDiv`), calling `Plotly.Plots.resize()` on every real size change, not just the window's.
-- **`forceInteractiveSignal`/`onForceInteractive`: a real split, not a redundant pair.** `PlotChart` still owns *detecting* that the signal changed (the same `useEffect` dependency-comparison it always used) since duplicating that in every caller would be real, unnecessary repetition - but it no longer owns *what happens* as a result (`onForceInteractive` fires instead of an internal `setDisplayMode`), since that's `PlotTile`'s own mode state now.
+<Canvas of={Stories.SingleSeries} />
+<Canvas of={Stories.CompareMode} />
 
-<Canvas of={PlotChartStories.CompareMode} />
+**Static.** `imageUrl` points at a `plot.png` endpoint and the browser shows the finished image. This is the
+default for the 17 statistics that have a server renderer.
 
-**The `CompareMode`/`SingleSeries` Canvases above render synthetic declining power-law curves, not real fetched values — Interactive-only, no `imageUrl`.** `StaticDefault` above is the one Canvas pointed at the real running API server (`GET /api/stellar-mass-function/plot.png`) — if it shows the inline error instead of a chart, the API server isn't running (`uvicorn api.main:app --port 8010`), not a bug in this component.
+**Interactive.** The same numbers redrawn by Plotly, so the reader can zoom and hover. Available whenever
+the chart is not image-only.
 
-**Real, deliberate scope decision:** Interactive-mode line color is a fixed 4-color palette (`LINE_COLORS`, this app's own brand primitives) cycling by series index — the Figma frame's own trace colors aren't semantically tied to anything else in this app, so no meaning is lost picking a simple deterministic order. Static mode's colors come from matplotlib's own default cycle instead (server-rendered, not controlled from here) — the two modes are not guaranteed to use identical per-series colors, a real, minor, accepted inconsistency rather than something worth synchronizing across a Python/JS boundary for a cosmetic detail.
+**Error.** When the image or the data fails, the card shows an inline message naming the likely cause,
+which is usually that the backend is not running.
 
-**Extended 2026-08-05 for Custom tab's Scatterplot:** `mode: 'markers'` renders `series[0]`'s x/y as a real point cloud (Plotly's plain `'scatter'` trace type, `mode: 'markers'` - SVG, not `'scattergl'`, since headless-Chromium WebGL screenshots aren't reliably verifiable, see `feedback_camels_webgl_headless.md`) instead of connecting points with lines - a raw cross-realization row scatter has no natural line order, so `'lines'` mode drew meaningless zigzags, confirmed directly. `markerColor` adds real third-field coloring via Plotly's native `marker.colorscale: 'Viridis'` + `showscale: true`, with `layout.margin.r` bumped to make room for the colorbar. Every pre-existing call site omits both props and is unaffected (`mode` defaults to `'lines'`).
+## Tokens
 
-## Usecase
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-chart` | The card, deliberately white |
+| `--font-ui` | The inline error message |
 
-- Real usage: `PlotTile`'s chart panel. `imageUrl` is built once from the tile's real params (suite/set/realizations/snapnum/mass range/bins) — see `lib/api.ts`'s `massRangeImageUrl`. `series`/`xLabel`/`yLabel`/`logX`/`logY` come from the same tile's own JSON fetch, so switching to Interactive never triggers a second network request — both modes render from data already in hand (the image fetch and the JSON fetch happen independently, in parallel).
-- `series` accepts more than one entry specifically for compare/overlay mode — a single-series chart is just the `series.length === 1` case, not a separate code path. Compare mode's `imageUrl` includes one `realizations=` query param per selected realization, matching `_render_mass_range_png`'s real per-realization legend.
-- Any chart with no real matplotlib render built yet should omit `imageUrl` entirely (Interactive-only) rather than pointing at a nonexistent endpoint — do not fabricate a URL just to force a Static option into existence.
-- **Extended 2026-08-05** beyond Stellar Mass Function to Halo Mass Function and Baryon Fraction — same component, unchanged; only the caller's `imageUrl`/`series` source differs (see `MassRangeSidebar.mdx`). Baryon Fraction is the one real case so far where `logY` is `false` (its own `get_baryon_fraction` sets `log_y=False`, a genuinely linear axis, not an oversight) — worth remembering if a future statistic's chart looks unexpectedly compressed on a log axis.
+Plotly draws its own axes and gridlines and does not read these tokens.
 
-## Code
+## Behaviour
 
-```tsx
-import { PlotChart } from '@/components/PlotChart/PlotChart';
-import { massRangeImageUrl } from '@/lib/api';
-import { MASS_RANGE_CONFIGS } from '@/components/MassRangeSidebar/massRangeConfig';
+- `logX` and `logY` set axis scaling, not formatting. Most CAMELS quantities span several decades.
+- `mode` chooses lines or markers. Lines for a spectrum, markers for a scatter.
+- `markerColor` adds a third dimension with a colour bar and a title.
+- `onForceInteractive` lets a caller switch away from the static image, which is how a failed PNG falls back.
 
-// Real usage: PlotTile owns `displayMode` state (via ChartModeDropdown)
-// and passes it straight through - this component no longer decides for
-// itself.
-function MassRangeChart({ statistic, result, params, displayMode }) {
-  const config = MASS_RANGE_CONFIGS[statistic];
-  return (
-    <PlotChart
-      series={[{ label: `${params.setName}_${params.realizations[0]}`, x: result.x, y: result.y }]}
-      xLabel={result.x_label}
-      yLabel={result.y_label}
-      logX={result.log_x}
-      logY={result.log_y}
-      imageUrl={massRangeImageUrl(config, params)}
-      displayMode={displayMode}
-    />
-  );
-}
-```
+## Accessibility
+
+- `Source: gap`. This is the weakest area in the system. The static image has no meaningful `alt`, so the
+  plot is invisible to a screen reader. The interactive canvas exposes no data at all.
+- The table mode reached through `ChartModeDropdown` is the accessible equivalent, and is currently the only
+  way to read a plot's values non-visually. Offering it wherever rows exist matters more here than anywhere
+  else.
+- Colour alone distinguishes compared series.
+
+## Content
+
+Axis labels carry units in square brackets exactly as the backend returns them: `k [h/Mpc]`,
+`P(k) [(Mpc/h)³]`. Do not reformat them in the client.
+
+## Use it
+
+- Any statistic with a numeric series or a server-rendered image.
+
+## Don't use it
+
+- For 3D data. Use `Plotly3DChart`.
+- For a grid of images. Use `FieldMapMosaic`.
+- For rows of numbers. Use the table.
+
+## Related
+
+- `StaticImageChart` — image-only, no interactive path
+- `Plotly3DChart` — volumetric and scatter 3D
+- `ChartModeDropdown` — switches between these modes
+- `PlotTile` — the host
+
+## Source files
+
+`PlotChart.tsx` · `PlotChart.css` · `PlotChart.stories.tsx`

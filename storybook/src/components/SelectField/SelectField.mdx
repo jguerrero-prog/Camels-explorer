@@ -5,52 +5,109 @@ import * as SelectFieldStories from './SelectField.stories';
 
 # SelectField
 
-The closed-state dropdown-styled field used throughout the params panel — Suite, Set, and originally (incorrectly) Realization too. Real source: Figma nodes `1055:28` ("field-Set") and identically the Suite/Realization fields in `1068:18`. Extracted out of `ParamsSidebar` on 2026-08-04 once it became clear the panel mixes multiple real field kinds (see `ParamsSidebar.mdx`).
+Picks exactly one value from a fixed list. The workhorse field of the params sidebar and the add-plot modal.
 
-## Token
+`Source: figma:1055:28` for the closed field, `code` for the open menu
 
-- `--color-surface-control` / `--color-border-subtle` — the input box fill/border
-- `--color-surface-chrome` — the open menu's own background (an elevated surface, distinct from the trigger's control surface)
-- `--color-surface-toggle-active` — option hover state
-- `--color-accent-gradient-start` (`--brand-purple`) — the selected option's checkmark
-- `--font-label` (Lato) — label
-- `--font-ui` (Inter) — the current value, and every option in the menu
+## Anatomy
 
-## Spec
+```
+.select-field
+├── label            Lato Regular 12, text/muted
+├── .select-field__input          the trigger
+│   ├── value        Inter Regular 14, centred, truncates with an ellipsis
+│   └── chevron      10x6 triangle, points down when closed
+├── caption          optional, Lato Regular 11, text/muted
+└── .select-field__menu           portalled to document.body when open
+    ├── search       optional, only when `searchable`
+    ├── option[]     33px rows; selected row is emphasis weight with a check
+    └── fade         only while the list is scrolled short of its end
+```
+
+## Playground
 
 <Canvas of={SelectFieldStories.Playground} />
 <Controls />
 
-- Label above (12px muted), then a box: 10px/12px padding, 8px radius, value left-aligned, a chevron icon right-aligned (rotated 180° closed, 0° open).
+## Props
 
-**The open menu is a real design now, built 2026-08-04 — not sourced from Figma, since no frame has ever shown this state.** The user asked directly for a dropdown design so the Add Plot modal's Curated tab would have something real to use, rather than leaving this permanently undesigned. Menu: same width as the trigger, `--color-surface-chrome` background (an elevated tone distinct from the trigger's own `--color-surface-control`), 8px radius, drop shadow, scrollable past 240px. Each option is a full-width row (8px/10px padding, 6px radius); the selected option is emphasis-weight with a ✓; hovered options get `--color-surface-toggle-active`. Closes on selecting an option, clicking outside, scrolling, or Escape.
+Generated from `SelectFieldProps`. Descriptions live in the type.
 
-**Real bug fixed 2026-08-04:** the menu originally used `position: absolute` nested inside its own field wrapper. Inside `AddPlotModal`'s scrollable fields area, the last field's (Statistic) menu rendered past the container's bottom edge and was clipped by its `overflow-y: auto` — invisible until the user scrolled the whole modal. Fixed by rendering the menu in a `document.body` portal (`createPortal`), `position: fixed`, positioned from the trigger's real `getBoundingClientRect()` rather than nested relative-positioning — this can never be clipped by any scrollable ancestor again. Closes on scroll (rather than continuously repositioning) so it can't visually detach from a trigger that moved.
+## Variants and states
 
-**Real bug fixed 2026-08-04:** the close-on-scroll listener is a capture-phase `window` listener, which also receives scroll events from the menu's *own* internal list (it's independently scrollable past 240px) — so scrolling the open menu closed it immediately, before any scroll could register. Caught via `MultiSelect` (same technique, longer real lists made it obvious), fixed identically here: ignore scroll events whose target is inside `.select-field__menu` itself.
+<Canvas of={SelectFieldStories.Default} />
+<Canvas of={SelectFieldStories.WithCaption} />
+<Canvas of={SelectFieldStories.Searchable} />
+<Canvas of={SelectFieldStories.WithDisabledOptions} />
+<Canvas of={SelectFieldStories.LongContent} />
 
-**The Canvas above renders "Select label"/"Selected value," not "Set"/"LH · Latin Hypercube."** This story demonstrates the control's mechanics, not confirmed copy — the real field names are documented in Usecase below instead.
+**Open menu.** The open state is driven by interaction rather than a prop, so it has no separate story.
+Click any trigger above to see it. The menu matches the trigger's width, sits 4px below it, and scrolls past
+240px.
 
-## Usecase
+**Missing states.** `Source: gap`. No hover, focus or disabled treatment is designed for the trigger itself.
+The component has no `disabled` prop.
 
-- Real, confirmed usage: Suite and Set fields inside `ParamsSidebar`, and Suite/Set/Statistic inside the Add Plot modal's Curated tab (see `AddPlotModal.mdx`) — the first place this component's menu is driven by real, live-fetched data (`GET /api/metadata`) rather than a static prop.
-- Use for exactly-one-value-from-a-fixed-list fields — for open-ended multi-value fields use `MultiSelect` instead; for a value with no fixed option list (a scrubbed number) use `Slider` or `NumberStepper`.
+## Tokens
 
-## Code
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-control` | Trigger fill |
+| `--color-border-subtle` | Trigger border, menu border |
+| `--color-surface-chrome` | Menu fill, an elevated tone distinct from the trigger |
+| `--color-surface-toggle-active` | Option hover |
+| `--color-accent-gradient-start` | The selected option's check |
+| `--color-text-primary` | Value, option labels |
+| `--color-text-muted` | Label, caption, disabled options |
+| `--color-text-emphasis` | The selected option |
+| `--font-label` | Label, caption, option suffix |
+| `--font-ui` | Value, options, search input |
 
-```tsx
-import { useState } from 'react';
-import { SelectField } from '@/components/SelectField/SelectField';
+## Behaviour
 
-function SuiteField() {
-  const [suite, setSuite] = useState('IllustrisTNG');
-  return (
-    <SelectField
-      label="Suite"
-      value={suite}
-      options={['IllustrisTNG', 'SIMBA', 'Astrid', 'Swift-EAGLE']}
-      onChange={setSuite}
-    />
-  );
-}
-```
+- Opens on trigger click. Closes on selecting an option, clicking outside, pressing Escape, or scrolling the page.
+- The menu renders in a `document.body` portal at `position: fixed`, positioned from the trigger's bounding
+  rect, so a scrollable ancestor cannot clip it. See Decision log, DR-005.
+- Scroll events originating inside the menu's own list do not close it.
+- A long value truncates with an ellipsis rather than overlapping the chevron.
+- `searchable` filters on a case-insensitive substring and resets the query each time the menu opens.
+- A disabled option is rendered and announced but never fires `onChange`.
+- The menu's scrollbar is always visible rather than an overlay. See Decision log, DR-006.
+
+## Accessibility
+
+- The trigger is a `button`. The menu is a `ul` of `button` rows.
+- `Source: gap`. Three things are missing and are worth fixing together: arrow-key navigation between
+  options, `role="listbox"` with `aria-expanded` and `aria-activedescendant` on the trigger, and a visible
+  focus ring. Today the menu is mouse-and-Escape only.
+- Disabled options need `aria-disabled`, not just reduced opacity.
+- Label and value are both above 4.5:1 on their own surfaces.
+
+## Content
+
+- Label in sentence case, units in square brackets: `Min stellar mass [Msun/h]`.
+- Expand an acronym once in the option itself: `LH · Latin Hypercube`, joined by a middle dot.
+- Captions state a count or a constraint, not an apology: `1,000 realizations`.
+
+## Use it
+
+- Exactly one value from a fixed list: suite, set, statistic, field, chart type.
+- With `searchable` once the list passes roughly twenty options.
+
+## Don't use it
+
+- For several values at once. Use `MultiSelect`.
+- For a continuous number. Use `Slider`, or `NumberStepper` when the value is typed.
+- For two mutually exclusive options that both fit on screen. Use `Radio`.
+- For a chart-level mode switch on a tile header. Use `ChartModeDropdown`.
+
+## Related
+
+- `MultiSelect` — same menu mechanics, several values
+- `Radio` — two or three options, no menu
+- `ParamsSidebar` — its most common host
+- `AddPlotModal` — Suite, Set and Statistic on the Curated tab
+
+## Source files
+
+`SelectField.tsx` · `SelectField.css` · `SelectField.stories.tsx`

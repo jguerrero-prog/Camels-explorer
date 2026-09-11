@@ -1,0 +1,62 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import { TokenTable } from './TokenTable';
+
+<Meta title="Foundations/Typography" />
+
+# Typography
+
+Three families, paired by role rather than used interchangeably. A component picks the family that matches
+what the text is doing, not what looks right in isolation.
+
+`Source: figma:1113:1583` for Inter and Lato, `figma:1019:10` for the mono column.
+
+<TokenTable
+  kind="font"
+  rows={[
+    { name: '--font-ui', role: 'Interface chrome: titles, field values, option lists, breadcrumbs' },
+    { name: '--font-label', role: 'Labels, buttons, tabs, stat chips, captions' },
+    { name: '--font-mono', role: 'Tabular numeric readout: the params column and the halo table' },
+  ]}
+/>
+
+## The ramp
+
+Every style below is in use. There is no size that is not on this list, and adding one is a change to this
+page as much as to a component.
+
+| Family | Size / line | Weight | Used by |
+| --- | --- | --- | --- |
+| Inter | 18 / 22 | Semi Bold | Params sidebar title |
+| Inter | 16 / 18 | Semi Bold | Tile title, plot tile title |
+| Inter | 14 / 17 | Regular | Select field value, option rows, number stepper value |
+| Inter | 13 / 16 | Regular | Filter tree leaf label, field map trigger, popover rows |
+| Inter | 12 / 15 | Regular | Segmented control option |
+| Lato | 16 / 18 | SemiBold | Modal title |
+| Lato | 14 / 17 | Bold | Modal tabs, Cancel and confirm buttons |
+| Lato | 14 / 17 | Regular | Tile empty-state caption |
+| Lato | 13 / 16 | SemiBold | Nav Add Plot button |
+| Lato | 13 / 16 | Bold | Popover titles, filter tree group label |
+| Lato | 13 / 16 | Regular | Checkbox label |
+| Lato | 12 / 15 | Bold | Stat chip value |
+| Lato | 12 / 15 | Regular | Field labels, stat chip label, footer hint |
+| Lato | 11 / 15 | Regular | Field captions, tree descriptions, counts |
+| Lato | 11 / 14 | Bold | Add buttons, badges, uppercase eyebrows |
+| Lato | 10 / 13 | SemiBold | Readout labels, uppercase, `letter-spacing: 0.04em` |
+| Lato | 10 / 13 | Bold | Select option suffix, realization tag |
+| JetBrains Mono | 13 / 17 | Regular | Params readout values |
+| JetBrains Mono | 12 / 16 | Regular | Halo table cells, `font-variant-numeric: tabular-nums` |
+| JetBrains Mono | 10.5 / 14 | Regular | Toast detail line |
+
+## Rules
+
+- **Numbers that line up get `tabular-nums`.** Any column of digits, in a table or a readout.
+- **Uppercase gets letter-spacing.** The readout label is the only uppercase style, at `0.04em`.
+- **Weight carries emphasis, not size.** A selected option is the same size, at emphasis weight.
+- **Mono means tabular, not code.** It marks a value a reader will compare against another value.
+
+## Known gap
+
+`Source: gap`. None of the three families is self-hosted. `tokens/primitives/typography.css` declares them
+with system fallbacks but there is no `@font-face` and no CDN link, so the app currently renders in the
+fallback stack. The decision between self-hosted `woff2` and a Google Fonts link is open. Until it is made,
+every size above is correct and every rendered glyph is not.

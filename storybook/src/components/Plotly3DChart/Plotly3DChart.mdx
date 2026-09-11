@@ -1,53 +1,71 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as Plotly3DChartStories from './Plotly3DChart.stories';
+import * as Stories from './Plotly3DChart.stories';
 
-<Meta of={Plotly3DChartStories} />
+<Meta of={Stories} />
 
 # Plotly3DChart
 
-The shared real Plotly 3D shell for 3D Density Field (`go.Volume`) and 3D Particle Cloud (`go.Scatter3d`) — both statistics use the identical real scene/layout config in `app.py` (`xaxis`/`yaxis`/`zaxis` titles, `aspectmode: "cube"`, zero margin, no `displayModeBar`). Added 2026-08-05 as the last of the 15 statistics get wired.
+A rotatable 3D scene. The only chart with no server-rendered equivalent.
 
-## Token
+`Source: code`
 
-Reuses `PlotChart.css`'s `.plot-chart` card layout (border-radius/padding) but **not** its white surface — `.plotly-3d-chart` overrides `background` to `transparent` so the tile's own dark `--color-surface-content` shows through, plus a taller minimum height (520px vs. `PlotChart`'s 320px; real 3D exploration benefits from more room to rotate than a 2D line chart, matching `app.py`'s own real `height=650` figure).
+## Anatomy
 
-**Real bug fixed 2026-08-05: white background, on two separate layers.** Direct user feedback after seeing the live tiles: 3D Density Field/3D Particle Cloud rendered inside a white box, unlike every other dark-chrome surface in this app. Two independent causes, both fixed: (1) `.plot-chart`'s own white `--color-surface-chart` is correct for `PlotChart`/`StaticImageChart` (real matplotlib PNGs assume a white canvas) but wrong here — this is a live 3D scene, not a static image; (2) Plotly's own `scene` has a *second*, independent background layer per axis (`showbackground`/`backgroundcolor`, default a light gray "wall") plus its own `scene.bgcolor` — neither is covered by `paper_bgcolor`. Fixed by setting `showbackground: false` and `backgroundcolor: 'transparent'` on each axis, `scene.bgcolor: 'transparent'`, and switching axis title/tick/grid colors to light values (`#e5e7eb` text, translucent light gridlines) readable against the now-dark surface — hardcoded literals, since Plotly's layout object can't consume this app's CSS custom properties directly (same precedent as `PlotChart`'s own hardcoded `'#1A1A1A'`/`'#E5E5E5'` for its white surface, just inverted for a dark one).
+```
+.plotly-3d-chart
+├── (Plotly 3D canvas)
+└── .plotly-3d-chart__clear-pin   appears once a point is pinned
+```
 
-## Spec
+## Playground
 
-<Canvas of={Plotly3DChartStories.ScatterExample} />
+<Canvas of={Stories.ScatterExample} />
 <Controls />
 
-- Takes pre-built trace objects (`data`) — this component owns only the shared scene/layout/resize shell, not trace construction. `DensityFieldChart`/`ParticleCloudChart` build the real `go.Volume`/`go.Scatter3d` shapes and pass them in.
-- **Real bug fixed proactively, same class `PlotChart`'s own Interactive mode hit**: a `ResizeObserver` on this component's own container calls `Plotly.Plots.resize()` on every real size change — `react-plotly.js`'s own `useResizeHandler` only catches *window* resizes, not a flex/grid-driven container resize (switching `Viewer`'s grid/stacked mode, or a sibling changing this tile's own flex sizing).
-- `displayModeBar: false` — matches every other Interactive chart in this app (`Toolbar` owns tile-level actions, not Plotly's default chrome), even though `app.py`'s own `st.plotly_chart` call doesn't set this explicitly. A deliberate, established app-wide convention takes priority over matching Streamlit's literal default here.
-- **Deliberately loosely typed** (`data: any[]`) — `plotly.js-dist-min` doesn't export the full `plotly.js` package's trace types, and `go.Volume`/`go.Scatter3d` are different enough shapes that forcing one named type wouldn't help; `PlotChart`'s own 2D `data` avoids this only because its single trace shape happens to satisfy structural inference.
-- **Pan/zoom/rotate are native Plotly 3D scene behavior, not something this component builds** — drag to rotate, scroll to zoom, right-click/shift-drag to pan, plus the default hover label with spike-lines projecting to each axis wall. All free from `go.Volume`/`go.Scatter3d` inside a `scene`.
-- **Real bug fixed 2026-08-07, direct user report ("the render just shows x/y/z [Mpc/h] - hardcoded axis labels that do not change even when I apply a different axis field")**: `xaxis`/`yaxis`/`zaxis` titles were hardcoded literal strings (`'x [Mpc/h]'` etc.), never props — invisible for `DensityFieldChart`/`ParticleCloudChart`, whose axes really are always spatial Mpc/h, but wrong for `App.tsx`'s Custom-tab 3D Scatterplot, where a user can put any field (mass, redshift, whatever) on any axis. Added `xLabel`/`yLabel`/`zLabel` props (defaulting to the real Mpc/h strings, so the two statistic callers don't need to change), and the Custom-tab call site now passes its own already-computed `result.xLabel`/`yLabel`/`zLabel` (the same `fieldLabel()`-derived strings its 2D scatter axes already use).
-- **Click-to-pin, added 2026-08-05, gated by `pinEnabled` (default `false` as of 2026-08-07 — see below)**: clicking a point calls `onClick`, which stores it in local `pinned` state and renders a real Plotly **3D scene annotation** (`layout.scene.annotations`, anchored to the point's own `x`/`y`/`z` — not screen space) showing its coordinates (plus `value` for `go.Volume`, or `text` for `go.Scatter3d`, if present). Unlike the default hover label, an annotation is real layout state, not a transient overlay — it survives while the user keeps rotating/panning/zooming elsewhere in the scene, which is the actual point of pinning ("keep a finger in that part of the viz" while exploring the rest). A "Clear pin" button (only rendered while a pin exists) removes it.
-- **Real bug fixed 2026-08-05: `onClick` now no-ops while a pin already exists.** Direct user report: panning/zooming a gl3d scene can itself register as a stray `plotly_click` near a data point mid-drag — previously this silently moved the pin and forced an annotation re-render on every such hit, which read as "lots of delays" while exploring. A new pin can now only be placed after "Clear pin" is pressed — one click sets it, nothing else moves it until it's explicitly cleared.
-- **Disabled everywhere, 2026-08-07, direct user report ("when I click on parts of the 3d plot it pins the mark... let's hide that feature for now, we could rebuild it later with stronger guardrails").** Removed for `ParticleCloudChart` (2026-08-06) and `DensityFieldChart` (2026-08-07) individually first, both via `pinEnabled={false}` — but `CamelsSamCharts`'s 3D scatter and `App.tsx`'s Custom-tab 3D Scatterplot both still relied on the `true` default and were never updated, which is what the user was actually seeing when they reported the pin "still in effect." Rather than patch those two call sites again and leave the door open for the next one, the default itself flipped to `false` and every real call site now passes it explicitly — no caller inherits pin behavior silently. The click-ignored-once-pinned fix above was itself a guardrail patch for a real jank bug (see 2026-08-05 entry), which is direct evidence this feature needs a sturdier redesign, not just a re-enable, before it comes back. Ruler mode (below) owns clicks in preference to pin regardless of `pinEnabled` — the two features were always mutually exclusive by click-handler order, not by this flag.
-- **Verification caveat, stated plainly**: headless Chromium's WebGL point-picking for gl3d canvases is unreliable under Playwright's synthetic mouse events (a pre-existing, already-documented limitation in this project — see the 3D Particle Cloud's own hover-testing history). The pin *logic* itself (state update, annotation render, survives mouse-move, "Clear pin" round-trips correctly, and stays fully inert when `pinEnabled={false}`) was verified by directly emitting a `plotly_click` event with a fake point payload — real point-picking in an actual browser is Plotly's own mature, independently-tested behavior, not something this project re-implements.
+## Tokens
 
-## Usecase
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-chrome` | Clear-pin control fill |
+| `--color-border-subtle` | Its border |
+| `--color-surface-toggle-active` | Its hover |
+| `--color-text-primary` | Its label |
+| `--font-label` | Its label |
 
-- Real usage: `DensityFieldChart` (3D Density Field) and `ParticleCloudChart` (3D Particle Cloud) — see their own `.mdx` files. Both are real statistics `app.py` renders exclusively via live interactive Plotly, with **no static-image equivalent at all** — a screenshot would lose the actual point of a rotate/zoom 3D view, unlike every other statistic wired this pass (`StaticImageChart`).
-- `PlotTile`'s `chart.kind: 'plotly-3d'` renders this component instead of `PlotChart`/`StaticImageChart` — see `PlotTile.mdx`.
+## Behaviour
 
-## Code
+- Drag to orbit, scroll to zoom. Plotly owns the camera.
+- `rulerMode` turns clicks into distance measurement between two points rather than selection.
+- `pinEnabled` lets a reader pin a point so its values stay visible while the scene rotates. The clear
+  control only appears once something is pinned.
+- Axis labels default to the box coordinates in Mpc/h.
 
-```tsx
-import { Plotly3DChart } from '@/components/Plotly3DChart/Plotly3DChart';
+## Accessibility
 
-function ExampleScatter() {
-  return (
-    <Plotly3DChart
-      data={[{
-        type: 'scatter3d', mode: 'markers',
-        x: [1, 2, 3], y: [1, 2, 3], z: [1, 2, 3],
-        marker: { size: 1.5, color: '#ffa53c', opacity: 0.5 },
-      }]}
-    />
-  );
-}
-```
+- `Source: gap`. A WebGL canvas exposes nothing to assistive technology, and there is no keyboard path to
+  orbit, zoom, pin or measure. There is no table fallback for 3D statistics, unlike 2D ones.
+  This is the least accessible surface in the app and should be treated as a known limitation rather than an
+  oversight.
+
+## Content
+
+Axis labels carry units: `x [Mpc/h]`. The pin readout shows coordinates at the same precision as the
+readout column.
+
+## Use it
+
+- 3D Density Field and 3D Particle Cloud, the two statistics with volumetric data.
+
+## Don't use it
+
+- For 2D data rotated for effect.
+- Where a reader needs the exact values. Offer the underlying catalog instead.
+
+## Related
+
+- `DensityFieldChart`, `ParticleCloudChart` — the two configurations that use it
+- `PlotChart` — every 2D statistic
+
+## Source files
+
+`Plotly3DChart.tsx` · `Plotly3DChart.css` · `Plotly3DChart.stories.tsx`

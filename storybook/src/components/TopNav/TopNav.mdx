@@ -1,60 +1,74 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as TopNavStories from './TopNav.stories';
+import * as Stories from './TopNav.stories';
 
-<Meta of={TopNavStories} />
+<Meta of={Stories} />
 
 # TopNav
 
-The 48px header row — `Toolbar` on the left (once a plot exists), the primary "Add Plot" action on the right. Sourced from two real frames: the zero-plots "Skeleton" (Figma node `1113:1583`, no toolbar) and the Stellar Mass Function drill-down's real `header` (node `1012:1124`, toolbar present).
+The 48px bar across the top. Holds the toolbar on the left and Add Plot on the right.
 
-## Token
+`Source: figma:1113:1583`
 
-- `--color-surface-chrome` — background (shared with IconRail — both are "chrome", not content)
-- `--color-border` — bottom border
-- `--font-label` (Lato), weight 600 — "Add Plot" button label (see the deviation note below: the raw Figma frame specifies 700)
-- `--color-add-plot-surface` / `--color-add-plot-text` — the Add Plot button's own light-surface/dark-text pair (see below)
+## Anatomy
 
-## Spec
+```
+.top-nav                48px + 1px bottom border, surface/chrome, padding 0 28
+├── toolbar             optional slot, left
+├── loadingIndicator    optional slot
+└── .top-nav__add-plot  32px, radius 9, add-plot/surface, margin-left auto
+```
 
-<Canvas of={TopNavStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-- Height 48px (real fix, 2026-08-06 — down from 64px on direct user feedback), full width, horizontal padding 28px. `toolbar` (when passed) sits at the row's leading edge; a `.top-nav__actions` group (`loadingIndicator` + Add Plot button) is pinned to the trailing edge via `margin-left: auto` (see the removal note below for why this isn't `justify-content: space-between` anymore).
-- Add Plot button: 32px tall, 9px radius, 14×14 plus icon + label (all scaled down from the original 40px/12px/18×18 to fit the shorter 48px bar without choking).
+## Variants and states
 
-**Real fix (2026-08-07, direct user feedback): the folder/project breadcrumb label ("Untitled / Project 1") is removed entirely.** `folderName`/`projectName` props, the `.top-nav__path*` markup/CSS, and the App.tsx call site's literal `"Untitled"`/`"Project 1"` strings are all gone — this row now opens directly with `toolbar` (or, when no plot exists yet, straight to the Add Plot button). Removing it also surfaced a real layout dependency: `.top-nav`'s own `justify-content: space-between` used to rely on the breadcrumb being present to push `toolbar`/`.top-nav__actions` apart - with a *variable* number of remaining children (`toolbar` is conditionally rendered, present only once a tile exists), `space-between` across just one child left-aligns it, which would have put the Add Plot button at the row's leading edge on the zero-tiles screen. Fixed by dropping `justify-content` and pinning `.top-nav__actions` to the trailing edge with `margin-left: auto` instead, which holds regardless of whether `toolbar` is present.
+<Canvas of={Stories.WithToolbar} />
+<Canvas of={Stories.WithLoadingIndicator} />
 
-**Real fix (2026-08-06, direct user feedback):** the button's fill flipped from the diagonal purple→red accent gradient to a solid light surface (`--color-add-plot-surface`, white) with dark text/icon (`--color-add-plot-text`, reusing `--neutral-900` — the same literal `PlotChart.tsx` already hardcodes for dark-text-on-white) — the one deliberately inverted control in this app's otherwise all-dark chrome.
+Add Plot is pinned right with `margin-left: auto` rather than `space-between`, because the toolbar is
+conditional: with `space-between` and no toolbar, the button would jump to the left edge.
 
-<Canvas of={TopNavStories.WithToolbar} />
+## Tokens
 
-<Canvas of={TopNavStories.WithLoadingIndicator} />
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-chrome` | Bar fill |
+| `--color-border` | Bottom border |
+| `--color-add-plot-surface` / `--color-add-plot-text` | The Add Plot button, the one inverted control |
+| `--font-label` | Button label |
 
-**Added 2026-08-05, on direct request** ("perhaps on the right of the top nav, left of the Add plot button"): `loadingIndicator` is a plain `ReactNode` slot, rendered inside `.top-nav__actions` together with the Add Plot button — this guarantees it always sits immediately to that button's left regardless of whether `toolbar` is present. See `LoadingIndicator.mdx`.
+## Behaviour
 
-**Resolved 2026-08-05, real bug fixed:** this component's own "Still open" note previously flagged that the toolbar-visible state hadn't been provided yet — it has now (Figma node `1012:1124`), and it shows `Toolbar` living in **this same row**, not a separate row beneath it (`App.tsx` originally rendered them as two stacked rows — a real layout bug, not a design choice, fixed by adding the `toolbar` prop here and deleting `App.tsx`'s own `.app-shell__toolbar-row`). `toolbar` is a plain `ReactNode` slot: omit it entirely (not just hide) when no plot exists yet, matching the zero-plots "Skeleton" frame having no toolbar at all.
+- Fixed 48px content height plus a 1px border, so the canvas below never shifts.
+- The Add Plot button is 32px and matches `LoadingIndicator`, so swapping them does not change the bar.
+- The bar holds no title or breadcrumb. Context lives on the tile.
 
-**Deliberate deviation from Figma (2026-08-04):** the raw frame specifies the label at `font-weight: 700` (Lato Bold); implemented at `600` per direct user request after seeing it rendered — one weight lighter than the literal spec. Noted here rather than silently matching Figma's stated value, since this is a real, intentional adjustment, not an oversight.
+## Accessibility
 
-## Usecase
+- `Source: gap`. No `role="banner"` and no landmark, so the bar is not reachable as a region.
+- The Add Plot button is inline markup rather than the `Button` component, so its focus and disabled
+  behaviour are defined twice. Consolidating them would fix both at once.
 
-- One `TopNav` per app shell, always visible — this is chrome, not a per-tile control.
-- `onAddPlot` here is specifically **"add a new empty tile to the canvas."** `STUDIO_PLAN.md`'s "Adding tiles" section already settled that this stays a single, low-ceremony action, not a wizard.
+## Content
 
-**Corrected 2026-08-04:** this is a distinct action from `Tile`'s own per-tile `onAddPlot` (opening a statistic picker for *that* tile, not built yet) — they were wrongly wired to the same handler in the first real app build, which meant clicking any existing empty tile added a whole new sibling tile instead of doing nothing. See `Tile.mdx` Usecase.
+One button, named for the outcome: "Add Plot".
 
-**Real gap (also confirmed 2026-08-04):** no design exists yet for what happens once the canvas already has one or more tiles and this button is clicked again — does it add a blank tile immediately, or open a picker first? Only the very-first-tile case is designed (the "Skeleton" frame). Currently implemented as "always add a blank tile," the simplest reading, not a confirmed final answer.
+## Use it
 
-## Code
+- Once, as the app's top bar.
 
-```tsx
-import { TopNav } from '@/components/TopNav/TopNav';
-import { Toolbar } from '@/components/Toolbar/Toolbar';
-import { LoadingIndicator } from '@/components/LoadingIndicator/LoadingIndicator';
+## Don't use it
 
-<TopNav
-  onAddPlot={() => openAddPlotFlow()}
-  toolbar={tiles.length > 0 ? <Toolbar viewMode={viewMode} onViewModeChange={setViewMode} /> : undefined}
-  loadingIndicator={isAnyTileLoading ? <LoadingIndicator onStop={stopAllLoading} /> : undefined}
-/>
-```
+- For per-tile actions. Those belong on the tile or in the toolbar.
+
+## Related
+
+- `Toolbar`, `LoadingIndicator` — its slots
+- `Button` — what the Add Plot button should become
+
+## Source files
+
+`TopNav.tsx` · `TopNav.css` · `TopNav.stories.tsx`

@@ -1,34 +1,70 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as LoadingIndicatorStories from './LoadingIndicator.stories';
+import * as Stories from './LoadingIndicator.stories';
 
-<Meta of={LoadingIndicatorStories} />
+<Meta of={Stories} />
 
 # LoadingIndicator
 
-Added 2026-08-05 directly on request, alongside a broader slider/refetch performance audit: dragging a param slider (e.g. Snapshot) gave no feedback that a real backend re-render was in flight, which read as "the app is stuck" rather than "the app is working." Named reference: Streamlit's own top-right "script is running" cue, which cycles through a small set of activity pictograms rather than a plain spinner.
+A 32px pill in the top nav while a fetch is in flight, with a way out.
 
-## Token
+`Source: code`
 
-Same dark-chrome pill pattern as `Plotly3DChart`'s "Clear pin" button (`--color-surface-chrome` background, `--color-border-subtle` border, `--font-label` for text) — a small floating control on a dark surface, not a new visual language. The activity glyph uses real emoji (🚴🏊🧹🏃) rather than hand-drawn pictogram SVGs — accurately drawing four distinct human-activity icons from scratch risks looking crude next to this app's otherwise carefully-sourced icon set, where a real pictogram (person on a bike/swimming/sweeping/running) is exactly what was asked for and emoji render that faithfully with zero new asset files.
+## Anatomy
 
-## Spec
+```
+.loading-indicator            32px, radius 9, surface/chrome, 1px border/subtle
+├── .loading-indicator__icon  aria-hidden, bounces on a 0.9s loop
+├── .loading-indicator__label Lato SemiBold 12, names what is loading
+└── .loading-indicator__stop  20px button, Lato SemiBold 10
+```
 
-<Canvas of={LoadingIndicatorStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-- Cycles through the 4 activity glyphs every 900ms via a plain `setInterval` — no dependency on any animation library, matching this app's existing CSS-keyframe-only approach (`Plotly3DChart`'s resize handling is the only other place with imperative timing logic, and that's a `ResizeObserver`, not a timer).
-- The glyph itself also gets a small CSS bounce (`@keyframes loading-indicator-bounce`) so it reads as "busy" even between icon swaps, disabled under `prefers-reduced-motion`.
-- **Stop button, real behavior**: there is no true network cancellation (no `AbortController` anywhere in this app - see `App.tsx`'s own `requestSeqRef` comment). Instead, `onStop` bumps every currently-loading tile's request sequence number and clears its `loading` flag - whatever response the abandoned request eventually returns is silently discarded when it lands, since it no longer matches the current sequence number. The user's own stated need ("stop the loading, if nothing is happening or it's taking long") is about the *UI* no longer looking stuck, not about the server-side request actually terminating - this satisfies that without threading `AbortSignal` through all 13 of `App.tsx`'s tile loaders.
+## Tokens
 
-## Usecase
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-chrome` | Pill fill |
+| `--color-border-subtle` | Pill and Stop borders |
+| `--color-text-muted` | Label |
+| `--color-text-primary` | Stop label |
+| `--color-surface-toggle-active` | Stop hover |
 
-- Rendered in `TopNav`'s new `loadingIndicator` slot, left of "Add Plot", whenever `App.tsx`'s `isAnyTileLoading` (`tiles.some(t => 'loading' in t && t.loading)`) is true - see `TopNav.mdx`'s `WithLoadingIndicator` story.
-- Root cause this was built to make visible, not just decorate: every one of `App.tsx`'s 13 `refetchXXXTile` functions fires a real backend round-trip on every parameter change. Before this session's fix, that fired on *every tick* of a slider drag (see `Slider.mdx`'s debounce fix) - this indicator is the honest signal for however long that round-trip (now debounced to one per drag) actually takes.
+## Behaviour
 
-## Code
+- Sits in the top nav, matching the Add Plot button's 32px height so the bar never changes height.
+- Stop discards whatever response is in flight and clears every tile's loading state. The request itself is
+  not cancelled, which is invisible from the interface.
+- The bounce respects `prefers-reduced-motion` and stops entirely when reduced motion is set.
 
-```tsx
-import { LoadingIndicator } from '@/components/LoadingIndicator/LoadingIndicator';
+## Accessibility
 
-<LoadingIndicator onStop={() => stopAllLoading()} />
-```
+- The animated glyph is `aria-hidden`, so the label carries the meaning.
+- `Source: gap`. The pill has no `role="status"` and no `aria-live`, so its appearance is silent to a screen
+  reader. `Toast` already does this correctly and is the model to copy.
+
+## Content
+
+Name what is loading, not that something is: "Loading Power Spectrum…", not "Loading…". One trailing
+ellipsis, no exclamation.
+
+## Use it
+
+- Any fetch long enough to notice, which in practice is every plot request.
+
+## Don't use it
+
+- Inside a tile. A tile shows its own loading state in place.
+- For a failure. Use the component's inline error state.
+
+## Related
+
+- `TopNav` — its only host
+- `Toast` — the confirmation counterpart, and the accessibility model
+
+## Source files
+
+`LoadingIndicator.tsx` · `LoadingIndicator.css` · `LoadingIndicator.stories.tsx`

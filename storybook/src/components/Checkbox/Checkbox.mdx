@@ -1,50 +1,84 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as CheckboxStories from './Checkbox.stories';
+import * as Stories from './Checkbox.stories';
 
-<Meta of={CheckboxStories} />
+<Meta of={Stories} />
 
 # Checkbox
 
-Real source: Figma nodes `1055:41` (unchecked, "Compare mode") and `1055:75` (checked, "Show symbolic-regression fit overlay") — both states confirmed directly, not inferred.
+An independent on/off setting. One per line, label to the right of the box.
 
-## Token
+`Source: figma:1019:37`
 
-- `--color-border-subtle` — unchecked box border
-- `--color-accent-gradient-start` → `--color-accent-gradient-end` — checked box fill, the same gradient as `Button` and `Slider`
-- `--color-text-primary` — label (both states — the real frames show the same label color whether checked or not, not dimmed-then-brightened)
-- `--font-label` (Lato) — label
+## Anatomy
 
-## Spec
+```
+button.checkbox
+├── .checkbox__box     18x18, radius 5, 1px border/subtle
+│   └── .checkbox__check   the tick, only when checked
+└── .checkbox__label   Lato Regular 13
+```
 
-<Canvas of={CheckboxStories.Unchecked} />
-<Canvas of={CheckboxStories.Checked} />
+## Playground
+
+<Canvas of={Stories.Unchecked} />
 <Controls />
 
-- 18×18 box, 5px radius.
-- Unchecked: transparent fill, 1px border.
-- Checked: no border, filled with the accent gradient, a white ✓ (Inter Semibold 12px) centered.
-- 10px gap to the label.
+## Variants and states
 
-**The Canvas above renders "Checkbox label," not "Compare mode"/"Show symbolic-regression fit overlay."** This story demonstrates the control's mechanics, not confirmed copy — the real label text is documented in Usecase below instead.
+<Canvas of={Stories.Checked} />
+<Canvas of={Stories.Disabled} />
 
-**Still open:**
-- No indeterminate state is shown or implied by either real frame.
+Checked replaces the border with the accent gradient and shows a tick in `text/emphasis`. Disabled drops the
+whole control to 50% opacity and sets `cursor: not-allowed`.
 
-**Added 2026-08-04, real usage, not sourced from Figma:** a `disabled` prop (dimmed, `cursor: not-allowed`) — `UnderlyingHalos`'s "Show all available fields (raw)" checkbox needs to disable itself when the real catalog has no `raw_frame` (matches `app.py`'s own `disabled=catalog.raw_frame is None` on the identical control).
+## Tokens
 
-## Usecase
+| Token | Applies to |
+| --- | --- |
+| `--color-border-subtle` | Unchecked box border |
+| `--color-accent-gradient-start` → `--color-accent-gradient-end` | Checked box fill |
+| `--color-text-emphasis` | The tick |
+| `--color-text-primary` | Label |
+| `--font-label` | Label |
+| `--font-ui` | The tick glyph |
 
-- Real, confirmed usages: SFR History's "Compare mode" toggle and "Show symbolic-regression fit overlay" toggle, both inside `ParamsSidebar`; `UnderlyingHalos`'s "Show all available fields (raw)" toggle.
-- Use for any independent on/off setting inside a params panel. `STUDIO_PLAN.md`'s roadmap row 3 (symbolic-regression overlay) and Compare mode (mentioned throughout `STUDIO_PLAN.md`'s "Adding tiles" section) are both real, already-planned features this control serves directly — not a generic checkbox added speculatively.
+## Behaviour
 
-## Code
+- Renders a `button`, not an `input`, so the whole row including the label is one hit target.
+- Clicking anywhere on the control toggles it. There is no separate label-click behaviour to get wrong.
+- The box never changes size between states, so a column of checkboxes does not shift when one is ticked.
 
-```tsx
-import { useState } from 'react';
-import { Checkbox } from '@/components/Checkbox/Checkbox';
+## Accessibility
 
-function CompareModeToggle() {
-  const [checked, setChecked] = useState(false);
-  return <Checkbox label="Compare mode" checked={checked} onChange={setChecked} />;
-}
-```
+- `Source: gap`. It is a `button` with no `role="checkbox"` and no `aria-checked`, so a screen reader
+  announces it as a plain button and never reports its state. Adding both attributes is a two-line fix and is
+  the highest-value change on this component.
+- Keyboard activation works, because it is a real button.
+- Disabled is visual only. It needs `aria-disabled` alongside the opacity change.
+- Label contrast is `text/primary` on `surface/chrome`, comfortably above 4.5:1.
+
+## Content
+
+Sentence case, stating what being on means: "Compare mode", "Log scale (X)", "Overlay VIDE void catalog".
+Never phrase it as a question, and never negate it: "Hide legend" rather than "Don't show legend".
+
+## Use it
+
+- An independent setting that does not exclude any other setting.
+- Turning an overlay or a mode on and off inside a params sidebar.
+
+## Don't use it
+
+- For one of several mutually exclusive options. Use `Radio`.
+- For a single value from a longer list. Use `SelectField`.
+- As a list-row selector. This component has no indeterminate state.
+
+## Related
+
+- `Radio` — mutually exclusive options
+- `ParamsSidebar` — its usual host
+- **Patterns / Statistic sidebar** — where Compare mode appears
+
+## Source files
+
+`Checkbox.tsx` · `Checkbox.css` · `Checkbox.stories.tsx`

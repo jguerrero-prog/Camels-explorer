@@ -1,44 +1,78 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as ToolbarStories from './Toolbar.stories';
+import * as Stories from './Toolbar.stories';
 
-<Meta of={ToolbarStories} />
+<Meta of={Stories} />
 
 # Toolbar
 
-The tool row that sits in the header between the folder/project name and "Add Plot" — real across all three frames it appears in (Figma nodes `1078:30`, `1068:48`, `1046:40`), identical every time, so this is a stable, confirmed component, not a one-off mock.
+Nine tools that act on the focused tile, plus the grid and stacked view switch.
 
-## Token
+`Source: figma:1078:30`
 
-- `--color-border-subtle` — the active-tool background tint
-- `--color-surface-toggle` / `--color-surface-toggle-active` — the grid/stacked view-mode toggle's own background and its selected option
+## Anatomy
 
-## Spec
+```
+.toolbar                     row, 4px gaps
+├── .toolbar__tool[]           36px, radius 8, 18px icon; active takes border/subtle
+│   └── .toolbar__popover-anchor  centred 12px below, for tools that open one
+├── .toolbar__spacer           8px
+└── .toolbar__viewmode         padding 2, radius 8, surface/toggle
+    └── __viewmode-option[]    32px, radius 6; active takes surface/toggle-active
+```
 
-<Canvas of={ToolbarStories.Playground} />
+Tools in order: annotate, arrow, note, hide, ratio/diff, ruler, linked brushing, copy provenance, copy as
+code.
+
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-Left to right: **Annotate → Arrow → Note → Hide → Ratio/diff → Ruler → Linked brushing → Copy provenance → Copy as code** (nine 36×36 tools, 18×18 icons, 8px radius) → an 8px spacer → a grid/stacked **view-mode toggle** (32×32 options inside a padded, rounded container).
+## Variants and states
 
-**Real addition (2026-08-06, direct user feedback): Hide.** Opens a popover (`HidePopover.mdx`) with 4 checkboxes - Annotations, Arrows, Notes, Param readouts - plus a This-panel/All-panels scope switch. Same `toolbar__tool-wrap`/`toolbar__popover-anchor` pattern as Ratio/diff and Copy as code (a real popover tool, not a toggle-mode one - no `hideActive` prop, the button's own look never changes).
+<Canvas of={Stories.StackedActive} />
 
-**Real fix (2026-08-06, direct user feedback): the AI agent icon was removed.** It was a named-but-unwired skeleton slot from the very first pass of this component and never gained real behavior - rather than continue carrying a permanently-inert button (and the divider that only existed to separate it from the real tools), both were deleted outright. Every remaining tool listed above is fully wired to real behavior in `App.tsx` - this is no longer a skeleton-level component.
+Tools are either momentary actions or sticky modes. A sticky tool stays filled while active, which is what
+`annotateActive`, `arrowActive` and `noteActive` drive.
 
-- The real `tool-ratio-diff` icon in Figma had small chevron overlays baked into its own SVG - simplified to the same plain icon-button treatment as its siblings (a deliberate choice, not a missed detail), then further reworked 2026-08-06 (removed the chevron, adjusted the glyph's own scale) after direct feedback that it read visibly smaller than the rest of the row.
+## Tokens
 
-## Usecase
+| Token | Applies to |
+| --- | --- |
+| `--color-border-subtle` | Active tool fill, divider |
+| `--color-surface-toggle` | Viewmode container |
+| `--color-surface-toggle-active` | Selected viewmode |
 
-- **Resolved 2026-08-05:** lives inside `TopNav`'s header row via its real `toolbar` prop (see `TopNav.mdx`) — `App.tsx` originally rendered this as a second row beneath `TopNav`, a real layout bug fixed once the real merged-header frame (Figma node `1012:1124`) confirmed it belongs in the same row.
-- `viewMode` should be lifted to whatever owns `Viewer` (see `Viewer.mdx`) — this component doesn't own view-mode state itself, it just displays/toggles it.
+## Behaviour
 
-## Code
+- Tools operate on the focused tile, so the focused ring is a prerequisite, not decoration.
+- A tool that opens a popover anchors it centred 12px below itself.
+- The viewmode switch changes the canvas layout: grid puts two tiles per row, stacked gives each full width.
 
-```tsx
-import { useState } from 'react';
-import { Toolbar } from '@/components/Toolbar/Toolbar';
-import type { ViewMode } from '@/components/Toolbar/Toolbar';
+## Accessibility
 
-function Header() {
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
-  return <Toolbar viewMode={viewMode} onViewModeChange={setViewMode} />;
-}
-```
+- Tools carry `aria-label` and `aria-pressed`, so icon-only buttons announce purpose and mode state.
+- `Source: gap`. No `role="toolbar"` and no arrow-key navigation between tools, so a keyboard user tabs
+  through all eleven controls. No visible focus ring.
+
+## Content
+
+Labels are verbs: "Annotate", "Add note", "Hide series", "Copy as code".
+
+## Use it
+
+- Once, inside `TopNav`.
+
+## Don't use it
+
+- For actions that do not need a focused tile.
+
+## Related
+
+- `HidePopover`, `RatioDiffPopover`, `CopyAsCodePopover` — what its tools open
+- `AnnotationOverlay`, `ArrowOverlay`, `NoteOverlay`, `LinkedBrushOverlay` — what its modes draw
+- **Chrome / Viewer** — what the viewmode switch changes
+
+## Source files
+
+`Toolbar.tsx` · `Toolbar.css` · `Toolbar.stories.tsx`

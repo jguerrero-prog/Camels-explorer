@@ -1,0 +1,181 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Reference/Decision log" />
+
+# Decision log
+
+Append-only. One entry per decision a future reader could plausibly try to reverse. Component pages link
+here; they never restate an entry.
+
+Write an entry when a choice rules something out, contradicts a spec, or rejects the obvious answer for a
+reason that is not visible in the result. Everything else is just the component.
+
+Entries below were migrated out of inline code comments, which is where this reasoning used to live.
+
+---
+
+## DR-001 · Invert the Add Plot button
+
+**Status** accepted · **Affects** `TopNav`, `add-plot/surface`, `add-plot/text`
+
+**Context.** Every control in the app sits on a dark surface. The single most important action needs to be
+findable without enlarging it.
+
+**Decision.** The nav Add Plot button uses a solid white surface with dark text, the only inverted control in
+the interface. It gets its own token pair rather than reusing text and surface tokens, because those are
+dark-surface-with-light-text and this is the opposite pairing.
+
+**Rejected.** The accent gradient, which is used by the modal's confirm button. Two gradient buttons on
+screen at once made neither read as primary.
+
+---
+
+## DR-002 · Use a dedicated blue for the focused tile ring
+
+**Status** accepted · **Affects** `PlotTile`, `border/selected`
+
+**Context.** Toolbar actions operate on the focused tile, so focus must be visible before those actions are
+used.
+
+**Decision.** A 1px ring in `border/selected` (`#3B82F6`), replacing the tile's own border rather than adding
+to it, so selection reads as a colour change and not an added thickness.
+
+**Rejected.** A translucent white ring: its contrast depended on whatever chart sat behind it, which is
+unreliable by construction. A brand-purple ring: competed with the accent gradient.
+
+---
+
+## DR-003 · Make the note card opaque
+
+**Status** accepted · **Affects** `NoteOverlay`, `note/surface`, `note/border`, `note/text`
+
+**Context.** Notes are placed over charts and are expected to survive being screenshotted into a slide.
+
+**Decision.** A flat, opaque card in `brand-deep-crimson` with white text, verified at 9.3:1 contrast.
+
+**Rejected.** A translucent warm-amber card. A translucent fill's real contrast depends on what sits behind
+it, so it could not be verified at all.
+
+---
+
+## DR-004 · Plot tiles and note cards are square-cornered
+
+**Status** accepted · **Affects** `PlotTile`, `NoteOverlay`, `AnnotationOverlay`
+
+**Context.** Rounded corners and shadows both signal "floating object". Applied to everything, they flatten
+the hierarchy.
+
+**Decision.** A populated plot tile has `border-radius: 0`, overriding `Tile`'s 12px. Note cards and
+annotation callouts are square and shadowless: they sit on the page rather than above it.
+
+**Rejected.** A single radius across every surface, which left nothing able to signal elevation.
+
+---
+
+## DR-005 · Render the select menu in a portal
+
+**Status** accepted · **Affects** `SelectField`, `MultiSelect`, `ChartModeDropdown`
+
+**Context.** Select fields appear inside the add-plot modal's scrollable fields area and inside the params
+sidebar, both of which clip overflow.
+
+**Decision.** The menu renders in a `document.body` portal at `position: fixed`, positioned from the
+trigger's bounding rect. It closes on scroll rather than repositioning, so it cannot visually detach from a
+trigger that moved.
+
+**Rejected.** Absolute positioning inside the field wrapper, which a scrollable ancestor clipped.
+
+---
+
+## DR-006 · Force always-visible scrollbars in long menus
+
+**Status** accepted · **Affects** `SelectField`, `ParamsSidebar`
+
+**Context.** Field pickers can hold well over a hundred options. On macOS, overlay scrollbars are invisible
+until the user is already scrolling, so a long list looks complete.
+
+**Decision.** Style `::-webkit-scrollbar` alone, which forces the space-reserving always-visible thumb, and
+pair it with a bottom fade that renders only while the list is scrolled short of its end.
+
+**Rejected.** The standard `scrollbar-width` and `scrollbar-color` properties. Setting them alongside
+`::-webkit-scrollbar` makes Chromium fall back to the overlay scrollbar, which is the behaviour being fixed.
+
+---
+
+## DR-007 · The canvas is its own surface
+
+**Status** accepted · **Affects** `Viewer`, `surface/canvas`
+
+**Context.** The area behind tiles originally used the same token as the tiles themselves, so a tile had no
+edge against its background.
+
+**Decision.** `surface/canvas` (`--neutral-960`) is darker than `surface/content` and distinct from
+`surface/chrome`. Three surfaces, three roles.
+
+---
+
+## DR-008 · Chrome is 48px, not 64px
+
+**Status** accepted · **Affects** `TopNav`, `IconRail`, `LoadingIndicator`
+
+**Context.** The shell consumed more vertical and horizontal space than the plots it framed.
+
+**Decision.** Top nav height and icon rail width are both 48px. Children scaled proportionally: rail items
+and the Add Plot button are 32px, rail icons 16px, nav button text 13px.
+
+---
+
+## DR-009 · Fix the add-plot modal's field area height
+
+**Status** accepted · **Affects** `AddPlotModal`
+
+**Context.** The Curated and Custom tabs have very different content heights, so the dialog resized when
+switching tabs.
+
+**Decision.** The fields area is a fixed 260px of content height, measured from the Curated tab's own settled
+height. Custom scrolls within it.
+
+**Rejected.** Letting the dialog hug its content, which moved the tab row and the footer under the cursor.
+
+---
+
+## DR-010 · Replace the min/max slider pair with a range filter
+
+**Status** accepted · **Affects** `RangeFilterControl`, Custom plot pattern
+
+**Context.** Each catalog filter was two full-width sliders, so three filters filled the modal.
+
+**Decision.** One `RangeFilterControl` per field: typeable min and max boxes above a dual-thumb track,
+matching the shape FlatHUB itself uses.
+
+---
+
+## DR-011 · Withdraw click-to-pin in 3D scenes
+
+**Status** accepted · **Affects** `Plotly3DChart`, `DensityFieldChart`, `ParticleCloudChart`
+
+**Context.** Clicking a 3D scene pinned a marker and read out its coordinates. In a volume render the click
+also has a scalar value worth reading; in a particle cloud it does not, so the pin showed coordinates alone.
+Pinning also competed with orbiting for the same click.
+
+**Decision.** `pinEnabled` defaults to `false` and every call site passes `false` explicitly, so the feature
+cannot return by omission. Measurement in a 3D scene is the Ruler tool's job.
+
+**Rejected.** Keeping it behind a per-caller toggle. The click conflict is in the interaction model, not in
+the callers, so a toggle would have left the same problem switchable.
+
+---
+
+## Template
+
+```
+## DR-0nn · <the decision, as an imperative>
+
+**Status** accepted | superseded by DR-0nn · **Affects** <components, tokens>
+
+**Context.** The constraint that forced a choice. Two sentences.
+
+**Decision.** What was chosen, in present tense.
+
+**Rejected.** The alternative and why it lost. The most valuable field.
+```

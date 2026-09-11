@@ -4,7 +4,7 @@ import { PlotChart } from './PlotChart';
 import { ChartModeDropdown } from '../ChartModeDropdown/ChartModeDropdown';
 
 const meta: Meta<typeof PlotChart> = {
-  title: 'Fields/PlotChart',
+  title: 'Charts/PlotChart',
   component: PlotChart,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '520px', height: '360px' }}><Story /></div>],

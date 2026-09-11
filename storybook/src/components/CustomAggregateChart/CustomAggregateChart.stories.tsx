@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { CustomAggregateChart } from './CustomAggregateChart';
 
 const meta: Meta<typeof CustomAggregateChart> = {
-  title: 'Fields/CustomAggregateChart',
+  title: 'Charts/CustomAggregateChart',
   component: CustomAggregateChart,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '520px', height: '360px' }}><Story /></div>],

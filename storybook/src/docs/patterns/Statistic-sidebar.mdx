@@ -1,0 +1,132 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Patterns/Statistic sidebar" />
+
+# Statistic sidebar
+
+One shell, configured per statistic. This pattern replaces 21 near-identical component pages.
+
+`Source: code`
+
+## What it is
+
+Every summary statistic uses the same sidebar: `ParamsSidebar` provides the shell, and the statistic supplies
+the controls that go inside it. Only `ParamsSidebar` has a stylesheet. The 21 statistic and dataset sidebars
+have none, because they contribute no visual decisions, only a list of fields.
+
+That is the whole pattern. If you are adding a statistic, you are choosing controls, not designing a panel.
+
+## Anatomy
+
+```
+ParamsSidebar                 280px, surface/chrome, 1px right border
+├── header        padding 0 20, gap 18
+│   ├── title     Inter Semi Bold 18, the statistic name
+│   └── divider   1px border/default
+├── scroll        flex 1, gap 18, padding 0 8 0 20, scrolls with a bottom fade
+│   └── …         the statistic's controls, in order
+└── footer        padding 0 20, pinned, never scrolls
+    └── Button    secondary, "Remove plot"
+```
+
+## The core three
+
+Almost every statistic opens with the same three controls, in this order.
+
+| Control | Component | Notes |
+| --- | --- | --- |
+| Suite | `SelectField` | Constrained to the suites that have data for this statistic |
+| Set | `SelectField` | Labelled `LH · Latin Hypercube`, expanding the acronym once |
+| Realization | `NumberStepper` | Caption carries the valid range, for example `0–999` |
+
+`Field PDF` is the single exception: it has a Suite but no Set, Realization or Snapshot, because the
+published data is per-suite rather than per-run.
+
+## Configurations
+
+What each statistic adds after the core three. Harvested from the running application, so this table is
+verifiable by opening the app rather than by reading code.
+
+| Statistic | Controls it adds |
+| --- | --- |
+| Power Spectrum | Compare mode, Snapshot, Grid size, Mass Assignment Scheme, Threads, Particle type, k range, Overlay linear-theory Pk (z=0, from ICs) |
+| Halo Mass Function | Compare mode, Snapshot, Min reduced mass [Msun/h], Max reduced mass [Msun/h], Bins |
+| Stellar Mass Function | Compare mode, Snapshot, Min stellar mass [Msun/h], Max stellar mass [Msun/h], Bins |
+| SFR History | Compare mode, z min, z max, Bins, Overlay symbolic-regression fit (real, IllustrisTNG-trained), Ωm, σ8, A_SN1 (galactic wind energy), A_AGN1 (BH feedback energy) |
+| Galaxy Scaling Relations | Snapshot, Min stellar mass [Msun/h], Max stellar mass [Msun/h], Bins |
+| Baryon Fraction | Compare mode, Snapshot, Min reduced mass [Msun/h], Max reduced mass [Msun/h], Bins |
+| 3D Density Field | Snapshot, Field, Grid resolution, Iso-surfaces, Opacity, Overlay VIDE void catalog |
+| 3D Particle Cloud | Snapshot, Particles to show |
+| 2D Field Map | Field, Group by, Field group control |
+| X-ray Halo Profiles | None. Core fields only. |
+| X-ray Photon Spectrum | None. Core fields only. |
+| Halo Gas Profiles | Field, Snapshot, Highlight halo (by mass rank, 1 = most massive) |
+| Color-Mass Diagram | Snapshot, SPS model, Spectra, Filter family, Band 1, Band 2 |
+| Bispectrum | Compare mode, Field, k range, Triangle shape (mu = cos angle between k1, k2) |
+| Field PDF | Field, Grid resolution, Redshift |
+| Lyman-alpha Spectrum | Snapshot, Sightline |
+| Spread Metric | None. Core fields only. |
+| Group Matching | None. Core fields only. |
+| AHF Radial Profiles | Snapshot, Halo (by Mvir rank, 1 = most massive) |
+
+Four further sidebars serve datasets rather than summary statistics and follow the same pattern:
+`BlackholeMergersSidebar`, `CamelsSamSidebar`, `ICParticlesSidebar` and `SimulationParametersSidebar`.
+
+## Rules
+
+- **Order is fixed.** Core three, then data selection (Field, Chart type), then parameters, then overlays.
+- **A divider separates an overlay group.** `SFR History` and `3D Density Field` both use one before their overlay toggle.
+- **Captions carry ranges and caveats**, at Lato 11 muted, directly under the control they qualify.
+- **The footer never scrolls.** Remove plot stays reachable regardless of how many controls a statistic has.
+- **Long option labels wrap rather than truncate** inside a segmented control. The `k range` options are the worst case.
+
+## Tokens
+
+Every token here belongs to `ParamsSidebar`. A statistic configuration sets none of its own.
+
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-chrome` | The panel, and the base of the bottom fade |
+| `--color-border` | The 1px right border, and the header divider |
+| `--color-border-subtle` | The scrollbar thumb, at 70% |
+| `--color-text-primary` | The title |
+| `--font-ui` | The panel |
+
+Fixed measurements: 280px wide, 24px vertical padding, 20px horizontal inset, 18px between controls, and a
+5px scrollbar. `Source: gap` for all of them, as no spacing tokens exist. See
+**Foundations / Elevation, radius and spacing**.
+
+## Behaviour
+
+- The panel is a column: a fixed header, a scrolling middle, and a pinned footer. Only the middle scrolls,
+  so Remove plot stays reachable however many controls a statistic has.
+- The scrolling area fades out at the bottom rather than cutting off, so it is visible that more controls
+  follow.
+- Horizontal padding is asymmetric, 20px left and 8px right, which reserves room for the scrollbar so it
+  never sits flush against a control.
+- Only one sidebar shows at a time: the one for the focused tile. Changing a control refetches that tile.
+- A statistic's controls render in the order its configuration lists them. Nothing reorders them.
+
+## Accessibility
+
+- Composed entirely from the shared fields, so every control keeps its own label and keyboard behaviour.
+  A configuration cannot introduce an accessibility problem without introducing a new control.
+- `Source: gap`. The panel is a plain `div`: no `role="complementary"`, no accessible name, and no heading
+  level on the title, so it is not reachable as a region and does not appear in a heading outline. Focus is
+  not moved into the sidebar when the focused tile changes, so a keyboard user is not told the controls now
+  belong to a different plot.
+
+## Use it
+
+- Any new summary statistic. Add a configuration row above rather than a new component.
+
+## Don't use it
+
+- For the Custom tab's controls. Those select fields from a catalog rather than parameters for a computation. Use the Custom plot pattern.
+- For a panel with no Remove plot action. That is not this pattern.
+
+## Related
+
+- `ParamsSidebar` — the shell
+- `SelectField`, `NumberStepper`, `Slider`, `Checkbox`, `Radio` — the controls it composes
+- `PlotTile` — what the sidebar's settings drive

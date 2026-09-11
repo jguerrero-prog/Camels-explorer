@@ -1,39 +1,77 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as ArrowOverlayStories from './ArrowOverlay.stories';
+import * as Stories from './ArrowOverlay.stories';
 
-<Meta of={ArrowOverlayStories} />
+<Meta of={Stories} />
 
 # ArrowOverlay
 
-The toolbar's Arrow tool (added 2026-08-06, no Figma design - requested directly: "the ability to add an arrow at any length"). Two clicks (start, then end) draw a straight arrow of arbitrary length/direction. Distinct from Annotate: an arrow points AT something without necessarily saying anything about it - no text, no callout.
+An arrow drawn on a chart from two clicks. One SVG layer holds every arrow on a tile.
 
-## Token
+`Source: code`
 
-- `--color-accent-gradient-end` — the line/arrowhead color
+## Anatomy
 
-## Spec
+```
+svg.arrow-overlay                   fills the tile, z-index 4
+├── defs > marker#arrow-overlay-head    8×8 filled triangle, orient auto
+├── line.arrow-overlay__line            2.5px stroke, markerEnd = the head
+└── circle.arrow-overlay__draft-point   r=4, the first click while awaiting the second
+```
 
-<Canvas of={ArrowOverlayStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-An absolutely-positioned SVG spanning the whole chart area, one `<line>` per real arrow with a `<marker>` arrowhead. Coordinates are set directly on the SVG elements as percentages (`x1="30%"`, not a `viewBox` + transform) - straight lines stay straight under independent x/y-axis percentage scaling, and this avoids needing the chart area's actual pixel size at render/draw time. Clicking a drawn arrow deletes it (no separate delete button/handle, since the line itself is the only real hit target). `draftA` (the first click, awaiting the second) renders as a small dot - real visible feedback that the start point registered before the arrow itself exists.
+## Variants and states
 
-`AwaitingSecondClick` shows that in-between state directly, without needing an actual first click in the docs canvas.
+<Canvas of={Stories.AwaitingSecondClick} />
 
-## Usecase
+There are only two states: arrows, and arrows plus a draft point. The draft point is what tells the user
+the first click registered, since nothing else on screen changes until the second.
 
-- Rendered by `App.tsx`'s `renderAnnotationOverlay(tile)` alongside `AnnotationOverlay`/`NoteOverlay`/`LinkedBrushOverlay` for the same tile - all four share one `annotationOverlay` slot on `PlotTile`.
-- Only wired when Arrow mode is on (`App.tsx`'s `arrowMode`, part of the shared `activeTool` state - only one click-driven tool owns the next chart click at a time).
-- `PlotTile`'s `onChartClick` routes both the first and second click through `App.tsx`'s `handleChartAreaClick`, which holds the pending start point (`arrowDraftA`) as a single global value (only one tile can be mid-arrow at once).
+## Tokens
 
-## Code
+| Token | Applies to |
+| --- | --- |
+| `--color-accent-gradient-end` | Line stroke, arrowhead fill, draft point |
 
-```tsx
-import { ArrowOverlay } from '@/components/ArrowOverlay/ArrowOverlay';
+A single flat colour rather than the accent gradient: a 2.5px stroke and an 8px arrowhead cannot carry one.
 
-<ArrowOverlay
-  arrows={arrowsByTile[tile.id] ?? []}
-  onDelete={(id) => removeArrow(tile.id, id)}
-  draftA={arrowDraftA?.tileId === tile.id ? arrowDraftA : null}
-/>
-```
+## Behaviour
+
+- Endpoints are fractional (`xFracA`/`yFracA` to `xFracB`/`yFracB`) and set as percentages, so an arrow
+  keeps its meaning when the tile resizes.
+- Clicking a line deletes that arrow, and the click is stopped so it does not also reach the chart.
+- The arrowhead is a shared `marker` definition, so every arrow points the same way at any angle.
+- `hidden` on an arrow is honoured by the Hide popover's Arrows category, not here.
+
+## Accessibility
+
+- `Source: gap`. The least accessible overlay in the application: the SVG and its shapes carry no role,
+  label or title; there is no keyboard path to draw an arrow or delete one; and click-to-delete happens
+  immediately, with no confirmation and no undo.
+
+## Content
+
+None. The arrow carries no text, which is the reason to pair it with an annotation or a note.
+
+## Use it
+
+- Pointing at a feature where a pin would sit on top of the data.
+- Connecting a note to the thing it refers to.
+
+## Don't use it
+
+- To carry words. Use `AnnotationOverlay` or `NoteOverlay`.
+- As a measurement. The arrow records no length or value.
+
+## Related
+
+- `AnnotationOverlay`, `NoteOverlay` — the rest of the annotation family
+- `HidePopover` — hides all arrows at once
+- `Toolbar` — the arrow mode
+
+## Source files
+
+`ArrowOverlay.tsx` · `ArrowOverlay.css` · `ArrowOverlay.stories.tsx`

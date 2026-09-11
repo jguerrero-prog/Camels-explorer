@@ -1,0 +1,49 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="Reference/Content and units" />
+
+# Content and units
+
+This is a scientific interface, so wording and number formatting carry meaning. A label that drops its unit
+is a bug, not a style choice.
+
+## Labels
+
+- **Sentence case.** "Grid size", "Mass Assignment Scheme", "Particle type". Not Title Case, not ALL CAPS.
+- **Proper nouns keep their casing.** IllustrisTNG, SIMBA, Astrid, Swift-EAGLE. Never "Illustristng".
+- **Acronyms stay uppercase.** LH, CV, 1P, SFR, AHF, MAS, CMD, SPS.
+- **Expand an acronym once, in the option.** `LH · Latin Hypercube`, joined by a middle dot, not a hyphen or a parenthesis.
+- **Units go in the label, in square brackets.** `Min stellar mass [Msun/h]`, `Vmax [km/s]`. Not in the value, and never omitted.
+
+## Numbers
+
+| Quantity | Format | Example |
+| --- | --- | --- |
+| Counts | Thousands separators | `2,927,443,277` |
+| Masses | Scientific, one decimal | `1.0e+10` |
+| Redshift | Two decimals | `0.00` |
+| Metallicity and fractions | Four decimals | `0.0231` |
+| Snapshot | Integer, no padding in the UI, zero-padded in filenames | `33` in a slider, `groups_033.hdf5` on disk |
+| Realization | Integer, with its valid range as the caption | `0`, caption `0–999` |
+
+Any column of numbers uses `--font-mono` with `tabular-nums` so digits align.
+
+## States
+
+Write the state, not an apology.
+
+| State | Pattern | Example |
+| --- | --- | --- |
+| Empty | Name the action that fills it | "Add a plot or simulation" |
+| Loading | Name what is loading | "Loading Power Spectrum…" |
+| Error, recoverable | What failed, then what to do | "Couldn't reach the API. Check that the backend is running on port 8010." |
+| Error, blocked | What is missing | "Pick a Type and the required fields for this chart type to continue." |
+| Result count | Filtered over total | "Filtered to 1,532,020,422 out of 2,927,443,277 total rows" |
+
+No "Oops", no "Something went wrong", no exclamation marks. If a message cannot say what to do next, it
+should say what is true instead.
+
+## Buttons
+
+Name the outcome, not the mechanism. "Add Plot", "Remove plot", "Filter settings". A button that opens a
+modal is named for what the modal achieves.

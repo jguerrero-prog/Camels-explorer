@@ -4,7 +4,7 @@ import { XrayPhotonSpectrumSidebar } from './XrayPhotonSpectrumSidebar';
 import type { XrayPhotonSpectrumParams } from './XrayPhotonSpectrumSidebar';
 
 const meta: Meta<typeof XrayPhotonSpectrumSidebar> = {
-  title: 'Sections/XrayPhotonSpectrumSidebar',
+  title: 'Statistic sidebars/XrayPhotonSpectrumSidebar',
   component: XrayPhotonSpectrumSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '480px' }}><Story /></div>],

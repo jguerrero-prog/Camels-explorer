@@ -1,52 +1,35 @@
-import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as HaloGasProfilesSidebarStories from './HaloGasProfilesSidebar.stories';
+import { Meta, Canvas } from '@storybook/addon-docs/blocks';
+import * as Stories from './HaloGasProfilesSidebar.stories';
 
-<Meta of={HaloGasProfilesSidebarStories} />
+<Meta of={Stories} />
 
 # HaloGasProfilesSidebar
 
-Halo Gas Profiles' real per-tile sidebar, from `app.py`'s own `elif statistic == "Halo Gas Profiles":` block, added 2026-08-05 alongside `XrayHaloProfilesSidebar`.
+A configuration of the **Statistic sidebar** pattern, for Halo Gas Profiles.
 
-## Token
+`Source: code`
 
-Composed entirely from `SingleRealizationFields`/`SelectField`/`Slider`/`Button` — no tokens of its own.
+This component owns no styles. It chooses which controls go inside `ParamsSidebar` and nothing else, so the
+shell, its scroll behaviour, its fade and its pinned footer are all documented once in the pattern rather
+than here.
 
-## Spec
+**Read the pattern first:** Patterns / Statistic sidebar.
 
-<Canvas of={HaloGasProfilesSidebarStories.Playground} />
-<Controls />
+## Its configuration
 
-- Suite/Set/Realization: `SingleRealizationFields` — one of `app.py`'s own `SINGLE_REALIZATION_STATISTICS`, so no Compare mode. `onepScheme="legacy"` (added 2026-08-08, issue #26) — this product's real 1P folders use a different naming convention (no "p", 6 params, 11 variations -5..5) than the other 1P-aware statistics in this app. Selecting Set → 1P now shows the real parameter names (Ωm, σ8, A_SN1, A_SN2, A_AGN1, A_AGN2 — identified 2026-08-08, issue #51's own follow-up investigation, via a real max-halo-mass spread test cross-checked against Lau et al. 2025 arXiv:2412.04559) rather than generic "p1"–"p6" labels — but still no per-suite real-*value* lookup at each variation step, unlike the modern scheme's Galaxy Scaling Relations/Color-Mass Diagram (no output file publishes that for this scheme).
-- Field: `SelectField`, options from `GET /api/metadata`'s `profiles_fields` (`Gas Density`/`Thermal Pressure`/`Metallicity`/`Temperature` — real `PROFILES_FIELD_INDEX` keys).
-- Snapshot: a `Slider`, `0` to `n_snapshots - 1` — this product uses the same 34-snapshot Pk/SFRH schedule (unlike X-ray Halo Profiles, which is fixed to one published snapshot and has no Snapshot control at all).
-- Highlight halo (by mass rank, 1 = most massive): a `Slider`, bounded by the real halo count in the currently-loaded tile (`maxHighlightRank` — a data-dependent bound, not a fixed config value, since it depends on how many halos this suite/set/realization/snapshot combination actually has).
+After Suite, Set and Realization it adds:
 
-## Usecase
+> Field, Snapshot, Highlight halo (by mass rank, 1 = most massive)
 
-- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/halo-profiles` (JSON, for `maxHighlightRank`'s own real halo count) and `/plot.png?...&highlight_rank=...` (the real render, with the chosen halo's error-barred line drawn in front — see `backend.py`'s `render_halo_profiles_png`).
-- `maxHighlightRank` is threaded from the tile's own loaded data, not a prop this sidebar can compute itself — `App.tsx` passes `1` while a tile is still loading (before the real halo count is known) and the real count once fetched.
-- **Real-data only, no synthetic fallback** — `get_halo_profiles()` returns `None` outright for unsupported combinations. Only **IllustrisTNG/SIMBA**, **LH/CV/1P sets** (1P joined 2026-08-08, issue #26 — its real per-file naming embeds a flat 0-65 index across all 66 param×variation combinations, not the pair itself; `backend.py`'s own `_profiles_onep_flat_index` computes it).
-- No halos table under this tile — same reasoning as `XrayHaloProfilesSidebar.mdx`: the chart already shows every halo, colored by mass; a separate per-subhalo Subfind table would be redundant. `Halo Gas Profiles`' own real per-halo `metadata` (~40 additional `Group*` fields, a `pd.DataFrame` from the same file) is a **different, not-yet-built** table — flagged as a real, deferred follow-up rather than routed through `UnderlyingHalos`, whose curated columns/filter are Subfind-specific (see `UnderlyingHalos.mdx`'s own 2026-08-05 note on this same distinction for Halo Mass Function/Baryon Fraction).
+## Live example
 
-## Code
+<Canvas of={Stories.Playground} />
 
-```tsx
-import { useState } from 'react';
-import { HaloGasProfilesSidebar } from '@/components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
-import type { HaloGasProfilesParams } from '@/components/HaloGasProfilesSidebar/HaloGasProfilesSidebar';
+## Related
 
-function FocusedTileSidebar({ realHaloCount }) {
-  const [params, setParams] = useState<HaloGasProfilesParams>({
-    suite: 'IllustrisTNG', setName: 'LH', realization: 42,
-    snapnum: 33, field: 'Gas Density', highlightRank: 1,
-  });
-  return (
-    <HaloGasProfilesSidebar
-      params={params}
-      onChange={setParams}
-      onRemove={() => {/* remove this tile from the canvas */}}
-      maxHighlightRank={realHaloCount}
-    />
-  );
-}
-```
+- **Patterns / Statistic sidebar** — the shell, the core three, and every configuration in one table
+- `ParamsSidebar` — the shell this renders into
+
+## Source files
+
+`HaloGasProfilesSidebar.tsx` · `HaloGasProfilesSidebar.stories.tsx`

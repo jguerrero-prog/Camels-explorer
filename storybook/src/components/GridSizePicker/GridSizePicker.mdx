@@ -1,43 +1,75 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as GridSizePickerStories from './GridSizePicker.stories';
+import * as Stories from './GridSizePicker.stories';
 
-<Meta of={GridSizePickerStories} />
+<Meta of={Stories} />
 
 # GridSizePicker
 
-Real (added 2026-08-06, direct user feedback: *"for grid size, they should have the ability to set the grid size to whichever (2x2, 3x3, 4x3, 5x4) you would need to create a grid picker, similar to table size selectors you see in google docs or ms word"*). A hover grid, not a plain row/column count field — hovering cell `(r, c)` highlights every cell from the top-left corner through `(r, c)` and shows the resulting size below; clicking commits that exact rectangle.
+Drag-free grid sizing: hover to preview an extent, click to choose it.
 
-## Token
+`Source: code`
 
-- `--color-surface-control` — inactive cell background
-- `--color-border-subtle` — cell border
-- `--color-accent-gradient-end` — active (hovered/highlighted) cell fill
-- `--font-label` (Lato) — size label
+## Anatomy
 
-## Spec
+```
+.grid-size-picker           column, centred, padding 10
+├── .grid-size-picker__grid   132x132, 3px gaps
+│   └── __cell[]              active cells fill with accent/gradient-end
+└── .grid-size-picker__label  Lato Bold 12, reads back the hovered extent
+```
 
-<Canvas of={GridSizePickerStories.Default} />
+## Playground
+
+<Canvas of={Stories.Default} />
 <Controls />
 
-- `maxRows`/`maxCols` (both default 6) set the grid's real extent — matches Google Docs'/MS Word's own "Insert Table" picker default, since this component's one real caller (grouped 2D Field Map view) has no use case past ~6×6 cells in a single tile.
-- Supports non-square sizes (2×2, 3×3, 4×3, 5×4, …) — every cell is independently clickable, not just the diagonal.
-- This component owns only the grid + label widget itself. It has no trigger button, no popover shell, and no "current value" display — it's a stateless-from-the-outside picker that reports a commit via `onSelect` and otherwise only tracks its own hover state internally.
+## Variants and states
 
-<Canvas of={GridSizePickerStories.SmallerExtent} />
+<Canvas of={Stories.SmallerExtent} />
 
-## Usecase
+Defaults to 6 by 6, the same extent as the table pickers in Google Docs and Word. Callers can reduce it;
+field-map grouping has no use beyond about 6 by 6 in one tile.
 
-- **`FieldMapGroupControl`** (`FieldMapGroupControl.mdx`) is the one real caller — it renders this inside a portal-positioned popover anchored to a trigger button in `FieldMap2DSidebar`, and adds the "current selection"/"back to single map" affordances this component itself doesn't have.
+## Tokens
 
-## Code
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-control` | Inactive cells |
+| `--color-border-subtle` | Cell borders |
+| `--color-accent-gradient-end` | Active cells, fill and border |
+| `--color-text-muted` | The extent label |
 
-```tsx
-import { useState } from 'react';
-import { GridSizePicker } from '@/components/GridSizePicker/GridSizePicker';
-import type { GridSize } from '@/components/GridSizePicker/GridSizePicker';
+## Behaviour
 
-function GridSizePickerUsage() {
-  const [size, setSize] = useState<GridSize | null>(null);
-  return <GridSizePicker onSelect={setSize} />;
-}
-```
+- Hovering a cell highlights the rectangle from the top-left to it, and the label reads back that extent.
+- Clicking commits. There is no drag and no confirm step.
+- The grid is a fixed 132px square, so cell size falls out of the extent rather than the reverse.
+
+## Accessibility
+
+- Cells carry `aria-label` describing the extent they would select.
+- `Source: gap`. The grid is pointer-only: there is no keyboard path to a cell, no roving tabindex and no
+  arrow-key navigation. A keyboard user cannot set a grid size at all. Two number inputs would be a
+  legitimate fallback.
+
+## Content
+
+The label reads `rows × cols` using a multiplication sign, not the letter x.
+
+## Use it
+
+- Choosing a small two-dimensional extent where seeing the shape beats typing two numbers.
+
+## Don't use it
+
+- For a one-dimensional count. Use `NumberStepper`.
+- For extents beyond about 6 by 6.
+
+## Related
+
+- `FieldMapGroupControl` — its only host
+- **Charts / FieldMapMosaic** — what the chosen extent renders
+
+## Source files
+
+`GridSizePicker.tsx` · `GridSizePicker.css` · `GridSizePicker.stories.tsx`

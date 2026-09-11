@@ -1,71 +1,76 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as TileStories from './Tile.stories';
+import * as Stories from './Tile.stories';
 
-<Meta of={TileStories} />
+<Meta of={Stories} />
 
 # Tile
 
-The single-tile empty state from the "Skeleton" frame (Figma node `1113:1583`, "Panel 1") — what a tile in the Viewer grid (`STUDIO_PLAN.md`'s auto-tiling surface) looks like **before** a plot or simulation has been added to it. This is not the whole grid — it's one cell.
+An empty panel inviting the first plot. The rounded, shadowed card that `PlotTile` replaces once filled.
 
-## Token
+`Source: figma:1113:1583`
 
-- `--color-surface-content` — tile background (distinct from `--color-surface-chrome` used by TopNav/IconRail — content sits one step lighter)
-- `--color-border` — tile border, and the empty-icon's fill
-- `--color-empty-icon-gradient-1` through `-4` — the empty-icon's border, a real top-to-bottom 4-stop gradient (`--brand-purple` → `#B0336A` → `--brand-golden-amber` → `--brand-bright-red`), given directly by the user reading the real value off the design — see `semantic.css` for why the 50% stop is a literal hex rather than a primitive reference
-- `--font-ui` (Inter) — tile title
-- `--font-label` (Lato) — empty-state caption
+## Anatomy
 
-## Spec
+```
+.tile                    radius 12, surface/content, 1px border, padding 16/20, gap 12
+├── .tile__title           Inter Semi Bold 16
+├── .tile__empty-state     centred, gap 12, fills the remaining height
+│   ├── .tile__empty-icon    56px, radius 16, four-stop gradient ring
+│   └── .tile__empty-caption Lato Regular 14
+└── footer                 optional slot, usually CanvasStatsRow
+```
 
-<Canvas of={TileStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-- Container: rounded 12px, 1px border, `0px 10px 24px -10px rgba(0,0,0,0.4)` shadow, 20px/16px padding, flex column with 12px gaps.
-- Title (`Panel 1` in the real frame) — plain text prop, no rename affordance observed.
-- Empty state: centered 56px icon (rounded 16px, gradient-outlined) + plus glyph + a caption ("Add a plot or simulation"). Implemented as a single button — the whole empty-state area is the click target for `onAddPlot`.
-- Optional `footer` slot, rendered as the card's last child, after the empty state.
+## Variants and states
 
-**Corrected 2026-08-04:** the empty-icon's border was originally implemented as a flat single color (`--brand-purple`). It's actually a 4-stop top-to-bottom gradient — CSS can't apply a gradient directly to a `border`, so it's built with the standard two-background-layers trick (a solid `padding-box` fill layer plus a gradient `border-box` layer), not a real design decision of its own.
+<Canvas of={Stories.AsCanvasStarter} />
 
-**Corrected 2026-08-04:** the four stat chips shown in the same Figma frame ("1,000 LH Realizations" etc.) are **not** part of this component's own implementation — they were originally hardcoded in here, but are a canvas-level "zero plots exist anywhere" concern, not a per-tile one (see `CanvasStatsRow.mdx`). **Re-confirmed against real Figma evidence (node `1113:1609`, "stats-row") that they DO visually nest as the last child inside this same card** — not as a separate row floating above it, which is what an earlier app build incorrectly did. The `footer` prop exists for exactly this: `Tile` still has no opinion on *whether* to show stats (that decision stays canvas-level, in whatever composes `Tile`), it just renders whatever the caller passes.
+## Tokens
 
-**Resolved 2026-08-04: the populated variant is `PlotTile`** (Figma node `1019:10`) — a separate component sharing this file's `.tile` card-shell CSS, not a prop on this one. See `PlotTile.mdx` for why, and for the real chart/readout/halos-table anatomy that made a shared prop shape wrong.
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-content` | Card fill |
+| `--color-border` | Card border, and the icon's inner fill |
+| `--color-text-primary` | Title |
+| `--color-text-muted` | Caption, plus icon |
+| `--color-empty-icon-gradient-1..4` | The icon's ring, top to bottom |
 
-**Still open:**
-- **More views are coming** for the different viewer states and the toolbar — nothing here should be read as the final word on how a populated tile looks or behaves.
+The ring is a four-stop gradient, richer than the two-stop accent used everywhere else, and it is the only
+place those four tokens appear. Its 50% stop is a literal with no brand equivalent. See Foundations / Color.
 
-## Usecase
+## Behaviour
 
-- One `Tile` per cell in the Viewer's auto-tiling grid, in its empty state — this is the "before adding a plot" moment the whole app starts from.
-- Do not reuse `Tile` for the populated (has-a-plot) state by just conditionally hiding the empty-state block — see `PlotTile` for that variant, built as its own component.
-- Pass `footer={<CanvasStatsRow .../>}` only for the canvas's lone starter tile, and only while the whole canvas has zero plots — see `CanvasStatsRow.mdx`'s Usecase for the exact rule. Every other tile gets no `footer`.
+- The whole empty state is one button, so the target is the area rather than the 56px icon.
+- Hover scales the icon to 1.04 and adds a faint warm glow.
+- The card keeps 12px radius and a shadow. `PlotTile` deliberately drops both. See Decision log, DR-004.
 
-<Canvas of={TileStories.AsCanvasStarter} />
+## Accessibility
 
-**Real bug fixed 2026-08-04:** `onAddPlot` must NOT be wired to "add a new tile to the canvas" — that's `TopNav`'s action (see `TopNav.mdx`). An earlier app build wired every tile's own `onAddPlot` to that same handler, so clicking any existing empty tile spawned an unrelated sibling tile. Since the per-tile statistic-picker flow isn't built yet, `onAddPlot` should be a real no-op for now (or eventually `openAddPlotFlow()`, per the Code sample below) — never a stand-in for adding more tiles.
+- `Source: gap`. The empty state is a `button` with no accessible name beyond its caption text, and the
+  icon is not marked decorative. The hover scale has no `prefers-reduced-motion` guard.
 
-## Code
+## Content
 
-```tsx
-import { Tile } from '@/components/Tile/Tile';
-import { CanvasStatsRow } from '@/components/CanvasStatsRow/CanvasStatsRow';
+Title names the panel: "Panel 1". Caption names the action: "Add a plot or simulation".
 
-// The canvas's lone starter tile, before any plot exists anywhere:
-<Tile
-  title="Panel 1"
-  onAddPlot={() => openAddPlotFlow()}
-  footer={
-    <CanvasStatsRow
-      stats={[
-        { value: '1,000', label: 'LH Realizations' },
-        { value: '4', label: 'suites' },
-        { value: '15', label: 'Statistics' },
-        { value: '5', label: 'Halo finders' },
-      ]}
-    />
-  }
-/>
+## Use it
 
-// Any other tile — no footer:
-<Tile title="Panel 2" onAddPlot={() => openAddPlotFlow()} />
-```
+- For an empty panel, as the canvas starter.
+
+## Don't use it
+
+- Once a plot exists. Use `PlotTile`.
+- As a generic card. The empty state is not optional.
+
+## Related
+
+- `PlotTile` — the populated counterpart
+- `CanvasStatsRow` — its usual footer
+
+## Source files
+
+`Tile.tsx` · `Tile.css` · `Tile.stories.tsx`

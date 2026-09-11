@@ -6,7 +6,7 @@ import type { MassRangeStatistic } from './massRangeConfig';
 import { MASS_RANGE_CONFIGS } from './massRangeConfig';
 
 const meta: Meta<typeof MassRangeSidebar> = {
-  title: 'Sections/MassRangeSidebar',
+  title: 'Statistic sidebars/MassRangeSidebar',
   component: MassRangeSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '640px' }}><Story /></div>],

@@ -4,7 +4,7 @@ import { DensityField3DSidebar } from './DensityField3DSidebar';
 import type { DensityField3DParams } from './DensityField3DSidebar';
 
 const meta: Meta<typeof DensityField3DSidebar> = {
-  title: 'Sections/DensityField3DSidebar',
+  title: 'Statistic sidebars/DensityField3DSidebar',
   component: DensityField3DSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '820px' }}><Story /></div>],

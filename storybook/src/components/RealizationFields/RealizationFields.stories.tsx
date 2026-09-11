@@ -5,7 +5,7 @@ import type { RealizationFieldsValue } from './RealizationFields';
 import { useCatalogMetadata } from '../../lib/useCatalogMetadata';
 
 const meta: Meta<typeof RealizationFields> = {
-  title: 'Fields/RealizationFields',
+  title: 'Patterns/Realization fields',
   component: RealizationFields,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '280px', display: 'flex', flexDirection: 'column', gap: '16px' }}><Story /></div>],

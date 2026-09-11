@@ -1,39 +1,86 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as CopyAsCodePopoverStories from './CopyAsCodePopover.stories';
+import * as Stories from './CopyAsCodePopover.stories';
 
-<Meta of={CopyAsCodePopoverStories} />
+<Meta of={Stories} />
 
 # CopyAsCodePopover
 
-The toolbar's "Copy as code" tool (Figma node `1076-10`'s "plot-code-modal") - anchored below the toolbar button by `Toolbar`'s own `.toolbar__popover-anchor` (see `Toolbar.mdx`), not by this component. `code` is real, runnable Python against `backend.py`'s actual function signatures (`App.tsx`'s `generateTileCode`) - deliberately NOT the aspirational `camels_viz` API shown in the original Figma copy, which doesn't exist anywhere in this codebase.
+Shows the Python that reproduces the plot on screen, ready to copy into a notebook.
 
-## Token
+`Source: code`
 
-- `--color-surface-popover` — the popover's own dark surface
-- `--color-syntax-keyword` / `--color-syntax-string` / `--color-syntax-number` / `--color-syntax-comment` — the code block's own syntax highlighting (see below)
-- `--color-success` — the transient "Copied" confirmation text
+## Anatomy
 
-## Spec
+```
+.copy-as-code-popover        380px
+├── __pointer                the triangle aimed at the toolbar button
+├── __header                 __title "Plot Code" + __header-actions
+│   └── __copy-btn (icon) · __close-btn
+├── __code-block             pre, monospace, syntax-highlighted spans
+└── __copied                 "Copied", shown for 1.5s after a copy
+```
 
-<Canvas of={CopyAsCodePopoverStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-A small header ("Plot Code" + Copy/Close icon buttons) above a `<pre>` code block in JetBrains Mono. Real, narrowly-scoped syntax highlighting (added 2026-08-06, `lib/highlightPython.ts`) - a small regex tokenizer for exactly the fixed subset of Python `generateTileCode` emits (comments, single-quoted strings, numbers, `True`/`False`/`None`/`import`/`as`), not a general-purpose highlighting library pulled in for one code block. Clicking the copy icon copies the real, unstyled `code` string to the clipboard and shows a 1.5s "Copied" confirmation - the highlighting is purely a display concern, never part of what's copied.
+## Variants and states
 
-The `CustomTileCode` story shows the Custom tile's own different code shape (`flathub_client` instead of `backend`, plus a real `#`-comment line for an unconstrained filter field) - confirms the tokenizer handles both of `generateTileCode`'s real branches, not just the common one.
+<Canvas of={Stories.CustomTileCode} />
 
-## Usecase
+The snippet is whatever the caller passes, so the two stories show the two kinds of tile: a curated
+statistic, and a custom plot whose snippet has to carry its field selection and filters as well.
 
-- Rendered by `App.tsx` inside `Toolbar`'s `copyAsCodePopover` prop, only while the popover is open for the currently-focused tile.
-- `code` comes from `generateTileCode(tile)` - `null` for a tile kind with no real backend.py call templated yet, in which case `App.tsx` doesn't render this popover at all rather than showing an empty code block.
+## Tokens
 
-## Code
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-popover` | Popover fill |
+| `--color-surface-content` | Code block ground, pointer |
+| `--color-border-subtle` | Border, pointer edges |
+| `--color-text-primary` / `--color-text-emphasis` / `--color-text-muted` | Code, title, controls |
+| `--color-syntax-keyword` / `--color-syntax-string` / `--color-syntax-number` / `--color-syntax-comment` | Highlighting |
+| `--color-success` | The "Copied" confirmation |
+| `--font-mono` | Code block |
+| `--font-label` | Title |
 
-```tsx
-import { CopyAsCodePopover } from '@/components/CopyAsCodePopover/CopyAsCodePopover';
+The four syntax tokens exist for this component alone, which is why they are worth knowing about: any other
+code surface should use them rather than inventing colours.
 
-<CopyAsCodePopover
-  code={generateTileCode(focusedTile)}
-  onClose={() => setCopyAsCodeOpen(false)}
-/>
-```
+## Behaviour
+
+- Highlighting is done by `lib/highlightPython`, a small tokenizer, not a syntax library. It emits keyword,
+  string, number and comment spans and leaves everything else unstyled.
+- Copy writes to the clipboard and shows the confirmation for 1.5 seconds.
+- The code is displayed, not editable. Editing it here would not change the plot.
+
+## Accessibility
+
+- Both controls carry `aria-label` and `title`, and the pointer is `aria-hidden`.
+- `Source: gap`. The popover has no role and no label of its own, no focus management and no Escape, and
+  "Copied" is visual only, with no live region to announce it.
+
+## Content
+
+The snippet is real, runnable Python against the CAMELS data paths. This is the one place in the interface
+where code is the content, so it is never truncated or elided.
+
+## Use it
+
+- Moving from exploring in the browser to working in a notebook.
+- Recording exactly how a figure was produced.
+
+## Don't use it
+
+- As a general export. Use the download actions for data or images.
+
+## Related
+
+- `Toolbar` — opens it
+- `HidePopover`, `RatioDiffPopover` — the same popover treatment
+- `Reference / Content and units` — how parameters are named
+
+## Source files
+
+`CopyAsCodePopover.tsx` · `CopyAsCodePopover.css` · `CopyAsCodePopover.stories.tsx` · `lib/highlightPython.ts`

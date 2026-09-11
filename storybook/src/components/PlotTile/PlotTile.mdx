@@ -1,102 +1,92 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as PlotTileStories from './PlotTile.stories';
+import * as Stories from './PlotTile.stories';
 
-<Meta of={PlotTileStories} />
+<Meta of={Stories} />
 
 # PlotTile
 
-The populated (has-a-plot) tile, from Figma node `1019:10`. `Tile.mdx` explicitly flagged this as a separate, not-yet-designed variant rather than something to bolt onto `Tile` via a prop — this is that variant, built as its own component sharing `Tile.css`'s `.tile` card shell (background/border/radius/shadow/padding) rather than duplicating it.
+A populated panel: title, mode switch, the plot, its provenance, and optionally the rows behind it.
 
-## Token
+`Source: figma:1019:10`
 
-Inherits most of `.tile`'s tokens from `Tile.mdx` (`--color-surface-content`, `--color-border`, `--font-ui`) unmodified. Two real overrides of its own: `border-radius: 0` (a plot panel is flat/square-cornered, unlike the empty-state `Tile`'s rounded 12px) and, while focused, `--color-border-selected` (a dedicated UI blue, 1px - see `.plot-tile--focused` in `PlotTile.css`) in place of `.tile`'s own neutral `--color-border`.
+## Anatomy
 
-Composed children carry their own tokens — see `PlotChart.mdx`, `StaticImageChart.mdx`, `ParamsReadout.mdx`, `UnderlyingHalos.mdx`.
+```
+.plot-tile                  square corners, surface/content, padding 16/20, gap 12
+├── .plot-tile__header
+│   ├── title                 Inter Semi Bold 16
+│   └── ChartModeDropdown     only when more than one mode is available
+├── .plot-tile__body         min-height 340
+│   ├── PlotChart | Plotly3DChart | Table
+│   └── ParamsReadout         right when wide, underneath when narrow
+├── UnderlyingHalos          optional
+└── annotationOverlay        optional, absolutely positioned over the chart
+.plot-tile--focused          1px border/selected ring
+```
 
-## Spec
+## Playground
 
-<Canvas of={PlotTileStories.SingleRealization} />
+<Canvas of={Stories.SingleRealization} />
 <Controls />
 
-- A header row (title + `ChartModeDropdown`, when 2+ modes are real for this tile), then **either** a body row (chart + `ParamsReadout` side by side) **or** `UnderlyingHalos` at full body height — never both at once (see the "Real fix (2026-08-06)" note below).
-- `chart.kind` (added 2026-08-05, default `'plotly'` when omitted): `'plotly'` renders `PlotChart` (a Static mode too, when `imageUrl` is given); `'static-image'` renders `StaticImageChart` instead (real PNG only) — for statistics with no Plotly equivalent at all, see `StaticImageChart.mdx`; `'plotly-3d'` renders `chart.content` directly (a caller-supplied node, not raw trace data) — for the two statistics with the opposite gap, no static-image equivalent at all, see `Plotly3DChart.mdx`.
+## Variants and states
 
-**Real fix (2026-08-06, direct user feedback): chart and table are now two mutually exclusive views, not one view with the table stacked below it.** Previously `UnderlyingHalos` (when `halos` was non-null) always rendered as a collapsible section underneath the chart+readout, both genuinely visible/competing for the same tile height at once - cramped in a grid cell. Now `chartMode` (own local state, `'static' | 'interactive' | 'table'`) picks exactly one: Static/Interactive render chart+readout as before; **Table replaces both entirely** with `UnderlyingHalos` at the tile's full body height. `availableChartModes(chart, hasHalos)` computes which options are real for a given tile (never a disabled option - see `ChartModeDropdown.mdx`); when only one mode is real, this component doesn't render the dropdown at all, matching the original toggle's "no toggle when nothing to switch to" behavior.
+<Canvas of={Stories.CompareMode} />
+<Canvas of={Stories.StaticImageOnly} />
+<Canvas of={Stories.TableMode} />
+<Canvas of={Stories.Plotly3DTile} />
+<Canvas of={Stories.NoHalosTable} />
+<Canvas of={Stories.ReadoutsHidden} />
 
-<Canvas of={PlotTileStories.TableMode} />
+**Available modes are computed, not passed.** `static` appears only when the chart has an image, `table`
+only when there are rows, `scatter3d` only with 3D data. With a single mode, `ChartModeDropdown` is not
+rendered at all.
 
-**Known minor rough edge, not a functional bug:** `UnderlyingHalos` keeps its own internal expand/collapse disclosure unchanged (`defaultExpanded` passed as `true` here) - selecting "Table" is now the real show/hide mechanism, so that inner disclosure header is redundant. Clicking it collapses the table to just its label/checkbox row while `chartMode` still says "Table" - a real, harmless overlap between two toggles that both mean roughly the same thing, left as-is per the explicit decision that `UnderlyingHalos`'s own chrome carries over unchanged into this new context.
+**The readout moves with width.** A full-width tile puts `ParamsReadout` in a 200px right-hand column. A
+grid tile at 544px puts it underneath as a wrapping row. Layout follows the tile, not a prop.
 
-**Real addition (2026-08-06, Toolbar's Hide feature): `readoutsHidden` prop.** When true, `ParamsReadout` doesn't render at all (chart/table are unaffected). Computed fresh by `App.tsx` on every render — `hidePerPanel[tile.id]?.readouts ?? hideAllPanels.readouts` — unlike Annotations/Arrows/Notes (see `HidePopover.mdx`), which stamp a `hidden` flag on existing items rather than gating live. A readout has no per-item array to stamp and no "creation moment" separate from the tile itself, so a live gate is the honest model here: a brand-new tile added while readouts are globally hidden inherits that immediately.
+## Tokens
 
-<Canvas of={PlotTileStories.ReadoutsHidden} />
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-content` | Tile fill |
+| `--color-border-selected` | The focused ring. See Decision log, DR-002. |
+| `--color-text-primary` | Title |
 
-<Canvas of={PlotTileStories.StaticImageOnly} />
-<Canvas of={PlotTileStories.Plotly3DTile} />
+## Behaviour
 
-- Clicking anywhere on the tile calls `onFocus` — real wiring, not decorative: `App.tsx` uses this to swap the left 280px slot to this tile's own `ParamsSidebar` (see Usecase). Which tile is focused lives in `App.tsx`'s own `focusedTileId` state; `App.tsx` passes it back down as this component's own `focused` prop.
+- Square corners, overriding `Tile`'s 12px. A populated panel sits on the page rather than floating above
+  it. See Decision log, DR-004.
+- The focused ring replaces the border rather than adding to it, so selection reads as colour, not weight.
+- The tile scrolls internally rather than squeezing a chart below its minimum height.
+- Clicking the chart reports fractional coordinates, which is how annotations, arrows and notes are placed.
 
-**History: removed 2026-08-04, re-added 2026-08-06.** An early pass drew a border for a focused tile with no real reason to (not sourced from any frame) and was removed on direct feedback. It came back once several toolbar tools (Copy provenance/as code, Annotate, Ruler, Ratio/diff) needed "the currently focused tile" to be something a user could actually see before using them (Figma nodes `1066-10`/`1076-10`/`1063-10` all show this ring) - real necessity, not a repeat of the earlier unrequested addition. **Real fix (2026-08-06, direct user feedback):** the ring's color/weight were further corrected from a translucent white/grey 1.5px border to `--color-border-selected` (a dedicated UI blue) at 1px - the same weight as every tile's own unselected border, so selection reads as a color change, not an added-thickness one.
+## Accessibility
 
-<Canvas of={PlotTileStories.CompareMode} />
+- `Source: gap`. The tile is a clickable `div` with no role, so focusing it by keyboard is impossible, and
+  toolbar actions depend on focus. This is the most consequential accessibility gap in the app: a keyboard
+  user cannot reach the tool targets at all.
+- The focused ring is colour-only, with no non-colour indicator.
+- Table mode is the accessible route to a chart's values.
 
-**Real, deliberate scope decision — why this isn't just `Tile` with a prop:** `Tile.mdx`'s own "Usecase" section already ruled this out ("that's a different enough anatomy... deserves its own documented variant"). The populated anatomy (chart + readout + collapsible halos table) shares nothing structurally with the empty state's single centered button, so a shared prop would mean two unrelated render branches inside one component — a separate component sharing only the outer card CSS is the honest shape.
+## Content
 
-## Usecase
+Title is the statistic name exactly as the modal and the sidebar spell it.
 
-- Real usage: `App.tsx`'s canvas, replacing the empty-state `Tile` once the Add Plot modal's Curated tab submits any of the **15 statistics `backend.py` supports** — all now have real end-to-end chart wiring, across three chart shapes: `chart.kind: 'plotly'` (six statistics sharing `backend.py`'s `_render_result_png` path — Stellar Mass Function, Halo Mass Function, Baryon Fraction, Power Spectrum, Bispectrum, SFR History), `'static-image'` (seven statistics with no Plotly equivalent — X-ray Halo Profiles, Halo Gas Profiles, Color-Mass Diagram, Field PDF, Lyman-alpha Spectrum, Galaxy Scaling Relations, 2D Field Map), and `'plotly-3d'` (the two with no static-image equivalent — 3D Density Field, 3D Particle Cloud).
-- `onFocus` is real, wired state in `App.tsx`: clicking sets `focusedTileId`, and the focused tile's own real sidebar composition then lives in the left 280px slot (same slot `IconRail`'s Project/Files panels use — mutually exclusive, per `STUDIO_PLAN.md`); editing those fields refetches this tile's chart.
-- Compare mode (`chart.series.length > 1`), where supported, is driven by the sidebar's "Realizations to compare" `MultiSelect` — one fetch per selected realization, same suite/set/params, overlaid; `chart.imageUrl` gains one `realizations=` query param per selection the same way. Bispectrum supports this for free via the same generic path; Power Spectrum/SFR History do too.
-- **`halos` is `null` for Power Spectrum, Bispectrum, and SFR History** (real 2026-08-05 addition) — these are field/box-level statistics with no per-halo catalog concept at all, unlike the three mass-range statistics whose `halos.rows`/`halos.rawRows` come from the same real `GET /api/halo-catalog` fetch. `halos.massContextNote` (only set for Halo Mass Function/Baryon Fraction) is unrelated to this — see `UnderlyingHalos.mdx`'s 2026-08-05 note on why their plotted quantity has no matching column in the per-subhalo catalog shown below the chart.
-- **`halos.finderPicker`, wired 2026-08-07 (direct user request)** — the three mass-range statistics now pass a real `finderPicker` (see `UnderlyingHalos.mdx`'s own note), swapping `halos.rows`/`columns`/`label` to an alternate finder's real schema via `App.tsx`'s `handleSelectHaloFinder` (`GET /halo-catalog/alt`). `null` (no picker rendered) for a suite with no real alternate-finder coverage.
-- **`catalogTable`, added 2026-08-07 (direct user request: reuse `UnderlyingHalos` for the VIDE void catalog "to keep components consistent")** — a second, generic "Table" mode channel for statistics with a real tabular catalog that isn't a per-halo Subfind one. 3D Density Field passes it (`rows` built from `backend.py`'s real VIDE void fields, `filter: null`, no `finderPicker`) only when a void overlay with real `extra` data is present — matching `app.py`'s own gate (`if show_voids and voids.extra is not None`). Kept as its own prop rather than repurposing `halos`: a prop literally named `halos` carrying void rows would read as a bug to a future reader. `availableChartModes` shows "Table" when *either* `halos` or `catalogTable` is set — every real tile has one or the other, never both, so the render picks whichever is present.
-- **`chart3d`, added 2026-08-07 (direct user request: "can black hole mergers have a 3D scatter plot option? Interactive, 3D Scatter, Table")** — a 4th `ChartDisplayMode` (`'scatter3d'`, see `ChartModeDropdown.mdx`) rendered in place of `chart` when selected, for a tile that has an ordinary 2D `chart` *and* wants a 3D view as a switchable peer, not a replacement. Different from `chart.kind: 'plotly-3d'` above: those two statistics have no 2D alternative at all, so `chart` itself is 3D; here `chart` stays the real 2D Interactive scatter and `chart3d` is a second, independent `ReactNode`. Black Hole Mergers' own `chart3d` (`App.tsx`'s `BlackholeMergers3DScatter`) plots the 3 genuinely continuous real columns (Redshift, Swallower/Swallowed BH mass) since the real merger log has no spatial x/y/z at all - same non-spatial-3D-scatter approach the Custom tab's own 3D Scatterplot chart type already uses. `null`/omitted hides the mode, same convention as `halos`/`catalogTable`.
+## Use it
 
-**Group Matching got the same treatment 2026-08-10** (`GroupMatching3DScatter`): N-body Group Mass × Hydro Group Mass × Percent Matched - checked against the real data first (Color-Mass Diagram was asked about too, but only has 2 real numeric fields, `color`/`log_mass`, with no genuine third dimension to plot, so it didn't get a `chart3d`).
-- **`chart` itself can be `null`, added 2026-08-07 (Simulation Parameters, issue #14)** — the first real statistic with no chartable shape at all: a flat parameter table has no natural x/y plot. `availableChartModes` simply omits Static/Interactive when `chart` is `null`, so the tile opens straight into Table mode with no dropdown shown at all (same "no toggle when nothing to switch to" behavior every other single-mode tile already has) - requires `halos`/`catalogTable` to be set, since a tile with neither a chart nor a table would render nothing.
+- One per plot on the canvas.
 
-## Code
+## Don't use it
 
-```tsx
-import { PlotTile } from '@/components/PlotTile/PlotTile';
-import { massRangeImageUrl } from '@/lib/api';
-import { MASS_RANGE_CONFIGS } from '@/components/MassRangeSidebar/massRangeConfig';
+- For an empty panel. Use `Tile`.
 
-function MassRangeTile({ statistic, result, params, catalog, onFocus }) {
-  const config = MASS_RANGE_CONFIGS[statistic];
-  return (
-    <PlotTile
-      title={statistic}
-      chart={{
-        series: [{ label: `${params.setName}_${params.realizations[0]}`, x: result.x, y: result.y }],
-        xLabel: result.x_label,
-        yLabel: result.y_label,
-        logX: result.log_x,
-        logY: result.log_y,
-        imageUrl: massRangeImageUrl(config, params),
-      }}
-      readoutGroups={[
-        { label: 'Suite / Set', value: `${params.suite} · ${params.setName}` },
-        { label: 'Realizations (compare)', value: params.realizations.join(', ') },
-        { label: config.rangeLabel, value: `${params.min.toExponential()} – ${params.max.toExponential()}` },
-        { label: 'Bins', value: String(params.bins) },
-      ]}
-      halos={{ rows: catalog.frame, rawRows: catalog.raw_frame }}
-      onFocus={onFocus}
-    />
-  );
-}
+## Related
 
-// Power Spectrum/Bispectrum/SFR History: same PlotTile, halos: null.
-function NoCatalogTile({ statistic, result, params, onFocus }) {
-  return (
-    <PlotTile
-      title={statistic}
-      chart={{ series: [{ label: '...', x: result.x, y: result.y }], xLabel: result.x_label, yLabel: result.y_label }}
-      readoutGroups={[{ label: 'Suite / Set', value: `${params.suite} · ${params.setName}` }]}
-      halos={null}
-      onFocus={onFocus}
-    />
-  );
-}
-```
+- `Tile` — the empty counterpart
+- `ChartModeDropdown`, `PlotChart`, `ParamsReadout`, `UnderlyingHalos` — its parts
+- **Chrome / Viewer** — the layouts it sits in
+
+## Source files
+
+`PlotTile.tsx` · `PlotTile.css` · `PlotTile.stories.tsx`

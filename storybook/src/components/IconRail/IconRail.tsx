@@ -6,9 +6,9 @@ import './IconRail.css';
 export type IconRailPanel = 'project' | 'files' | null;
 
 export type IconRailProps = {
-  /** Which panel (if any) is currently open - Project and Files are mutually
-   * exclusive and mutually exclusive with the params sidebar (see
-   * STUDIO_PLAN.md "Left icon rail" section). Settings has no panel yet. */
+  /** Which panel is open, or `null` for none. Project and Files are mutually
+   * exclusive with each other and with the params sidebar. Settings has no
+   * panel. */
   activePanel: IconRailPanel;
   onSelectPanel: (panel: IconRailPanel) => void;
 };

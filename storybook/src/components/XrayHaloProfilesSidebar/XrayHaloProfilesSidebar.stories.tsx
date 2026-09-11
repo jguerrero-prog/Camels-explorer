@@ -4,7 +4,7 @@ import { XrayHaloProfilesSidebar } from './XrayHaloProfilesSidebar';
 import type { XrayHaloProfilesParams } from './XrayHaloProfilesSidebar';
 
 const meta: Meta<typeof XrayHaloProfilesSidebar> = {
-  title: 'Sections/XrayHaloProfilesSidebar',
+  title: 'Statistic sidebars/XrayHaloProfilesSidebar',
   component: XrayHaloProfilesSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '480px' }}><Story /></div>],
