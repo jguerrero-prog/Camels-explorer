@@ -12,9 +12,8 @@ import '../NumberStepper/NumberStepper.css';
 export type SingleRealizationFieldsValue = {
   suite: string;
   setName: string;
-  // A plain realization index for every set except 1P, whose real folders
-  // are compound-named by parameter+variation (e.g. "p11_2") - see the 1P
-  // block below.
+  /** A plain index for every set except 1P, whose identifiers are compound,
+   * naming a parameter and a variation such as `p11_2`. */
   realization: number | string;
 };
 
@@ -22,50 +21,35 @@ export type SingleRealizationFieldsProps = {
   catalog: Catalog | null;
   value: SingleRealizationFieldsValue;
   onChange: (value: SingleRealizationFieldsValue) => void;
-  /** Restricts the Suite dropdown to only these suites - e.g. X-ray Halo
-   * Profiles only has real coverage for 2 of 4 (backend.py's
-   * PUBLIC_XRAY_SUITES, exposed as GET /api/metadata's statistic_suites).
-   * Omit when every suite is real for this statistic. Added 2026-08-05 so
-   * an unsupported combination can't be configured in the first place,
-   * rather than only being disclosed as "No data available" after the
-   * fact. */
+  /** Restricts the Suite dropdown to these suites, for a statistic that is
+   * not published for all of them. The list comes from
+   * `GET /api/metadata`'s `statistic_suites`. Omit when every suite applies.
+   * Narrowing the dropdown prevents configuring a combination that has no
+   * data, rather than reporting it afterwards. */
   allowedSuites?: string[];
-  /** Restricts the Set dropdown similarly - only Halo Gas Profiles is
-   * narrower than "every set" among this component's real statistics. */
+  /** Restricts the Set dropdown the same way. Among the statistics using
+   * this block, only Halo Gas Profiles is narrower than every set. */
   allowedSets?: string[];
-  /** Like `allowedSets`, but the allowed list depends on the currently
-   * selected Suite (added 2026-08-08, issue #30, for Spread Metric -
-   * SIMBA's real coverage here is {LH, CV}, Astrid's is {LH, CV, 1P}, a
-   * genuine per-suite difference `allowedSets`' one flat list can't
-   * express). Takes precedence over `allowedSets` when both are passed;
-   * a suite missing from this map has no real sets at all for this
-   * statistic (an empty Set dropdown, not a guessed fallback). */
+  /** Like `allowedSets`, but the allowed sets differ per suite, which one
+   * flat list cannot express: Spread Metric publishes {LH, CV} for SIMBA and
+   * {LH, CV, 1P} for Astrid. Takes precedence over `allowedSets` when both
+   * are given. A suite absent from the map has no sets for this statistic,
+   * giving an empty Set dropdown rather than a guessed fallback. */
   allowedSetsForSuite?: Record<string, string[]>;
-  /** Hides both real value-adjustment controls this component can render -
-   * the 1P "Variation" OptionSlider and the plain "Realization"
-   * NumberStepper (non-1P sets) - defaulting to shown, i.e. every real
-   * per-tile sidebar keeps today's behavior unchanged. CuratedTab (Add
-   * Plot modal) passes true - same "no value editing inside a modal you
-   * have to submit to see the effect of" fix already applied to the
-   * Custom tab: adjusting either control blind, before any tile exists,
-   * gives no immediate feedback. Suite/Set/1P-Parameter (*selections*, not
-   * continuous/steppable values) stay in the modal either way; the
-   * realization itself defaults to 0 (1P: paramIndex 1, variation 0) and
-   * is only ever adjusted in the real per-tile sidebar, where doing so
-   * refetches the already-rendered tile live. No replacement caption is
-   * shown in the modal for either hidden control - the value simply
-   * starts at 0 and is adjustable once a tile exists. */
+  /** Hides the two value-adjustment controls, the 1P "Variation" slider and
+   * the plain "Realization" stepper, leaving only the selections. Shown by
+   * default, so per-tile sidebars are unaffected. The Add Plot modal sets it:
+   * adjusting a value before any tile exists gives no feedback, so the
+   * realization starts at 0 and becomes adjustable in the sidebar, where
+   * changing it refetches the tile live. Suite, Set and 1P Parameter are
+   * selections rather than values and stay in the modal either way. */
   hideRealizationValueControls?: boolean;
-  /** Which real 1P folder-naming scheme this statistic's own real 1P data
-   * uses - 'modern' (default, "1P_p{index}_{variation}", 28 params, 5
-   * variations) or 'legacy' ("1P_{index}_{variation}", no "p", 6 params,
-   * 11 variations -5..5). Real, genuinely different conventions (see
-   * backend.py's own comment), not a UI preference - X-ray Halo Profiles
-   * (issue #51) uses 'legacy' too, despite its own real file storing a
-   * bare flat "1P_{N}" index with no folder structure at all - confirmed
-   * (not assumed) to be the exact same (param, variation) -> index formula
-   * as Halo Gas Profiles' own legacy scheme, by comparing real per-index
-   * halo-mass data between both products. */
+  /** Which 1P naming scheme this statistic's data uses. `modern` (the
+   * default) is `1P_p{index}_{variation}`, with 28 parameters and 5
+   * variations. `legacy` is `1P_{index}_{variation}`, with no `p`, 6
+   * parameters and 11 variations from -5 to 5. These are different
+   * conventions in the published data, not a display preference, so the
+   * value follows the statistic rather than the interface. */
   onepScheme?: 'modern' | 'legacy';
 };
 

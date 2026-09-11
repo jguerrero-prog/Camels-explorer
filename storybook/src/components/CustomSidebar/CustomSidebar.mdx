@@ -1,40 +1,81 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as CustomSidebarStories from './CustomSidebar.stories';
+import * as Stories from './CustomSidebar.stories';
 
-<Meta of={CustomSidebarStories} />
+<Meta of={Stories} />
 
-# CustomSidebar
+# Custom plot
 
-The Custom tile's real per-tile sidebar (added 2026-08-05) - reuses `CustomFieldsForm`, the exact same field-picking UI the Add Plot modal's Custom tab uses, so a Custom tile's filters/fields/chart type stay editable after creation, the same real capability every other statistic's own per-tile sidebar already has.
+The sidebar for a custom tile. Unlike the curated statistics, it selects rows by filtering the catalog
+rather than by naming a simulation.
 
-## Token
+`Source: code`
 
-Composes `ParamsSidebar`'s own shell/scroll/fade (see `ParamsSidebar.mdx`) - no tokens of its own beyond what `CustomFieldsForm`/`CustomFilterValues`/`CustomFilterSettings` already use.
+## Anatomy
 
-## Spec
+```
+ParamsSidebar title="Custom", footer = Remove plot
+├── CustomFieldsForm       x field, y field, colour field, aggregation
+├── CustomFilterValues     one range control per active filter field
+└── CustomFilterSettings   opens Patterns / Filter settings to choose which fields filter
+```
 
-<Canvas of={CustomSidebarStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-**This story fetches real, live data** - `api.ts`'s `API_BASE` points directly at `localhost:8010`, not relative to whatever port Storybook itself runs on, so this renders exactly like the real app when the FastAPI backend (`uvicorn api.main:app --port 8010`) is running locally. With it stopped, this shows the real "Couldn't load real field metadata — is the API server running?" error path - both are genuine states, neither is a Storybook-only mock.
+## Variants and states
 
-Real fix (2026-08-05, direct user feedback): this used to render `CustomFieldsForm` with its full inline Filters tree (every field, always expanded) ahead of the actual values - "looks like an exact copy and paste" of the Add Plot modal. Now: top-level choices (`showFilterTree={false}`) → live values for whichever fields are already active (`CustomFilterValues`) → a divider → a collapsed-by-default "Filter settings" section (`CustomFilterSettings`) holding the same tree.
+The field list is fetched, so the sidebar has three states rather than one:
 
-Real fix (2026-08-06): its own scroll/fade overflow handling (base pickers + N filter values + the tree, filters unbounded in count) used to be hand-rolled entirely in this component. Generalized into `ParamsSidebar` itself instead, so every sidebar shares the same real scroll-then-fade affordance.
+- **Loading** — a single line while the field list is in flight.
+- **Error** — "Couldn't load field metadata" plus a prompt to check the API server, because this failure is
+  almost always a local one that the reader can fix.
+- **Ready** — the three sections above.
 
-## Usecase
+## Tokens
 
-- Rendered by `App.tsx` whenever the focused tile's `kind === 'custom'`, in the same left-sidebar slot every other statistic's own sidebar occupies.
-- `onChange` flows into `App.tsx`'s `refetchCustomTile`, which turns an edited selection into a real, live re-fetch of the already-rendered tile next to it - dragging a filter range here gives immediate visual feedback a value picked blind inside the modal never could.
+| Token | Applies to |
+| --- | --- |
+| `--color-text-muted` | The loading line |
+| `--color-danger` | The error line |
 
-## Code
+The shell, its scroll behaviour and its pinned footer belong to `ParamsSidebar`.
 
-```tsx
-import { CustomSidebar } from '@/components/CustomSidebar/CustomSidebar';
+## Behaviour
 
-<CustomSidebar
-  selection={tile.selection}
-  onChange={(selection) => refetchCustomTile(tile.id, selection)}
-  onRemove={() => removeTile(tile.id)}
-/>
-```
+- Two requests populate the sidebar: the flat field list for the pickers, and the field tree for the filter
+  chooser.
+- Filters are chosen in a modal, not inline. A filter set can be long, and an unbounded collapsible section
+  inside a scrolling sidebar was not navigable.
+- The scroll-and-fade treatment comes from `ParamsSidebar`, which every sidebar shares.
+
+## Accessibility
+
+Inherited from `ParamsSidebar` and the composed fields.
+
+- `Source: gap`. The loading and error lines are plain paragraphs with no live region, so a change of state
+  is not announced.
+
+## Content
+
+Field names are catalog names, unchanged, so that a selection here matches what a user would write in a
+query. Units come from the catalog where published.
+
+## Use it
+
+- For any question the curated statistics do not answer directly.
+
+## Don't use it
+
+- For a published statistic. The curated sidebars are faster and their output is precomputed.
+
+## Related
+
+- `Patterns / Filter settings` — the modal this opens
+- `ParamsSidebar` — the shell
+- `CustomAggregateChart` — what the selection renders into
+
+## Source files
+
+`CustomSidebar.tsx` · `CustomSidebar.stories.tsx` · `CustomFieldsForm.tsx` · `CustomFilterValues.tsx` · `CustomFilterSettings.tsx`

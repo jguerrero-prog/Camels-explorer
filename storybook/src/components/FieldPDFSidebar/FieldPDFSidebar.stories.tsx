@@ -4,7 +4,7 @@ import { FieldPDFSidebar } from './FieldPDFSidebar';
 import type { FieldPDFParams } from './FieldPDFSidebar';
 
 const meta: Meta<typeof FieldPDFSidebar> = {
-  title: 'Sections/FieldPDFSidebar',
+  title: 'Statistic sidebars/FieldPDFSidebar',
   component: FieldPDFSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '480px' }}><Story /></div>],

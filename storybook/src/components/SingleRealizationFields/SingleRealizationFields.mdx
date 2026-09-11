@@ -1,45 +1,72 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as SingleRealizationFieldsStories from './SingleRealizationFields.stories';
+import * as Stories from './SingleRealizationFields.stories';
 
-<Meta of={SingleRealizationFieldsStories} />
+<Meta of={Stories} />
 
-# SingleRealizationFields
+# Realization fields (single)
 
-Suite / Set / Realization, with no Compare mode — the sibling of `RealizationFields` for the seven real statistics `app.py`'s own `SINGLE_REALIZATION_STATISTICS` tuple lists as not supporting overlay/compare mode (each has its own real caption confirming it: *"Compare mode doesn't apply to this view"*).
+The same opening block as `Realization fields`, for statistics that can only show one simulation at a time.
+No compare mode, no multi-select.
 
-## Token
+`Source: code`
 
-Inherits everything from its composed fields — see `SelectField.mdx`, `NumberStepper.mdx`. No tokens of its own.
+## Anatomy
 
-## Spec
+```
+Suite            SelectField
+Set              SelectField
+  1P             SelectField "1P Parameter" + OptionSlider "Variation"
+  otherwise      NumberStepper "Realization"
+```
 
-<Canvas of={SingleRealizationFieldsStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-- Suite / Set: `SelectField`, options from `GET /api/metadata` (via `useCatalogMetadata`).
-- Realization: a plain `NumberStepper` — no `Checkbox`/`MultiSelect` at all, unlike `RealizationFields`.
-- Changing Set resets `realization` to `0` — same reasoning as `RealizationFields`.
-- **Real bug fixed 2026-08-05: SB wasn't selectable here either** — same fix as `RealizationFields.mdx`'s own entry (SB added to the Set dropdown, its per-suite realization bound read via the shared `realizationCountFor` helper, honest warning caption for SIMBA/Swift-EAGLE). None of the eight statistics using this component are among SB's documented product coverage (Pk/Subfind/Rockstar/SubLink/SFRH) except Galaxy Scaling Relations (Subfind-backed) — the others will just show real, honest "no data" for SB, same as any other unsupported combination.
-- **Real bug fixed 2026-08-05: 1P was selectable but non-functional here too** — same underlying fix and reasoning as `RealizationFields.mdx`'s own 1P entry (parameter+variation `SelectField`/`OptionSlider` pair replaces the `NumberStepper`, suite-aware named-vs-generic param labels, missing-variation warning, live real-value caption). `realization` widened from `number` to `number | string` to hold the compound `"p11_2"`-style id. Of this component's eight real statistics, **Galaxy Scaling Relations and Color-Mass Diagram** use the *modern* scheme (`onepScheme="modern"`, the default) and **Halo Gas Profiles** and **X-ray Halo Profiles** use the *legacy* scheme (`onepScheme="legacy"`, added 2026-08-08, issue #26, joined by X-ray Halo Profiles issue #51 — a different real folder convention: no "p", 6 params, 11 variations). X-ray Halo Profiles' own real file stores this as a bare `1P_{N}` flat index (0–65) with no folder structure at all — a follow-up investigation confirmed it's the exact same (param, variation) → index formula as Halo Gas Profiles' own scheme (by comparing real per-index halo-mass data between both products), and even identified the 6 params' real names (Ωm, σ8, then 4 suite-prefixed feedback knobs) via a real max-halo-mass spread test cross-checked against Lau et al. 2025 (arXiv:2412.04559) — `legacy_onep_param_names` from `GET /api/metadata` now drives the "1P Parameter" `SelectField`'s own labels for this scheme, same real-metadata pattern `onep_tng_params` uses for the modern scheme's IllustrisTNG names. Both statistics' own API endpoints were widened to `realization: str` accordingly. The remaining four (3D Density Field, 3D Particle Cloud, 2D Field Map, Lyman-alpha Spectrum) keep `realization: int` server-side and fail cleanly with a 422 for a 1P selection, deliberately not widened (two of them, 2D Field Map and 3D Density Field, read a realization index as a real byte offset into a stacked CMD-grid file — passing a string there would silently corrupt that read, not just fail to resolve).
+## Variants and states
 
-## Usecase
+Two options change the shape of the block:
 
-- Real usage: the first three fields inside the sidebars for **Galaxy Scaling Relations, 3D Density Field, 3D Particle Cloud, 2D Field Map, X-ray Halo Profiles, Halo Gas Profiles, Color-Mass Diagram, Lyman-alpha Spectrum** — every one of `app.py`'s own `SINGLE_REALIZATION_STATISTICS`.
-- Not a variant of `RealizationFields` with a hidden Compare-mode prop — kept as a fully separate component since seven real statistics need exactly this shape and none of the multi-realization machinery (`compareMode`, `realizations: number[]`, `MultiSelect`) at all.
+- **`hideRealizationValueControls`** drops the variation slider and the realization stepper, for statistics
+  where the suite and set alone identify the output.
+- **`onepScheme`** selects how a 1P run is identified. `modern` uses `1P_p{index}_{variation}`; `legacy`
+  uses `1P_{index}_{variation}` with six parameters and no `p`. Which scheme a statistic uses depends on how
+  its files were written, so it is a per-statistic setting rather than a global one.
 
-## Code
+`allowedSetsForSuite` narrows the set list per suite, for statistics whose coverage differs between suites.
 
-```tsx
-import { useState } from 'react';
-import { SingleRealizationFields } from '@/components/SingleRealizationFields/SingleRealizationFields';
-import type { SingleRealizationFieldsValue } from '@/components/SingleRealizationFields/SingleRealizationFields';
-import { useCatalogMetadata } from '@/lib/useCatalogMetadata';
+## Tokens
 
-function Sidebar() {
-  const catalog = useCatalogMetadata();
-  const [value, setValue] = useState<SingleRealizationFieldsValue>({
-    suite: 'IllustrisTNG', setName: 'LH', realization: 42,
-  });
-  return <SingleRealizationFields catalog={catalog} value={value} onChange={setValue} />;
-}
-```
+None directly. Every visible surface belongs to the fields this block composes.
+
+## Behaviour
+
+- Changing the set resets the realization, and picks the correct 1P identifier form for the active scheme.
+- Legacy 1P parameter names come from the catalog where they are published, and fall back to `p1`, `p2`.
+
+## Accessibility
+
+Inherited from the composed fields.
+
+## Content
+
+Identical conventions to `Realization fields`: set labels rather than codes, published parameter names
+where they exist, numbered fallbacks where they do not.
+
+## Use it
+
+- For a statistic that renders one simulation per tile, such as a profile or a map.
+
+## Don't use it
+
+- Where overlaying several realizations is meaningful. Use `Realization fields`.
+
+## Related
+
+- `Patterns / Realization fields` — the compare-capable version
+- `Patterns / Statistic sidebar` — the shell this block opens
+
+## Source files
+
+`SingleRealizationFields.tsx` · `SingleRealizationFields.stories.tsx`

@@ -4,7 +4,7 @@ import { BlackholeMergersSidebar } from './BlackholeMergersSidebar';
 import type { BlackholeMergersParams } from './BlackholeMergersSidebar';
 
 const meta: Meta<typeof BlackholeMergersSidebar> = {
-  title: 'Sections/BlackholeMergersSidebar',
+  title: 'Statistic sidebars/BlackholeMergersSidebar',
   component: BlackholeMergersSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '480px' }}><Story /></div>],

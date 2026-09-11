@@ -4,14 +4,13 @@ import './TopNav.css';
 
 export type TopNavProps = {
   onAddPlot: () => void;
-  /** Real slot (Figma node 1012:1124, "header") for Toolbar - the real
-   * frame shows breadcrumbs/toolbar/Add Plot in one row, not two. Omit
-   * entirely (not just hide) when no plot exists yet - see TopNav.mdx. */
+  /** Slot for the `Toolbar`, which shares this one row with the Add Plot
+   * button. Omit it entirely, rather than rendering a hidden one, when no
+   * plot exists yet. */
   toolbar?: ReactNode;
-  /** LoadingIndicator, added 2026-08-05 on direct request ("perhaps on the
-   * right of the top nav, left of the Add plot button") - rendered in its
-   * own flex group with the Add Plot button so it always sits immediately
-   * to its left regardless of whether `toolbar` is present. */
+  /** Slot for the `LoadingIndicator`. It shares a flex group with the Add
+   * Plot button, so it always sits immediately to the button's left whether
+   * or not `toolbar` is present. */
   loadingIndicator?: ReactNode;
 };
 

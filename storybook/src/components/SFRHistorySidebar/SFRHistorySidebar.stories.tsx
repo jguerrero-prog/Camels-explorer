@@ -4,7 +4,7 @@ import { SFRHistorySidebar } from './SFRHistorySidebar';
 import type { SFRHistoryParams } from './SFRHistorySidebar';
 
 const meta: Meta<typeof SFRHistorySidebar> = {
-  title: 'Sections/SFRHistorySidebar',
+  title: 'Statistic sidebars/SFRHistorySidebar',
   component: SFRHistorySidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '900px' }}><Story /></div>],

@@ -5,9 +5,13 @@ import { SelectField } from '../SelectField/SelectField';
 import { Slider } from '../Slider/Slider';
 import { NumberStepper } from '../NumberStepper/NumberStepper';
 import { Checkbox } from '../Checkbox/Checkbox';
+import { Button } from '../Button/Button';
+
+const SUITES = ['IllustrisTNG', 'SIMBA', 'Astrid', 'Swift-EAGLE'];
+const SETS = ['LH · Latin Hypercube', 'CV · Cosmic Variance', '1P · One-Parameter'];
 
 const meta: Meta<typeof ParamsSidebar> = {
-  title: 'Sections/ParamsSidebar',
+  title: 'Chrome/ParamsSidebar',
   component: ParamsSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '100vh' }}><Story /></div>],
@@ -16,29 +20,68 @@ export default meta;
 
 type Story = StoryObj<typeof ParamsSidebar>;
 
-// Field labels/values are generic, not the real Figma copy (Suite/
-// IllustrisTNG, Set/LH, Realization, Compare mode) - see ParamsSidebar.mdx
-// Usecase for where the real, confirmed field names are documented in prose.
-// title is left as real structural context (which statistic), not a
-// control label this rule is about.
-function Interactive() {
-  const [select1, setSelect1] = useState('Selected value');
-  const [select2, setSelect2] = useState('Selected value');
-  const [sliderValue, setSliderValue] = useState(278);
-  const [stepperValue, setStepperValue] = useState(10.0);
-  const [checked, setChecked] = useState(false);
-
+/** The core three controls every statistic opens with. */
+function CoreFields() {
+  const [suite, setSuite] = useState('IllustrisTNG');
+  const [set, setSet] = useState('LH · Latin Hypercube');
+  const [realization, setRealization] = useState(0);
   return (
-    <ParamsSidebar title="SFR History">
-      <SelectField label="Select label 1" value={select1} options={['Selected value', 'Option B', 'Option C']} onChange={setSelect1} />
-      <SelectField label="Select label 2" value={select2} options={['Selected value', 'Option B', 'Option C']} onChange={setSelect2} />
-      <Slider label="Slider label" min={0} max={999} value={sliderValue} onChange={setSliderValue} />
-      <NumberStepper label="Number label" value={stepperValue} step={0.1} onChange={setStepperValue} formatValue={(v) => v.toFixed(1)} />
-      <Checkbox label="Checkbox label" checked={checked} onChange={setChecked} />
+    <>
+      <SelectField label="Suite" value={suite} options={SUITES} onChange={setSuite} />
+      <SelectField label="Set" value={set} options={SETS} onChange={setSet} />
+      <NumberStepper
+        label="Realization"
+        value={realization}
+        step={1}
+        caption="0–999"
+        onChange={setRealization}
+        formatValue={(v) => String(v)}
+      />
+    </>
+  );
+}
+
+/** Power Spectrum: the core three plus this statistic's own controls. */
+function PowerSpectrum() {
+  const [snapshot, setSnapshot] = useState(33);
+  const [grid, setGrid] = useState(512);
+  const [compare, setCompare] = useState(false);
+  const [mas, setMas] = useState('CIC');
+  return (
+    <ParamsSidebar title="Power Spectrum" footer={<Button variant="secondary">Remove plot</Button>}>
+      <CoreFields />
+      <Checkbox label="Compare mode" checked={compare} onChange={setCompare} />
+      <Slider label="Snapshot" min={0} max={33} value={snapshot} onChange={setSnapshot} />
+      <Slider label="Grid size" min={64} max={512} value={grid} onChange={setGrid} />
+      <SelectField label="Mass Assignment Scheme" value={mas} options={['NGP', 'CIC', 'TSC', 'PCS']} onChange={setMas} />
     </ParamsSidebar>
   );
 }
 
-export const Playground: Story = {
-  render: () => <Interactive />,
+export const Default: Story = { render: () => <PowerSpectrum /> };
+
+export const Playground: Story = { render: () => <PowerSpectrum /> };
+
+/** Enough controls to overflow the panel, which reveals the bottom fade. Remove plot stays pinned. */
+export const Overflowing: Story = {
+  render: () => {
+    const [v, setV] = useState(1);
+    return (
+      <ParamsSidebar title="SFR History" footer={<Button variant="secondary">Remove plot</Button>}>
+        <CoreFields />
+        {['z min', 'z max', 'Bins', 'Ωm', 'σ8', 'A_SN1', 'A_AGN1', 'A_SN2', 'A_AGN2'].map((label) => (
+          <Slider key={label} label={label} min={0} max={10} value={v} onChange={setV} />
+        ))}
+      </ParamsSidebar>
+    );
+  },
+};
+
+/** Without a footer. The scroll region takes the full height. */
+export const NoFooter: Story = {
+  render: () => (
+    <ParamsSidebar title="Spread Metric">
+      <CoreFields />
+    </ParamsSidebar>
+  ),
 };

@@ -4,7 +4,7 @@ import { UnderlyingHalos } from './UnderlyingHalos';
 import type { HaloRow, ColumnDef } from './UnderlyingHalos';
 
 const meta: Meta<typeof UnderlyingHalos> = {
-  title: 'Fields/UnderlyingHalos',
+  title: 'Data display/Table (UnderlyingHalos)',
   component: UnderlyingHalos,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '640px', background: 'var(--color-surface-content)', padding: '16px' }}><Story /></div>],

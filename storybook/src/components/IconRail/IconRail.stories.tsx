@@ -4,7 +4,7 @@ import { IconRail } from './IconRail';
 import type { IconRailPanel } from './IconRail';
 
 const meta: Meta<typeof IconRail> = {
-  title: 'Sections/IconRail',
+  title: 'Chrome/IconRail',
   component: IconRail,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '100vh' }}><Story /></div>],

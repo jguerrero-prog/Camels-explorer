@@ -4,7 +4,7 @@ import { AhfHaloProfilesSidebar } from './AhfHaloProfilesSidebar';
 import type { AhfHaloProfilesParams } from './AhfHaloProfilesSidebar';
 
 const meta: Meta<typeof AhfHaloProfilesSidebar> = {
-  title: 'Sections/AhfHaloProfilesSidebar',
+  title: 'Statistic sidebars/AhfHaloProfilesSidebar',
   component: AhfHaloProfilesSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '600px' }}><Story /></div>],

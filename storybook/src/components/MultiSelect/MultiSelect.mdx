@@ -1,64 +1,85 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as MultiSelectStories from './MultiSelect.stories';
+import * as Stories from './MultiSelect.stories';
 
-<Meta of={MultiSelectStories} />
+<Meta of={Stories} />
 
 # MultiSelect
 
-A chip-based multi-value field. Real source: Figma node `1019:37` ("field-Realizations to compare") — chips for existing values, each removable, plus a text input for adding more.
+Several values from one field, each shown as a removable chip.
 
-## Token
+`Source: figma:1019:37`
 
-- `--color-surface-control` / `--color-border-subtle` — the outer box, same as `SelectField`'s
-- `--color-surface-chip` (`--neutral-920`, new) — each chip's fill, distinct from any other surface token in the system so far
-- `--color-surface-chrome` — the dropdown menu's own background (matches `SelectField`'s menu)
-- `--font-ui` (Inter) — chip values, the add-input's typed text, and dropdown option labels
-- `--color-text-muted` — the × remove glyph, the input's placeholder, and the caption
+## Anatomy
 
-## Spec
+```
+.multi-select
+├── .multi-select__label
+├── .multi-select__box        wrapping, padding 8, gap 6, surface/control
+│   ├── .multi-select__chip[]   surface/chip, radius 6
+│   │   ├── __chip-value
+│   │   └── __chip-remove
+│   ├── .multi-select__input    grows to fill the remaining row
+│   └── .multi-select__chevron  only when `options` is supplied
+├── .multi-select__menu       role="listbox", the unselected options
+└── .multi-select__caption
+```
 
-<Canvas of={MultiSelectStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-- Label above (12px muted), then a wrapping box (8px padding, 8px border radius) holding chips, an inline text input, and (when `options` is passed) a chevron trigger.
-- Each chip: 6px radius, `--color-surface-chip` fill, value + a muted "×", the whole chip clickable to remove.
-- The add-input has no visible border of its own — it sits flush inside the shared box, `flex: 1 0 80px` so it always has room to grow/type even with several chips present.
-- Optional `caption` line below the box (11px muted), same pattern as `SelectField`'s/`NumberStepper`'s.
+## Variants and states
 
-**Real bug fixed 2026-08-04 — dropdown affordance added:** this component's own "Still open" note previously flagged that free-typing alone left "which values are actually valid" undiscoverable. Direct user feedback confirmed exactly that gap: real usage should let people pick from a dropdown, not only type. `options` (when passed) renders a chevron trigger that opens a portal-based menu (`document.body`, `position: fixed` from the trigger's real on-screen rect — identical technique to `SelectField`'s own open menu, including its clipping fix) listing every option not already added; picking one calls `onAdd` directly. Typing + Enter still works exactly as before — the dropdown is an addition, not a replacement.
+<Canvas of={Stories.WithOptions} />
 
-**Real bug fixed 2026-08-04 — the menu couldn't actually be scrolled.** Both this menu and `SelectField`'s close on scroll via a capture-phase `window` listener — but that listener also receives scroll events fired by the menu's *own* internal list scrolling (its `max-height` makes it independently scrollable), so the very first scroll gesture inside a long list closed the menu instead of scrolling it. Caught directly: a 66-realization set showed a caption claiming "66 realizations available" but the dropdown only ever showed the first ~9, with no way to reach the rest. Fixed by checking the scroll event's own target and ignoring it when the scroll originated inside `.multi-select__menu`.
+Without `options` the control is type-only. With them, a chevron opens a menu of values not already added,
+which is how realizations are picked from a known set.
 
-<Canvas of={MultiSelectStories.WithOptions} />
+## Tokens
 
-**The `Playground` Canvas renders "Multi-select label" and generic chip values, not "Realizations to compare"/"278"/"3"/"Add realization…".** This story demonstrates the control's mechanics, not confirmed copy — the real labels/values are documented in Usecase below and in the Code snippet's illustrative real usage instead. `WithOptions` above is the real shape: caption showing a total count, dropdown listing every valid realization not yet added.
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-control` | Box fill |
+| `--color-surface-chip` | Chip fill |
+| `--color-border-subtle` | Box border |
+| `--color-surface-chrome` | Menu fill |
+| `--color-surface-toggle-active` | Option hover |
+| `--color-text-primary` | Chip values, options |
+| `--color-text-muted` | Label, caption, remove affordance |
 
-**Still open:** no visible "already added" / duplicate-prevention state beyond simply excluding already-added values from the dropdown list — typing a duplicate value directly is still possible and silently deduplicated by the caller (see `MassRangeSidebar`'s `onAdd`, which checks `!params.realizations.includes(n)` before adding).
+## Behaviour
 
-## Usecase
+- The box wraps. Adding chips makes it taller, never wider, so the sidebar column holds.
+- Already-selected values are excluded from the menu rather than shown as disabled.
+- The menu renders in a portal, like `SelectField`, so a scrollable ancestor cannot clip it.
 
-- Real, confirmed usage: `MassRangeSidebar`'s "Realizations to compare" field — directly powers Compare mode (see `Checkbox.mdx`) once more than one realization is selected. `caption` shows the selected set's real total realization count; `options` is every integer from `0` to `realizations - 1`.
-- Use for any field where a user picks an open-ended set of discrete values, as opposed to `SelectField` (exactly one value from a fixed list).
-- Omit `options` for a field with no fixed valid-value list — the component falls back to free-typing only, no chevron/dropdown rendered at all (see `Playground` above).
+## Accessibility
 
-## Code
+- The menu carries `role="listbox"` with `role="option"` children, and the trigger carries `aria-expanded`
+  and `aria-haspopup`.
+- `Source: gap`. Each chip's remove control has no accessible name, so a screen reader hears the value twice
+  with no indication that the second is a remove button. Backspace does not remove the last chip.
 
-```tsx
-import { useState } from 'react';
-import { MultiSelect } from '@/components/MultiSelect/MultiSelect';
+## Content
 
-function RealizationsToCompare({ totalRealizations }) {
-  const [values, setValues] = useState(['278', '3']);
-  return (
-    <MultiSelect
-      label="Realizations to compare"
-      values={values}
-      onRemove={(v) => setValues((prev) => prev.filter((x) => x !== v))}
-      onAdd={(v) => setValues((prev) => (prev.includes(v) ? prev : [...prev, v]))}
-      placeholder="Add realization…"
-      caption={`${totalRealizations.toLocaleString()} realizations available`}
-      options={Array.from({ length: totalRealizations }, (_, i) => String(i))}
-    />
-  );
-}
-```
+Label plural, because the field holds several values: "Realizations to compare". The caption states how many
+are available, not how many are chosen.
+
+## Use it
+
+- Several values of one field: realizations to compare, suites to compare.
+
+## Don't use it
+
+- For exactly one value. Use `SelectField`.
+- For independent settings. Use several `Checkbox`es.
+
+## Related
+
+- `SelectField` — one value, same menu mechanics
+- **Patterns / Realization fields** — its main host, in compare mode
+
+## Source files
+
+`MultiSelect.tsx` · `MultiSelect.css` · `MultiSelect.stories.tsx`

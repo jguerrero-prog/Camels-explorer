@@ -4,7 +4,7 @@ import { GalaxyScalingRelationsSidebar } from './GalaxyScalingRelationsSidebar';
 import type { GalaxyScalingRelationsParams } from './GalaxyScalingRelationsSidebar';
 
 const meta: Meta<typeof GalaxyScalingRelationsSidebar> = {
-  title: 'Sections/GalaxyScalingRelationsSidebar',
+  title: 'Statistic sidebars/GalaxyScalingRelationsSidebar',
   component: GalaxyScalingRelationsSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '640px' }}><Story /></div>],

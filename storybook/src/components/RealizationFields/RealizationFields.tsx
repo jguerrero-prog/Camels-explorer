@@ -15,17 +15,14 @@ export type RealizationFieldsValue = {
   suite: string;
   setName: string;
   compareMode: boolean;
-  // A plain realization index for every set except 1P, whose real folders
-  // are compound-named by parameter+variation (e.g. "p11_2") - see the 1P
-  // block below.
+  /** A plain index for every set except 1P, whose identifiers are compound,
+   * naming a parameter and a variation such as `p11_2`. */
   realizations: (number | string)[];
-  /** Which axis Compare mode varies (issue #56) - 'realization' (fixed
-   * suite, multiple realizations - the original, only behavior) or 'suite'
-   * (fixed realization, multiple suites), letting a user check a result
-   * against a different simulation code the way CAMELS' own papers do via
-   * the CV set's shared realizations across suites. Optional and defaults
-   * to 'realization' when omitted, so every existing value/caller keeps
-   * its exact current behavior without needing to set this. */
+  /** Which axis Compare mode varies. `realization` fixes the suite and
+   * overlays several realizations; `suite` fixes the realization and overlays
+   * several suites, which is how a result is checked against a different
+   * simulation code, using the CV set's shared realizations. Defaults to
+   * `realization`. */
   compareAxis?: 'realization' | 'suite';
   /** Selected suites when compareAxis === 'suite'. Ignored otherwise. */
   compareSuites?: string[];
@@ -42,26 +39,20 @@ export type RealizationFieldsProps = {
   catalog: Catalog | null;
   value: RealizationFieldsValue;
   onChange: (value: RealizationFieldsValue) => void;
-  /** Restricts the Suite dropdown to only these suites - e.g. SFR History
-   * only has real coverage for 3 of 4 (backend.py's PUBLIC_SFRH_SUITES,
-   * exposed as GET /api/metadata's statistic_suites). Omit when every
-   * suite is real for this statistic (most are). Added 2026-08-05 so an
-   * unsupported combination can't be configured in the first place, rather
-   * than only being disclosed as "No data available" after the fact. */
+  /** Restricts the Suite dropdown to these suites, for a statistic that is
+   * not published for all of them. The list comes from
+   * `GET /api/metadata`'s `statistic_suites`. Omit when every suite applies,
+   * which is the usual case. Narrowing the dropdown prevents configuring a
+   * combination that has no data, rather than reporting it afterwards. */
   allowedSuites?: string[];
-  /** Restricts the Set dropdown similarly - only Bispectrum is narrower
-   * than "every set" among this component's real statistics. */
+  /** Restricts the Set dropdown the same way. Among the statistics using
+   * this block, only Bispectrum is narrower than every set. */
   allowedSets?: string[];
 };
 
-/** Suite / Set / Compare mode / Realization(s) - the real fields every
- * per-tile sidebar in this app opens with, regardless of which statistic
- * it's for (see `GET /api/metadata`'s own suites/sets, shared across every
- * statistic). Extracted 2026-08-05 from `MassRangeSidebar` once
- * `PowerSpectrumSidebar`/`BispectrumSidebar`/`SFRHistorySidebar` were about
- * to duplicate the identical block a 3rd/4th/5th time - not a
- * pre-emptive abstraction, real duplication crossing the "three strikes"
- * line this project already applies elsewhere. */
+/** Suite, Set, Compare mode and Realization: the block every per-tile
+ * sidebar opens with, whichever statistic it is for. Suites and sets come
+ * from `GET /api/metadata` and are shared across all statistics. */
 export function RealizationFields({ catalog, value, onChange, allowedSuites, allowedSets }: RealizationFieldsProps) {
   const activeSet = catalog?.sets.find((s) => s.name === value.setName);
   const realizationCount = realizationCountFor(catalog, value.setName, value.suite);

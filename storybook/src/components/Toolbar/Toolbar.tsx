@@ -18,54 +18,40 @@ export type ToolbarProps = {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   onAnnotate?: () => void;
-  /** Whether Annotate mode is currently on (App.tsx's own `annotateMode`)
-   * - shows the same pressed-background treatment as the view-mode
-   * toggle's active option, so it's clear the next click on a chart will
-   * drop a pin rather than just focus the tile. */
+  /** Whether Annotate mode is on. Takes the same pressed treatment as the
+   * active view mode, so it is clear that the next click on a chart drops a
+   * pin rather than focusing the tile. */
   annotateActive?: boolean;
-  /** Real (added 2026-08-06, no Figma design - user-requested directly):
-   * draw a straight arrow of arbitrary length/direction anywhere on a
-   * tile's chart, by clicking a start point then an end point. Distinct
-   * from Annotate (a pin tied to one precise point, always carries text)
-   * - an arrow points AT something without necessarily saying anything
-   * about it. */
+  /** Enters arrow mode: click a start point, then an end point. Unlike an
+   * annotation, an arrow points at something without saying anything about
+   * it. */
   onArrow?: () => void;
   arrowActive?: boolean;
-  /** Real (added 2026-08-06, no Figma design) - a free-floating text note,
-   * placed with a single click anywhere on a tile. Distinct from
-   * Annotate: no anchor pin/dot, no precise-location semantics - just a
-   * note living on the canvas near where it was dropped. */
+  /** Enters note mode: one click places a free-floating card. Unlike an
+   * annotation it has no pin and no precise location, so it is for a remark
+   * about the figure rather than about a point in it. */
   onNote?: () => void;
   noteActive?: boolean;
   onHide?: () => void;
-  /** Real (added 2026-08-06, direct user feedback: "I want us to create a
-   * hide feature on the toolbar... hide annotations, arrows, notes, or
-   * the paramreadouts"). Same `toolbar__tool-wrap`/`toolbar__popover-anchor`
-   * pattern as Ratio/diff and Copy as code below - a real popover, not a
-   * toggle-mode tool, so (unlike Annotate/Arrow/Note) there's no
-   * `hideActive` prop; the button's own look never changes, only whether
-   * the popover renders. */
+  /** Slot for `HidePopover`, anchored below the Hide button. A popover
+   * rather than a mode, so there is no active state: the button's look never
+   * changes, only whether the popover renders. */
   hidePopover?: ReactNode;
   onRatioDiff?: () => void;
-  /** Real (Figma node 989-10's ratio-diff-popover) - rendered directly
-   * below the Ratio/diff button, same `toolbar__tool-wrap` anchor pattern
-   * as Copy as code's own popover. */
+  /** Slot for `RatioDiffPopover`, anchored below the Ratio/diff button. */
   ratioDiffPopover?: ReactNode;
   onRuler?: () => void;
-  /** Whether Ruler mode is currently on (App.tsx's own `rulerMode`) - same
-   * pressed treatment as Annotate's own active state. */
+  /** Whether Ruler mode is on. Same pressed treatment as Annotate. */
   rulerActive?: boolean;
   onLinkedBrushing?: () => void;
-  /** Whether Linked brushing mode is currently on (App.tsx's own
-   * `brushCaptureActive`) - same pressed treatment as Annotate/Ruler. */
+  /** Whether Linked brushing mode is on. Same pressed treatment as
+   * Annotate and Ruler. */
   linkedBrushingActive?: boolean;
   onCopyProvenance?: () => void;
   onCopyAsCode?: () => void;
-  /** Real (Figma node 1076-10's plot-code-modal) - rendered directly below
-   * the Copy as code button (this file owns the `position: relative`
-   * anchor + the real dropdown-style pointer/offset), so App.tsx only
-   * needs to decide whether the popover is open and what code to show,
-   * not where onscreen it lives. */
+  /** Slot for `CopyAsCodePopover`. The toolbar owns the anchor and the
+   * pointer offset, so a caller only decides whether it is open and what
+   * code to show, not where it sits. */
   copyAsCodePopover?: ReactNode;
 };
 

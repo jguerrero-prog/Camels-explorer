@@ -4,7 +4,7 @@ import { SimulationParametersSidebar } from './SimulationParametersSidebar';
 import type { SimulationParametersParams } from './SimulationParametersSidebar';
 
 const meta: Meta<typeof SimulationParametersSidebar> = {
-  title: 'Sections/SimulationParametersSidebar',
+  title: 'Statistic sidebars/SimulationParametersSidebar',
   component: SimulationParametersSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '360px' }}><Story /></div>],

@@ -1,47 +1,88 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as NoteOverlayStories from './NoteOverlay.stories';
+import * as Stories from './NoteOverlay.stories';
 
-<Meta of={NoteOverlayStories} />
+<Meta of={Stories} />
 
 # NoteOverlay
 
-The toolbar's Note tool (added 2026-08-06, no Figma design - requested directly: "the ability to add a note, different from annotation"). A free-floating, draggable text note dropped with one click. Deliberately distinct from Annotate: no anchor pin/dot (a note isn't tied to one precise data point) and no author/timestamp callout - just text on the canvas.
+A draggable card on a tile, for a remark that is not tied to a data point. Built to survive a screenshot
+into a slide.
 
-## Token
+`Source: code`
 
-- `--color-note-surface` (`--brand-deep-crimson`) — the card's own flat fill
-- `--color-note-border` (`--brand-crimson-red`) — a one-step-brighter edge in the same red family, purely for a crisp flat-card outline, not for contrast
-- `--color-note-text` (`--color-text-emphasis`) — white, verified 9.3:1 contrast against the surface (WCAG AAA)
+## Anatomy
 
-## Spec
+```
+.note-card                   200px, z-index 6, positioned by percentage
+├── __handle                 drag area, holds __delete
+├── __text                   click to edit
+└── editing: __input (textarea, autofocused) + __save
+.note-card--dragging         while a drag is in progress
+```
 
-<Canvas of={NoteOverlayStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-**Real fix (2026-08-06, direct user feedback):** the original card was a translucent warm-amber wash over the canvas, which failed WCAG contrast - a translucent fill's real contrast depends on whatever sits behind it, unreliable by construction. Now a flat, fully OPAQUE cardinal-red card with white text - a real index card a researcher could screenshot straight into a presentation slide, not a floating glassmorphic panel. Contrast verified via the standard relative-luminance formula: white-on-`#8B1A1A` = 9.3:1, comfortably clearing WCAG AAA's 7:1 bar, not just AA's 4.5:1.
+## Variants and states
 
-A drag handle sits along the top edge (mousedown+drag repositions the note - a free note has no "correct" location the way a pinned annotation does); the delete `×` sits in the same row. Clicking the text switches to an editable `<textarea>` with Save; `draft` (a just-placed, not-yet-saved note) renders the same editable state with no delete button yet, since there's nothing real to delete.
+<Canvas of={Stories.OnWhiteChartCard} />
 
-`OnWhiteChartCard` is the primary reference view here - the exact real-world context (a white Plotly chart card) this redesign was built to read cleanly against.
+The white-card story is the reason the card is opaque. A note sits over dark chrome in one place and a white
+plot in another, and a translucent fill takes its contrast from whatever happens to be behind it. The card
+is a solid crimson with white text, so it reads the same in both positions. See Decision log, DR-003.
 
-## Usecase
+Three states: at rest, editing (click the text), and dragging.
 
-- Rendered by `App.tsx`'s `renderAnnotationOverlay(tile)` alongside `AnnotationOverlay`/`ArrowOverlay`/`LinkedBrushOverlay`.
-- Only wired when Note mode is on (`App.tsx`'s `noteMode`, part of the shared `activeTool` state).
-- Dragging reads/writes fractional (`xFrac`/`yFrac`) coordinates against the tile's own `.plot-tile__chart-area` bounding box - the same coordinate space every other click-placed overlay in this app uses, so a note stays correctly placed regardless of how large the tile renders.
+## Tokens
 
-## Code
+| Token | Applies to |
+| --- | --- |
+| `--color-note-surface` | Card fill |
+| `--color-note-border` | Card border |
+| `--color-note-text` | Text, and the Save button fill |
+| `--font-label` | Save button |
 
-```tsx
-import { NoteOverlay } from '@/components/NoteOverlay/NoteOverlay';
+No drop shadow, matching the annotation callout: the card sits on the page rather than above it.
 
-<NoteOverlay
-  notes={notesByTile[tile.id] ?? []}
-  onSaveText={(id, text) => saveNoteText(tile.id, id, text)}
-  onDelete={(id) => removeNote(tile.id, id)}
-  onMove={(id, xFrac, yFrac) => moveNote(tile.id, id, xFrac, yFrac)}
-  draft={noteDraft?.tileId === tile.id ? noteDraft : null}
-  onSaveDraft={(text) => saveNoteDraft(tile.id, text)}
-  onCancelDraft={() => setNoteDraft(null)}
-/>
-```
+## Behaviour
+
+- Dragged by its handle. The drag is measured against the enclosing `.plot-tile__chart-area`, so a note
+  stays inside the chart region and is stored as a fraction of it.
+- Position is clamped to 0–1, so a note cannot be dragged out of its tile.
+- Move events are bound to the window during a drag and removed on release, so a drag continues even when
+  the pointer leaves the card.
+- Clicking the text opens an editor; Save trims and commits. Clicks are stopped at the card.
+- `hidden` on a note is honoured by the Hide popover's Notes category, not here.
+
+## Accessibility
+
+- The delete control carries `aria-label` and `title`, and `:focus-within` reveals it rather than hover
+  alone, so a keyboard user can reach it once focus is in the card. The same pattern hides it from a
+  screenshot.
+- `Source: gap`. Dragging is pointer-only, with no keyboard way to move a note; the card itself is not
+  focusable; and the text is made editable by a click handler on a paragraph rather than by a control.
+
+## Content
+
+The note is the user's own words. Nothing here is supplied by the interface.
+
+## Use it
+
+- A remark about the figure as a whole.
+- A caption that needs to survive into a slide or a paper.
+
+## Don't use it
+
+- For a comment about one point in the data. Use `AnnotationOverlay`.
+
+## Related
+
+- `AnnotationOverlay` — pinned to a coordinate
+- `HidePopover` — hides all notes at once
+- `Toolbar` — the note mode
+
+## Source files
+
+`NoteOverlay.tsx` · `NoteOverlay.css` · `NoteOverlay.stories.tsx`

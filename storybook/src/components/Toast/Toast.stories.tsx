@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Toast } from './Toast';
 
 const meta: Meta<typeof Toast> = {
-  title: 'Sections/Toast',
+  title: 'Primitives/Toast',
   component: Toast,
   parameters: { layout: 'centered', backgrounds: { default: 'dark' } },
   decorators: [(Story) => <div style={{ background: 'var(--color-surface-canvas)', padding: '48px' }}><Story /></div>],

@@ -4,7 +4,7 @@ import { ParticleCloud3DSidebar } from './ParticleCloud3DSidebar';
 import type { ParticleCloud3DParams } from './ParticleCloud3DSidebar';
 
 const meta: Meta<typeof ParticleCloud3DSidebar> = {
-  title: 'Sections/ParticleCloud3DSidebar',
+  title: 'Statistic sidebars/ParticleCloud3DSidebar',
   component: ParticleCloud3DSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '520px' }}><Story /></div>],

@@ -3,36 +3,25 @@ import type { ReactNode } from 'react';
 import './ParamsSidebar.css';
 
 export type ParamsSidebarProps = {
-  /** The statistic's own name, e.g. "SFR History". */
+  /** The statistic's name, for example "SFR History". */
   title: string;
-  /** Real fields are heterogeneous - SelectField, Slider, NumberStepper,
-   * Checkbox, MultiSelect all appear in the real params panel depending on
-   * the statistic (confirmed 2026-08-04 across multiple frames). ParamsSidebar
-   * only owns the panel shell (title/divider/scroll/footer) - composing the
-   * right fields for a given statistic is the caller's job, matching
-   * STUDIO_PLAN.md's "only show controls a statistic actually consumes"
-   * rule. This is the SCROLLABLE region - see `footer` for content that
-   * must stay pinned below it. */
+  /**
+   * The statistic's controls, in display order. This region scrolls. Fields are
+   * heterogeneous by design: compose whichever of SelectField, Slider,
+   * NumberStepper, Checkbox, Radio and MultiSelect the statistic consumes.
+   */
   children: ReactNode;
-  /** Real (generalized 2026-08-06 from CustomSidebar's own original
-   * per-component fix - every one of the other 12 sidebars hardcoded the
-   * exact same trailing `<Button variant="secondary" onClick={onRemove}>
-   * Remove plot</Button>` as a plain child, which is exactly the content a
-   * user must always be able to reach even if `children` overflows -
-   * pinned outside the scrollable area, never scrolling out of view. */
+  /**
+   * Pinned below the scroll region and never scrolled out of view. In every
+   * current caller this is the Remove plot button.
+   */
   footer?: ReactNode;
 };
 
-/** Real fix (2026-08-06, generalized from CustomSidebar's own 2026-08-05
- * fix - see that component's git history): a statistic with enough real
- * controls (many filter fields, a long field-tree, several sliders) can
- * genuinely overflow this panel's fixed-height column - previously that
- * silently bled past the sidebar's own bottom edge (or FlatHUB long field
- * names caused actual horizontal overflow, see CustomTab.css's own
- * 2026-08-06 fix). Every one of the ~13 real per-statistic sidebars shares
- * this shell, so the fix belongs here once, not copy-pasted per statistic -
- * CustomSidebar previously hand-rolled its own version of exactly this
- * scroll-wrap/fade/MutationObserver, now removed as a duplicate. */
+/**
+ * The shell every statistic sidebar shares: title, divider, a scrolling
+ * control region with a bottom fade, and a pinned footer.
+ */
 export function ParamsSidebar({ title, children, footer }: ParamsSidebarProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollMore, setCanScrollMore] = useState(false);

@@ -15,51 +15,34 @@ export type PlotChartProps = {
   yLabel: string;
   logX?: boolean;
   logY?: boolean;
-  /** URL of a real, server-rendered matplotlib PNG for this exact chart
-   * (see PlotChart.mdx). When present, `displayMode: 'static'` renders it;
-   * when absent, `displayMode` should only ever be `'interactive'` - the
-   * parent (`PlotTile`) is responsible for not offering a Static option
-   * with nothing to show. */
+  /** URL of a server-rendered matplotlib PNG of this exact chart. When
+   * present, `displayMode: 'static'` renders it. When absent, `displayMode`
+   * must be `'interactive'`: `PlotTile` is responsible for not offering a
+   * Static option with nothing to show. */
   imageUrl?: string;
-  /** Real point-cloud mode for Custom tab's Scatterplot (added 2026-08-05)
-   * - every other call site plots regularly-ordered curves, where
-   * connecting points with 'lines' is meaningful; a raw cross-realization
-   * row scatter has no natural line order, so 'markers' is required, not
-   * just cosmetic. Exactly one entry in `series` is used in this mode -
-   * Scatterplot has no multi-series/compare concept the way every other
-   * statistic here does. Uses Plotly's plain 'scatter' trace type (SVG),
-   * not 'scattergl' - see feedback_camels_webgl_headless.md: WebGL
-   * renders aren't reliably verifiable via headless screenshot. */
+  /** `lines` for a curve, `markers` for a point cloud. Every curated
+   * statistic plots ordered curves, where connecting the points means
+   * something. A cross-realization scatter has no natural order, so markers
+   * are required there rather than cosmetic. In marker mode exactly one
+   * entry in `series` is used: a scatter has no compare concept. Drawn with
+   * Plotly's SVG `scatter` trace rather than `scattergl`. */
   mode?: 'lines' | 'markers';
-  /** Real third-field coloring (Scatterplot's optional Color field) - one
-   * value per point, same length/order as `series[0].x`/`y`. Renders via
-   * Plotly's native marker.colorscale/showscale (Viridis) with a real
-   * colorbar, not a second charting library. */
+  /** Colours each point by a third field: one value per point, in the same
+   * order and length as `series[0]`. Drawn with Plotly's own Viridis
+   * colorscale and colorbar. */
   markerColor?: { values: number[]; title: string };
-  /** Real (Ratio/diff overlay tool) - a derived series only ever renders
-   * via the live Plotly trace, never the server-rendered Static PNG (the
-   * PNG has no way to know about a client-computed extra series). Any
-   * defined, changing value here switches this chart to Interactive so
-   * the user actually sees the result they just asked for, rather than
-   * comparing against a Static view that silently didn't change. Still
-   * consumed here (not just by the parent) since detecting the *change*
-   * needs the same `useEffect` dependency-comparison PlotChart already
-   * did - see `onForceInteractive` below for how it now reaches the mode
-   * state, which moved up to `PlotTile` (real fix, 2026-08-06 - see
-   * PlotChart.mdx).) */
+  /** Any changing defined value switches the tile to Interactive. A series
+   * derived in the browser, such as a ratio or difference, cannot appear in
+   * the server-rendered PNG, so a Static view would silently not change.
+   * This component detects the change and reports it through
+   * `onForceInteractive`; the mode itself lives in `PlotTile`. */
   forceInteractiveSignal?: unknown;
-  /** Real fix (2026-08-06, direct user feedback: "the static/interactive
-   * toggle is becoming illegible... sits inside the plot"): this used to
-   * be internal state with its own on-chart toggle UI. Both moved up to
-   * `PlotTile` (which also needed the same mode to decide between showing
-   * a chart at all vs. a full `UnderlyingHalos` table - see
-   * `ChartModeDropdown`) - this component is now a fully controlled,
-   * dumb renderer for whichever mode it's told. */
+  /** Which way to draw: a static PNG, an interactive Plotly chart, or a 3D
+   * scatter. Fully controlled. `PlotTile` owns the mode, since it also needs
+   * it to decide between a chart and a halo table. */
   displayMode: Exclude<ChartDisplayMode, 'table'>;
-  /** Fires once when `forceInteractiveSignal` changes to a defined value -
-   * `PlotChart` still owns detecting that specific change (a plain prop
-   * comparison the parent would otherwise have to duplicate), but no
-   * longer owns what happens as a result. */
+  /** Fires when `forceInteractiveSignal` changes to a defined value. This
+   * component detects the change; the parent decides what to do about it. */
   onForceInteractive?: () => void;
 };
 

@@ -1,53 +1,95 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as CustomFilterSettingsModalStories from './CustomFilterSettingsModal.stories';
+import * as Stories from './CustomFilterSettingsModal.stories';
 
-<Meta of={CustomFilterSettingsModalStories} />
+<Meta of={Stories} />
 
-# CustomFilterSettingsModal
+# Filter settings
 
-Real fix (2026-08-06, direct user feedback: *"the filter settings on the side menu has a poor experience... turn 'filter settings' to instead open up a modal where all of the filters live and all of the context fits with no cutoffs"*). The real, live `CustomFilterTree` (`GET /api/custom/field-tree`) used to live in two separate cramped homes — inline inside `CustomFieldsForm` at tile-creation time (the Add Plot modal's ~400px column) and collapsed-by-default inside `CustomFilterSettings`' own sidebar section post-creation (the 280px `ParamsSidebar` column). Both now open this one shared, full-size modal instead — same real tree, same "+ Add"/"Remove" toggles, just given real room.
+Chooses which catalog fields act as filters on a custom plot. A full-size modal, because a field tree does
+not fit in a sidebar column.
 
-## Token
+`Source: figma:1066:10`
 
-- `--color-surface-content` — modal card background
-- `--color-border` / `--color-border-subtle` — card border, divider, tree guide-lines
-- `--font-label` (Lato) — title, tree labels/captions
+## Anatomy
 
-## Spec
+```
+.filter-settings-modal-backdrop       portal to document.body, click to dismiss
+└── .filter-settings-modal            role="dialog", aria-modal, aria-label="Filter settings"
+    ├── __header                      __title + __close
+    ├── __divider
+    └── __body                        caption, then CustomFilterTree
+```
 
-<Canvas of={CustomFilterSettingsModalStories.FoFHaloType} />
+## Playground
+
+<Canvas of={Stories.FoFHaloType} />
 <Controls />
 
-- 560px card, same backdrop/dialog shell language as `AddPlotModal` (full-screen `rgba(0,0,0,0.6)` backdrop, centered), but a distinct component — no tabs, no footer, since this modal only ever does one job.
-- Header: "Filter settings" title + 28px `×` close button. Divider. Body: caption + the real `CustomFilterTree`, capped to viewport height with its own scroll.
-- Closes via the `×` button, `Escape`, or a backdrop click (`onMouseDown` on the backdrop itself, guarded so a click that starts inside the card and drags out doesn't also close it).
+## Variants and states
 
-<Canvas of={CustomFilterSettingsModalStories.WithFieldsAlreadyAdded} />
-<Canvas of={CustomFilterSettingsModalStories.NoTypeSelectedYet} />
-<Canvas of={CustomFilterSettingsModalStories.TreeFetchError} />
+<Canvas of={Stories.WithFieldsAlreadyAdded} />
+<Canvas of={Stories.NoTypeSelectedYet} />
+<Canvas of={Stories.TreeLoading} />
+<Canvas of={Stories.TreeFetchError} />
 
-## Usecase
+Four of the five stories are states rather than content, because the tree is fetched and scoped:
 
-- **`CustomTab`** (Add Plot modal, tile creation) and **`CustomSidebar`** (`ParamsSidebar`, post-creation editing) both render `CustomFilterSettings` — a thin trigger button showing "Filter settings" plus a live count of active filter fields — which owns this modal's `open`/`close` state and passes `tree`/`treeError`/`selection`/`onChange` straight through. Neither caller talks to `CustomFilterSettingsModal` directly.
-- The tree shown is filtered to the current `selection.type` via `filterTreeForType` (`params` + whichever of `Group`/`Subhalo` matches) — the same filtering `CustomFieldsForm`'s old inline tree used, just called from here now.
-- Toggling a leaf's "+ Add"/"Remove" calls `toggleCustomFilterField`, which also drops any already-set range for a removed field — shared logic, not duplicated between the modal and any other tree consumer.
-- **Real, deliberate scope**: this modal only ever picks *which* fields are active filters, never *what value* they're filtered to — range/value editing stays in `CustomFilterValues` (sidebar-only, post-creation), since fixing a range blind inside a modal you have to close to see the effect of was the exact interaction bug a user caught in an earlier pass of this tab.
+- **No type selected** — the tree is filtered by the object type, so with no type there is nothing to show.
+  The body says "Pick a Type first" rather than rendering an empty tree.
+- **Loading** and **Error** — as elsewhere in the custom flow, the error names the likely cause rather than
+  reporting a failure abstractly.
+- **Fields already added** — groups holding active fields show a count badge, so a long tree still shows
+  where the current selection sits.
 
-## Code
+## Tokens
 
-```tsx
-import { useState } from 'react';
-import { CustomFilterSettings } from '@/components/AddPlotModal/CustomFilterSettings';
-import type { CustomSelection } from '@/components/AddPlotModal/CustomFieldsForm';
-import { useCustomFieldTree } from '@/lib/useCustomFields';
+| Token | Applies to |
+| --- | --- |
+| `--color-overlay` | Backdrop |
+| `--color-surface-content` | Modal fill |
+| `--color-border` | Border and divider |
+| `--color-text-primary` / `--color-text-muted` | Title, captions |
 
-function CustomFilterSettingsUsage({ selection, onChange }: {
-  selection: CustomSelection;
-  onChange: (s: CustomSelection) => void;
-}) {
-  const { tree, error: treeError } = useCustomFieldTree();
-  // CustomFilterSettings owns the open/close state and renders
-  // CustomFilterSettingsModal internally once opened.
-  return <CustomFilterSettings tree={tree} treeError={treeError} selection={selection} onChange={onChange} />;
-}
-```
+## Behaviour
+
+- Rendered through a portal to `document.body`, so it is never clipped by the sidebar or the tile it was
+  opened from.
+- Opened from two places with the same content: at tile creation, from the Add Plot modal's narrow column,
+  and afterwards from the custom sidebar. One full-size home replaced two cramped ones.
+- Nothing is pre-selected. Filters are opt-in, so a new custom plot starts unfiltered.
+- The tree is scoped to the selected object type; fields from other types are not shown.
+
+## Accessibility
+
+The most complete overlay in the application, and the model the others should follow:
+
+- `role="dialog"` with `aria-modal="true"` and an `aria-label`.
+- Escape closes it, via a document-level key listener cleaned up on unmount.
+- The backdrop dismisses only on a direct hit, so a drag that ends on the backdrop does not close it.
+- The close button carries both `aria-label` and `title`.
+- `Source: gap`. Focus is neither moved into the modal on open nor trapped inside it, and is not restored to
+  the trigger on close.
+
+## Content
+
+- The caption states the rule: "Add fields as live filters. Nothing is pre-selected."
+- Field and group names are catalog names, unchanged. Descriptions and units are shown as published.
+
+## Use it
+
+- Choosing filter fields for a custom plot, from either entry point.
+
+## Don't use it
+
+- To set filter values. The chosen fields get range controls in the sidebar.
+- For the curated statistics, which are selected by simulation rather than filtered.
+
+## Related
+
+- `Patterns / Custom plot` — the sidebar that opens it
+- `AddPlotModal` — the other entry point
+- `RangeFilterControl` — where a chosen field gets its values
+
+## Source files
+
+`CustomFilterSettingsModal.tsx` · `CustomFilterSettingsModal.css` · `CustomFilterSettingsModal.stories.tsx` · `CustomFilterTree.tsx`

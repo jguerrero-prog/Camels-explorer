@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { RatioDiffPopover } from './RatioDiffPopover';
 
 const meta: Meta<typeof RatioDiffPopover> = {
-  title: 'Sections/RatioDiffPopover',
+  title: 'Overlays/RatioDiffPopover',
   component: RatioDiffPopover,
   parameters: { layout: 'centered', backgrounds: { default: 'dark' } },
   decorators: [(Story) => <div style={{ background: 'var(--color-surface-chrome)', padding: '48px' }}><Story /></div>],

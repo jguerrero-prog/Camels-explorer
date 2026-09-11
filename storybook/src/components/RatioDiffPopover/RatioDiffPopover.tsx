@@ -5,12 +5,10 @@ export type RatioDiffCandidate = {
   tileId: string;
   title: string;
   caption: string;
-  /** Real, decided rule (Figma node 989-10 itself dims its own "Field
-   * PDF" row, a different statistic than the focused "SFR History") -
-   * only a tile of the SAME statistic as the focused one has an x-axis
-   * that means the same thing, so only those are real, offerable
-   * comparison targets. Different-statistic tiles still show (so a user
-   * can see why they're not offered), just disabled. */
+  /** Whether this tile can be compared against. Only a tile showing the
+   * same statistic has an x-axis that means the same thing. A tile showing a
+   * different statistic is still listed, but disabled, so the user can see
+   * why it is not on offer. */
   compatible: boolean;
 };
 
@@ -22,17 +20,15 @@ export type RatioDiffPopoverProps = {
   onCompare: (mode: 'ratio' | 'difference') => void;
   mode: 'ratio' | 'difference';
   onModeChange: (mode: 'ratio' | 'difference') => void;
-  /** Real fix (2026-08-06, code-quality audit): the sourced Figma frame
-   * (989-10) has no close button in this popover's own header, so one
-   * isn't added here either - but every other popover in the app (Hide,
-   * Copy as code) can be dismissed with Escape, and this one couldn't.
-   * Optional only because App.tsx is this component's one real caller and
-   * always provides it - not because a caller skipping it is expected. */
+  /** Dismisses the popover on Escape. There is no close button in the
+   * header, so this is the only way to leave without choosing something.
+   * Optional in the type because the application always supplies it, not
+   * because omitting it is expected. */
   onClose?: () => void;
 };
 
-/** Real (Figma node 989-10's ratio-diff-popover) - "Compare against"
- * popover for the Ratio/diff overlay tool. */
+/** "Compare against" popover for the ratio and difference tool: picks
+ * another tile to compare the focused tile against. */
 export function RatioDiffPopover({
   candidates, selectedTileId, onSelect, onNewPlot, onCompare, mode, onModeChange, onClose,
 }: RatioDiffPopoverProps) {

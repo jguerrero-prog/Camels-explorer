@@ -1,51 +1,83 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as SliderStories from './Slider.stories';
+import * as Stories from './Slider.stories';
 
-<Meta of={SliderStories} />
+<Meta of={Stories} />
 
 # Slider
 
-A range slider with a gradient fill, real source: Figma node `1055:33` ("slider-Realization"). Corrects an earlier assumption in `ParamsSidebar` that "Realization" was a dropdown-styled box — it's actually this.
+A value on a continuum, with the current value shown beside the label.
 
-## Token
+`Source: figma:1019:37`
 
-- `--color-surface-track` (`--neutral-850`, same primitive as `--color-border-subtle`) — the unfilled track
-- `--color-accent-gradient-start` → `--color-accent-gradient-end` — the filled portion, same gradient as `Button`'s primary variant and `Tile`'s empty-icon border
-- `--font-label` (Lato) — the label
-- `--font-ui` (Inter) — the current value, semibold
+## Anatomy
 
-## Spec
+```
+.slider
+├── .slider__label-row
+│   ├── .slider__label   Lato Regular 12, text/muted
+│   └── .slider__value   Inter Semi Bold 12, text/primary, right aligned
+└── .slider__track-wrap  14px tall
+    ├── .slider__track   4px, radius 2, surface/track
+    ├── .slider__fill    4px, accent gradient, left to the thumb
+    ├── .slider__thumb   14px circle
+    └── .slider__input   a native range input at opacity 0, covering the track
+```
 
-<Canvas of={SliderStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-- Label row: label (muted, left) and current value (semibold, right), `justify-content: space-between`.
-- Track: 4px tall, full width, 2px radius, `--color-surface-track`.
-- Fill: same height/radius, gradient, width = `(value - min) / (max - min)`.
-- Thumb: 14px, positioned at the fill's edge minus half its own width, so it sits centered on the fill boundary — matches the real frame's `left: 60px` for a 67px-wide fill (67 - 14/2 = 60).
-- `step` (added 2026-08-05, default `1`): every prior real usage (Bins, `OptionSlider`'s index ranges) is a whole-number range, where the default was never wrong. Real bug fixed for SFR History's Ωm/σ8/A_SN1/A_AGN1 sliders — a fractional real range (e.g. `0.1-0.5`) with the browser's default `step="1"` only ever lets the value sit at `min`, since no other integer fits in range.
+## Tokens
 
-**Real bug fixed 2026-08-05: `onChange` debounced (trailing, 300ms), not fired per drag tick.** Direct user report: dragging a slider on a param that triggers a real backend re-render (e.g. Snapshot) caused "crazy friction" and repeatedly slow plot renders — every one of `App.tsx`'s `refetchXXXTile` functions wires `onChange` straight to a full network round-trip, and a native `<input type="range">` fires `onChange` on every pixel of movement, not just on release. Fixing this here (rather than in all ~13 call sites, or worse, only some of them) means every slider — present and future — is correct by default. The thumb itself still tracks every tick instantly via local `dragValue` state; only the expensive `onChange` call is throttled, firing immediately on pointer release (feels as responsive as before) or after 300ms of inactivity (covers keyboard/arrow-key adjustment, which has no pointerup). See `LoadingIndicator.mdx` for the companion "is it still loading" cue this made worth building.
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-track` | Unfilled track |
+| `--color-accent-gradient-start` → `--color-accent-gradient-end` | Filled portion |
+| `--color-text-primary` | Current value |
+| `--color-text-muted` | Label |
+| `--font-label` | Label |
+| `--font-ui` | Value |
 
-**The Canvas above renders "Slider label," not "Realization."** This story demonstrates the control's mechanics, not confirmed copy — the real field name is documented in Usecase below instead.
+## Behaviour
 
-**Still open:**
-- A native `<input type="range">` is layered underneath, invisible, purely for keyboard/pointer accessibility — the visuals are entirely custom-drawn. This wasn't a real design decision, it's a standard accessible-custom-slider pattern; flagged so it's understood as an implementation choice, not something sourced from Figma.
-- No drag-to-scrub visual feedback (e.g. thumb scale-up while dragging) is specified in the real frame.
+- The visible track is decorative. A native `input[type=range]` sits transparently on top, so keyboard,
+  pointer and assistive input all work without reimplementation.
+- `step` defaults to 1. Pass a fractional step for a narrow range: a 0.1 to 0.5 range at step 1 can only ever
+  sit at its minimum.
+- `formatValue` controls the readout only, never the value. Use it for units and precision.
 
-## Usecase
+## Accessibility
 
-- Real, confirmed usage: SFR History's "Realization" field inside `ParamsSidebar`.
-- Reasonable for any single bounded numeric parameter a user scrubs rather than types — don't reach for it for values with no natural min/max (use `NumberStepper` for step-driven values like z max instead).
+- The native range input carries the role, the value and keyboard support: arrows step, Home and End jump to
+  the bounds.
+- `Source: gap`. The input has no `aria-label`, so it is announced without its field name. The visible label
+  is a sibling `p`, not a `label` element. Associating them is a one-line fix.
+- The thumb has no focus ring of its own, so keyboard focus is invisible against a dark panel.
 
-## Code
+## Content
 
-```tsx
-import { useState } from 'react';
-import { Slider } from '@/components/Slider/Slider';
+Label in sentence case with units in square brackets. The value shows units only when they are not already
+in the label. Snapshot shows `33`, not `snapshot 33`.
 
-function RealizationField() {
-  const [value, setValue] = useState(278);
-  return <Slider label="Realization" min={0} max={999} value={value} onChange={setValue} />;
-}
-```
+## Use it
+
+- A bounded numeric range where the approximate position matters more than the exact figure: Snapshot, Grid
+  size, Threads, Bins.
+- Through `OptionSlider` when the underlying values are a fixed list rather than a number.
+
+## Don't use it
+
+- When the exact value is typed rather than scrubbed. Use `NumberStepper`.
+- For two bounds at once. Use `RangeFilterControl`.
+- For an unbounded value.
+
+## Related
+
+- `OptionSlider` — the same control indexed over a list of values
+- `NumberStepper` — typed entry
+- `RangeFilterControl` — two thumbs, min and max
+
+## Source files
+
+`Slider.tsx` · `Slider.css` · `Slider.stories.tsx`

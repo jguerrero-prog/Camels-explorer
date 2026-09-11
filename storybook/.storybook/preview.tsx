@@ -7,6 +7,29 @@ import './preview.css';
 
 const preview: Preview = {
   parameters: {
+    // Gives the sidebar a real information architecture: orientation first,
+    // foundations next, then components grouped by layer, then the reference
+    // pages a reader goes to on purpose. See Start here.
+    options: {
+      storySort: {
+        order: [
+          'Start here',
+          'Foundations', ['Color', 'Typography', 'Elevation, radius and spacing'],
+          'Patterns',
+          'Statistic sidebars',
+          'Primitives',
+          'Fields',
+          'Charts',
+          'Data display',
+          'Chrome',
+          'Overlays',
+          'Flows',
+          'Sections',
+          'Brand',
+          'Reference', ['Content and units', 'Contributing', 'Decision log'],
+        ],
+      },
+    },
     controls: {
       matchers: {
        color: /(background|color)$/i,

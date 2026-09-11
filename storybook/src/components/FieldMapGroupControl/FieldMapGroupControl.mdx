@@ -1,45 +1,81 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as FieldMapGroupControlStories from './FieldMapGroupControl.stories';
+import * as Stories from './FieldMapGroupControl.stories';
 
-<Meta of={FieldMapGroupControlStories} />
+<Meta of={Stories} />
 
 # FieldMapGroupControl
 
-Real (added 2026-08-06, ticket #12 — *"2D Field Map currently shows one realization at a time... researchers like placing 2d field maps in groups like 4 rows 4 columns (not a 4x4 panel grid view)"*). Lives inside `FieldMap2DSidebar`, right below the Field picker.
+Chooses whether a 2D Field Map tile shows one map or a grid of consecutive realizations.
 
-## Token
+`Source: code`
 
-- `--color-surface-control` — trigger background
-- `--color-surface-toggle-active` — trigger/reset hover
-- `--color-border-subtle` — trigger/menu border
-- `--color-surface-popover` — popover menu background
-- `--font-label` / `--font-ui` — caption / trigger value text
+## Anatomy
 
-## Spec
+```
+.field-map-group-control
+├── __label     Lato Regular 12
+├── __trigger   40px, radius 8, surface/control, aria-expanded
+├── __menu      surface/popover
+│   ├── GridSizePicker
+│   ├── __divider
+│   └── __reset   back to a single map
+└── __caption   the realization range the current extent covers
+```
 
-<Canvas of={FieldMapGroupControlStories.SingleMap} />
+## Playground
+
+<Canvas of={Stories.SingleMap} />
 <Controls />
 
-- Trigger button shows "Single map" (default) or "R × C grid" once a size is committed, plus a caption line stating either the current (inactive) state or the real realization range a committed grid will fill.
-- Clicking the trigger opens a portal-positioned popover (same `getBoundingClientRect`/`position: fixed` pattern as `ChartModeDropdown` — closes on outside click or Escape) containing `GridSizePicker` and, once a grid is active, a "Back to single map" reset button.
+## Variants and states
 
-<Canvas of={FieldMapGroupControlStories.GridSelected} />
+<Canvas of={Stories.GridSelected} />
 
-## Usecase
+`value` of `null` means a single map, which is the default. A `GridSize` means a mosaic.
 
-- **Real, deliberate constraint**: `FieldMap2DSidebar` only renders this control when the tile's `realization` is a plain number — 1P's `realization` is a compound string id (e.g. `"p11_2"`), which has no real "next realization" to sequentially fill a grid with. Rather than show this control disabled with no explanation for a 1P selection, it isn't rendered at all.
-- **Fill order**: sequential, row-major, starting from the tile's own `Realization` field — realization *N, N+1, N+2, …* filling left-to-right/top-to-bottom (a stated assumption, not something explicitly asked — see `UI_REFINEMENTS_EPIC.md` ticket #12). A range that runs past a set's real realization count (e.g. CV's 27) just shows "No data" for the out-of-range cells in `FieldMapMosaic`, the same honest-gap pattern every other real-data statistic in this app already uses.
-- Committing a size calls `onChange({ rows, cols })`; `App.tsx`'s `refetchFieldMap2DTile` turns that into N parallel `fetchFieldMap2DMeta` calls (see `FieldMapMosaic.mdx`) rather than any backend change — the existing single-realization endpoint, called N times.
+## Tokens
 
-## Code
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-control` | Trigger fill |
+| `--color-border-subtle` | Trigger border |
+| `--color-surface-popover` | Menu fill |
+| `--color-surface-toggle-active` | Trigger hover |
+| `--color-text-primary` | Trigger value |
+| `--color-text-muted` | Label and caption |
 
-```tsx
-import { useState } from 'react';
-import { FieldMapGroupControl } from '@/components/FieldMapGroupControl/FieldMapGroupControl';
-import type { GridSize } from '@/components/GridSizePicker/GridSizePicker';
+## Behaviour
 
-function FieldMapGroupControlUsage({ startRealization }: { startRealization: number }) {
-  const [groupSize, setGroupSize] = useState<GridSize | null>(null);
-  return <FieldMapGroupControl value={groupSize} onChange={setGroupSize} startRealization={startRealization} />;
-}
-```
+- The caption states the realization range the grid would cover, computed from the tile's current
+  realization: choosing 4 by 4 from realization 42 reads "Realizations 42–57". The range is visible before
+  committing, not after.
+- Reset returns to a single map without closing and reopening the menu.
+
+## Accessibility
+
+- The trigger carries `aria-expanded` and `aria-haspopup`.
+- `Source: gap`. The menu contains `GridSizePicker`, which is pointer-only, so this control inherits that
+  limitation: a keyboard user can open the menu but cannot choose an extent.
+
+## Content
+
+The trigger reads the current state plainly: "Single map" or "4 × 4". The caption names the consequence, not
+the setting.
+
+## Use it
+
+- On a 2D Field Map tile, to compare consecutive realizations side by side.
+
+## Don't use it
+
+- On any other statistic. Nothing else renders a mosaic.
+
+## Related
+
+- `GridSizePicker` — the extent chooser inside the menu
+- **Charts / FieldMapMosaic** — the result
+- **Statistic sidebars / FieldMap2DSidebar** — its host
+
+## Source files
+
+`FieldMapGroupControl.tsx` · `FieldMapGroupControl.css` · `FieldMapGroupControl.stories.tsx`

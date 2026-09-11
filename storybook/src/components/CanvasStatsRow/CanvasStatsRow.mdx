@@ -1,58 +1,70 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as CanvasStatsRowStories from './CanvasStatsRow.stories';
+import * as Stories from './CanvasStatsRow.stories';
 
-<Meta of={CanvasStatsRowStories} />
+<Meta of={Stories} />
 
 # CanvasStatsRow
 
-The four pill-shaped stat chips ("1,000 LH Realizations", "4 suites", "15 Statistics", "5 Halo finders") from the "Skeleton" frame (Figma node `1113:1583`). Originally built as part of `Tile`; **extracted out on 2026-08-04** once the real behavior was confirmed — see Usecase.
+A row of pill-shaped counters showing the size of the dataset behind an empty canvas.
 
-## Token
+`Source: figma:1113:1583`
 
-- `--color-surface-sunken` (pure black) — chip background, distinct from the tile's own surface
-- `--color-border` — chip border
-- `--font-label` (Lato) — both the bold value and the muted label
-- `--color-text-primary` / `--color-text-muted` — value vs. label weight
+## Anatomy
 
-## Spec
+```
+.canvas-stats-row           row, 12px gaps, full width
+└── .canvas-stats-row__chip   flex 1, radius 999, surface/sunken, 1px border
+    ├── __value              Lato Bold 12, text/primary
+    └── __label              Lato Regular 12, text/muted
+```
 
-<Canvas of={CanvasStatsRowStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-- A row of pill chips (`border-radius: 999px`), evenly split (`flex: 1 0 0` each), each holding a bold value + muted label.
-- The four values are real product facts, not filler: `1,000` LH realizations, `4` suites, `15` statistics (`backend.py`'s own `STATISTICS` list — confirmed the same length via direct introspection), `5` halo finders.
+## Tokens
 
-**Still open:**
-- **No live data source wired yet.** These are still passed as static `stats` props. Wiring them to something real (the FastAPI layer's own route/metadata) is a real follow-up, not done here.
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-sunken` | Chip fill, the only use of pure black in the app |
+| `--color-border` | Chip border |
+| `--color-text-primary` | Value |
+| `--color-text-muted` | Label |
+| `--font-label` | Both |
 
-## Usecase
+## Behaviour
 
-**Confirmed 2026-08-04, correcting the original assumption this was per-tile:** this row shows **only when the whole canvas has zero plots** — the very first moment, before anything has been added anywhere. It is not repeated per empty tile, and it disappears entirely once *any* plot exists on the canvas, regardless of which tile it was added to.
+- Chips share the row width equally, so four chips each take a quarter regardless of content.
+- Values come from the catalog, not from constants: 1,000 LH realizations, 4 suites, 19 statistics,
+  5 halo finders.
+- The row sits in the tile footer slot, under the empty state.
 
-The values are confirmed to be **live, not static** once wired — they update in response to real app/data state even while the canvas is still in this empty moment (e.g. if a future control changes scope before any plot is added). The current `stats` prop already supports that; only the actual data source is still missing.
+## Accessibility
 
-**Placement, re-corrected 2026-08-04 against real Figma evidence (node `1113:1609`):** this renders as the *last child inside the same card* as the canvas's lone starter `Tile` — passed via `Tile`'s `footer` prop — not as a separate row floating above the tile grid. An earlier app build placed it above `Viewer` as an independent sibling; a direct `get_design_context` pull showed the real "stats-row" node nested inside "Panel 1" itself, after its empty-state block. The *ownership* rule from the original correction still holds — `Tile` doesn't decide whether to show this, the canvas-level caller does — only the rendering position changed. See `Tile.mdx`'s Usecase and Code.
+- `Source: gap`. Value and label are separate spans with no association, so each chip reads as two
+  fragments. Wrapping each chip's text in a single element would fix it.
+- Contrast on `surface/sunken` is the highest in the app, since it is pure black.
 
-## Code
+## Content
 
-```tsx
-import { Tile } from '@/components/Tile/Tile';
-import { CanvasStatsRow } from '@/components/CanvasStatsRow/CanvasStatsRow';
+Value first, then a lowercase label except where the term is a proper noun: `1,000 LH Realizations`,
+`4 suites`, `19 Statistics`. Thousands separators always.
 
-{isCanvasEmpty && (
-  <Tile
-    title="Panel 1"
-    onAddPlot={() => openAddPlotFlow()}
-    footer={
-      <CanvasStatsRow
-        stats={[
-          { value: '1,000', label: 'LH Realizations' },
-          { value: '4', label: 'suites' },
-          { value: '15', label: 'Statistics' },
-          { value: '5', label: 'Halo finders' },
-        ]}
-      />
-    }
-  />
-)}
-```
+## Use it
+
+- Under an empty canvas, to show the scale of what is available before anything is plotted.
+
+## Don't use it
+
+- For live filter counts. The Custom tab states those in a sentence, where the numbers are long.
+- As navigation. Chips are not interactive.
+
+## Related
+
+- `Tile` — the empty state above it
+- **Chrome / Viewer** — the canvas it describes
+
+## Source files
+
+`CanvasStatsRow.tsx` · `CanvasStatsRow.css` · `CanvasStatsRow.stories.tsx`

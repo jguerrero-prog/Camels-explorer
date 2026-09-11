@@ -1,61 +1,35 @@
-import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as PowerSpectrumSidebarStories from './PowerSpectrumSidebar.stories';
+import { Meta, Canvas } from '@storybook/addon-docs/blocks';
+import * as Stories from './PowerSpectrumSidebar.stories';
 
-<Meta of={PowerSpectrumSidebarStories} />
+<Meta of={Stories} />
 
 # PowerSpectrumSidebar
 
-Power Spectrum's real per-tile sidebar, from `app.py`'s own `if statistic == "Power Spectrum":` block — the most complex control surface of any statistic in this app, with two nested conditional reveals (an All-k mode reveals a redshift-space-distortion picker, which itself reveals a Multipole radio only once a real axis is chosen).
+A configuration of the **Statistic sidebar** pattern, for Power Spectrum.
 
-## Token
+`Source: code`
 
-Composed entirely from existing fields — see `RealizationFields.mdx`, `OptionSlider.mdx`, `SelectField.mdx`, `Slider.mdx`, `Radio.mdx`, `Checkbox.mdx`, `Button.mdx`. No tokens of its own.
+This component owns no styles. It chooses which controls go inside `ParamsSidebar` and nothing else, so the
+shell, its scroll behaviour, its fade and its pinned footer are all documented once in the pattern rather
+than here.
 
-## Spec
+**Read the pattern first:** Patterns / Statistic sidebar.
 
-<Canvas of={PowerSpectrumSidebarStories.Playground} />
-<Controls />
+## Its configuration
 
-- Suite/Set/Compare mode/Realization(s): `RealizationFields`.
-- **Real bug fixed 2026-08-05: Snapshot slider was missing entirely.** `App.tsx` hardcoded `snapnum: DEFAULT_SNAPNUM` (33, z≈0), even though `app.py`'s own `get_power_spectrum` call takes `snapnum` as a real parameter (found during a full param-wiring audit against `app.py`, prompted by direct user report). Added a `Slider` "Snapshot" (`0` to `n_snapshots - 1`) right after `RealizationFields`.
-- Grid size: `OptionSlider` over `[128, 256, 512, 1024]`, default 512. Same real gap as Mass Assignment Scheme below - not wired.
-- Mass Assignment Scheme: `SelectField` over `NGP`/`CIC`/`TSC`/`PCS`, default `CIC`. **Real, honest gap (caption added 2026-08-12, direct user report - "I don't see anything changing"):** not wired to anything real today. `grid`/`MAS`/`threads` are threaded all the way through `get_power_spectrum`'s own signature, but the only reached code path (`fetch_public=True`, CAMELS' precomputed public Pk files) ignores all three - the public release was computed once with a fixed MAS/grid baked in, no per-MAS/per-grid variant exists to select between. The only path where these would matter - real, on-demand Pk computed from raw snapshot particle data via Pylians - is a stub (`backend.py`'s own `NotImplementedError`), unreached in production. Not a regression: git blame confirms the field and the stub were both part of the very first commit. See issue #72 for the real feature this gap describes.
-- Threads: `Slider`, 1–16, default 1. Same real gap as Mass Assignment Scheme above - not wired.
-- Particle type: `SelectField`, a label-mapped choice (`Gas [0]`/`DM [1]`/`Stars [4]`/`Black holes [5]`/`Total [0,1,4]`) — `PTYPE_OPTIONS` maps each label to the real `ptype` array `get_power_spectrum` expects, matching `app.py`'s own dict exactly.
-- k range: `Radio`, "Standard" vs. "All-k (HIPSTER...)".
+After Suite, Set and Realization it adds:
 
-<Canvas of={PowerSpectrumSidebarStories.AllKWithMultipole} />
+> Compare mode, Snapshot, Grid size, Mass Assignment Scheme, Threads, Particle type, k range, Overlay linear-theory Pk (z=0, from ICs)
 
-- **Only visible in All-k mode:** Redshift-space distortion `SelectField` ("Real space (none)" / "Axis 0" / "Axis 1" / "Axis 2").
-- **Only visible once a real axis (not "Real space") is chosen:** Multipole `Radio` (`P0`/`P2`/`P4`) — the second, deeper conditional reveal.
-- Overlay linear-theory Pk (z=0, from ICs): `Checkbox`, default unchecked — the real dashed-line overlay `_render_result_png`'s `overlay` callable draws (see `MassRangeSidebar.mdx`'s sibling note on `_render_result_png`).
+## Live example
 
-## Usecase
+<Canvas of={Stories.Playground} />
 
-- Real usage: `App.tsx`'s canvas — `onChange` triggers a real refetch of `GET /api/power-spectrum` (JSON, one call per realization) and `/plot.png` (static render, with the linear-Pk overlay when checked). `rsdLabel`/`multipole` only affect the request when `kRange === 'allk'` — the caller derives `rsd_axis`/`multipole` from them (`null`/`"P0"` otherwise, matching `get_power_spectrum`'s own real default arguments).
-- **The linear-Pk overlay silently no-ops if unavailable** — `get_linear_pk_ics` returns `None` for suites/sets without a real ICs Pk file (e.g. Swift-EAGLE, confirmed absent per `backend.py`'s own docstring); the overlay callable checks for this and simply doesn't draw rather than erroring.
-- No halos table under this tile — Power Spectrum is a field-level statistic, not tied to any per-halo catalog. See `UnderlyingHalos.mdx`.
+## Related
 
-## Code
+- **Patterns / Statistic sidebar** — the shell, the core three, and every configuration in one table
+- `ParamsSidebar` — the shell this renders into
 
-```tsx
-import { useState } from 'react';
-import { PowerSpectrumSidebar, PTYPE_OPTIONS } from '@/components/PowerSpectrumSidebar/PowerSpectrumSidebar';
-import type { PowerSpectrumParams } from '@/components/PowerSpectrumSidebar/PowerSpectrumSidebar';
+## Source files
 
-function FocusedTileSidebar() {
-  const [params, setParams] = useState<PowerSpectrumParams>({
-    suite: 'IllustrisTNG', setName: 'LH', compareMode: false, realizations: [42], snapnum: 33,
-    grid: 512, MAS: 'CIC', threads: 1, ptypeLabel: 'DM [1]',
-    kRange: 'standard', rsdLabel: 'Real space (none)', multipole: 'P0', showLinearPk: false,
-  });
-  const ptype = PTYPE_OPTIONS[params.ptypeLabel];
-  return (
-    <PowerSpectrumSidebar
-      params={params}
-      onChange={setParams}
-      onRemove={() => {/* remove this tile from the canvas */}}
-    />
-  );
-}
-```
+`PowerSpectrumSidebar.tsx` · `PowerSpectrumSidebar.stories.tsx`

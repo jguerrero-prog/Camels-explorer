@@ -1,38 +1,74 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as StaticImageChartStories from './StaticImageChart.stories';
+import * as Stories from './StaticImageChart.stories';
 
-<Meta of={StaticImageChartStories} />
+<Meta of={Stories} />
 
 # StaticImageChart
 
-The static-image half of `PlotChart`, without the Static/Interactive toggle. Added 2026-08-05 for statistics `app.py` renders exclusively via `st.pyplot()`, with no Plotly equivalent at all: Galaxy Scaling Relations' 2x2 panel, 2D Field Map's heatmap, X-ray Halo Profiles/Halo Gas Profiles' colored-by-mass multi-line + colorbar, Color-Mass Diagram's scatter, Field PDF's band+fill, Lyman-alpha's dual-panel.
+A server-rendered plot image, with an inline error state when it cannot load.
 
-## Token
+`Source: code`
 
-Reuses `PlotChart.css`'s `.plot-chart`/`.plot-chart__image`/`.plot-chart__error` classes directly (imported, not duplicated) — same white card surface (`--color-surface-chart`), same error-state typography.
+## Anatomy
 
-## Spec
+```
+.plot-chart                  borrowed from PlotChart, the white card
+├── .plot-chart__image       the server-rendered PNG
+└── .plot-chart__error       replaces the image when it fails to load
+```
 
-<Canvas of={StaticImageChartStories.RealImage} />
-<Canvas of={StaticImageChartStories.BrokenImage} />
+The simplest chart path: the backend draws the plot with matplotlib and returns a PNG, and this shows it.
+It has no stylesheet of its own and imports `PlotChart.css`, so the image sits on the same white card as
+every other chart. 17 of the 19 statistics have a `plot.png` endpoint; the two 3D statistics do not.
+
+## Playground
+
+<Canvas of={Stories.RealImage} />
 <Controls />
 
-- Plain `<img>` filling the card, `object-fit: contain`.
-- Real failure handling via the image's own `onError`/`onLoad` — same honest inline message `PlotChart`'s static mode already uses (server not running, non-200 response), rather than a silent broken-image icon.
-- **No toggle, ever — this is deliberate, not a missing feature.** Building a Plotly equivalent for any of these six shapes (a continuous-colormap multi-line chart, a 2x2 grid, a heatmap, a scatter, a band+fill, a dual-panel) would mean re-implementing six different chart types Plotly has no drop-in match for, toward a toggle `app.py` itself never offers for any of them.
+## Variants and states
 
-## Usecase
+<Canvas of={Stories.BrokenImage} />
 
-- Real usage: `PlotTile`'s `chart` prop, when `chart.kind === 'static-image'` — see `PlotTile.mdx`. `PlotTile` renders this instead of `PlotChart` for exactly the six statistics named above.
-- Not a fallback or a degraded mode — for these statistics, the real matplotlib PNG *is* the complete, correct rendering, matching `app.py`'s own choice exactly.
+The error state is reached whenever the image fails, which in practice means the backend is not running. It
+names the command that fixes it rather than reporting a status code.
 
-## Code
+## Tokens
 
-```tsx
-import { StaticImageChart } from '@/components/StaticImageChart/StaticImageChart';
+None of its own. The card comes from `PlotChart`.
 
-function XrayProfilesChart({ suite, setName, realization }) {
-  const imageUrl = `http://localhost:8010/api/xray-profiles/plot.png?suite=${suite}&set_name=${setName}&realization=${realization}&fetch_public=true`;
-  return <StaticImageChart imageUrl={imageUrl} alt="X-ray luminosity profile vs radius" />;
-}
-```
+## Behaviour
+
+- `imageUrl` is a `plot.png` endpoint with the statistic's parameters as query string.
+- The image is sized to the tile, not the other way round.
+- A failed load swaps the image for the error state rather than leaving a broken-image icon.
+
+## Accessibility
+
+- `alt` is required by the type, which is more than `PlotChart` does.
+- `Source: gap`. Callers pass a generic alt. A useful one would name the statistic, the suite and the
+  realization, since that is what distinguishes one plot image from another.
+
+## Content
+
+The error names the likely cause and gives the command that fixes it, rather than reporting a failure
+abstractly: "Couldn't load the chart image, is the API server running?" followed by the `uvicorn` line. The
+`alt` text is the caller's and should describe the plot, not say "chart".
+
+
+## Use it
+
+- A statistic whose server renderer exists and whose data does not need interaction.
+
+## Don't use it
+
+- When the reader needs to zoom or hover. Use `PlotChart` in interactive mode.
+
+## Related
+
+- `PlotChart` — the card and the interactive path
+- `ChartModeDropdown` — how a reader switches away from static
+
+## Source files
+
+`StaticImageChart.tsx` · `StaticImageChart.stories.tsx`

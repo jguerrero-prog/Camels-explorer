@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { DensityFieldChart } from './DensityFieldChart';
 
 const meta: Meta<typeof DensityFieldChart> = {
-  title: 'Fields/DensityFieldChart',
+  title: 'Charts/DensityFieldChart',
   component: DensityFieldChart,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '640px', height: '560px' }}><Story /></div>],

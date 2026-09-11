@@ -1,43 +1,87 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as LinkedBrushOverlayStories from './LinkedBrushOverlay.stories';
+import * as Stories from './LinkedBrushOverlay.stories';
 
-<Meta of={LinkedBrushOverlayStories} />
+<Meta of={Stories} />
 
 # LinkedBrushOverlay
 
-The toolbar's Linked cross-tile brushing tool (Figma node `1063-10`'s "brush-selection/linked-highlight/linked-badge"). Drag a horizontal band on any tile; every other visible tile highlights the identical fraction of its own chart width.
+Drag an x-range on one tile; every other tile shows the same range.
 
-## Token
+`Source: code`
 
-- `--color-accent-gradient-start` / `--color-accent-gradient-end` — the band fill and badge dot
+## Anatomy
 
-## Spec
+```
+.linked-brush-overlay                fills the tile, z-index 3
+├── --capturing                      the brushing mode is active
+├── __band                           accent at 18%, 1.5px accent edges left and right
+└── __badge                          __badge-dot + label + __clear
+```
 
-<Canvas of={LinkedBrushOverlayStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-A translucent vertical band plus a small badge showing either the real source label (the tile whose drag produced the selection) or "LINKED" (every mirrored tile). **Real, decided rule** (confirmed directly against Figma's own frame's rectangle coordinates, not assumed): the band is a plain fraction of each tile's own chart width - deliberately NOT translated into each tile's own data units, since two arbitrary statistics (e.g. Redshift vs. Stellar mass) have no real unit correspondence to translate through. Only the source tile gets a real, precise label (`~Redshift 2.99–5.50 selected`, prefixed "~" since a static PNG's exact plot-area inset isn't known client-side); every other tile just says "LINKED" rather than fabricating a value with no real basis.
+## Variants and states
 
-`SourceTile` / `MirroredTile` show that exact asymmetry side by side; `NoSelectionYet` shows the tool active with nothing dragged yet (no band, no badge - not a placeholder state).
+<Canvas of={Stories.SourceTile} />
+<Canvas of={Stories.MirroredTile} />
+<Canvas of={Stories.NoSelectionYet} />
 
-## Usecase
+The **source** tile is the one the drag happened on and shows its own label in the badge. A **mirrored**
+tile shows the same band with the badge reading `LINKED`, so it is always clear which tile owns the
+selection and which are following it. With no selection the overlay renders nothing at all.
 
-- Rendered by `App.tsx`'s `renderAnnotationOverlay(tile)` alongside `AnnotationOverlay`/`ArrowOverlay`/`NoteOverlay`.
-- `captureActive` is `App.tsx`'s own `brushCaptureActive` (part of the shared `activeTool` state) - true for every tile while Linked brushing mode is on, so any tile can start a NEW drag even while showing someone else's highlight.
-- `App.tsx` keeps ONE global `brushSelection` (`{ sourceTileId, xFracStart, xFracEnd }`), not one per tile - every tile reads the same selection and just compares its own id against `sourceTileId` to decide `isSource`.
+During a drag the band follows the pointer but the badge is suppressed, so a label does not chase the
+cursor across the plot.
 
-## Code
+## Tokens
 
-```tsx
-import { LinkedBrushOverlay } from '@/components/LinkedBrushOverlay/LinkedBrushOverlay';
+| Token | Applies to |
+| --- | --- |
+| `--color-accent-gradient-end` | Band edges, badge dot |
+| `--color-surface-content` | Badge fill |
+| `--color-border-subtle` | Badge border |
+| `--color-text-primary` / `--color-text-muted` | Badge label, clear control |
 
-<LinkedBrushOverlay
-  captureActive={brushCaptureActive}
-  xFracStart={brushSelection?.xFracStart ?? null}
-  xFracEnd={brushSelection?.xFracEnd ?? null}
-  isSource={brushSelection?.sourceTileId === tile.id}
-  sourceLabel={brushSelection?.sourceTileId === tile.id ? brushSourceLabel(tile, brushSelection.xFracStart, brushSelection.xFracEnd) : undefined}
-  onBrush={(start, end) => handleBrush(tile.id, start, end)}
-  onClear={handleClearBrush}
-/>
-```
+The band fill is a literal `rgba(230, 57, 70, 0.18)`, the accent at an opacity no token expresses.
+`Source: gap`.
+
+## Behaviour
+
+- The band is x-only. There is no y or rectangular selection.
+- Bounds are fractional and applied as percentages, so a band mirrors correctly onto tiles of any width.
+- A drag under 1% of the width is discarded, so a stray click does not create an unusably narrow selection.
+- Bounds are normalised, so dragging right-to-left works.
+- Pointer handling only engages when `captureActive` is set; otherwise the layer is inert and the chart
+  underneath behaves normally.
+
+## Accessibility
+
+- The clear control carries `aria-label` and `title`.
+- `Source: gap`. Brushing is drag-only with no keyboard equivalent, and a change of selection is not
+  announced.
+
+## Content
+
+The badge names the source tile, or reads `LINKED` on a tile that is following one. It does not report a
+count of selected points.
+
+## Use it
+
+- Comparing the same x-range across several statistics at once.
+
+## Don't use it
+
+- For zooming. In interactive mode Plotly owns zoom.
+- For selecting rows. Use the table view.
+
+## Related
+
+- `Toolbar` — the linked brushing mode
+- `PlotTile` — every tile that mirrors the band
+
+## Source files
+
+`LinkedBrushOverlay.tsx` · `LinkedBrushOverlay.css` · `LinkedBrushOverlay.stories.tsx`

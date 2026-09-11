@@ -1,49 +1,84 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as RadioStories from './Radio.stories';
+import * as Stories from './Radio.stories';
 
-<Meta of={RadioStories} />
+<Meta of={Stories} />
 
 # Radio
 
-A new primitive, added 2026-08-05 — no Figma frame in this file shows a radio control yet. Built because `app.py` uses `st.radio(..., horizontal=True)` for several real, mutually-exclusive 2-3 option choices where every option should be visible and directly comparable at a glance (a `SelectField` dropdown would hide the other options behind a click, which is wrong for a binary/ternary choice): Power Spectrum's "k range" and "Multipole", Color-Mass Diagram's "Spectra".
+A segmented control for two or three mutually exclusive options, all visible at once.
 
-## Token
+`Source: figma:1019:37`
 
-- `--color-surface-toggle` — the group's own background (same token `Toolbar`'s grid/stacked view-mode switch uses).
-- `--color-surface-toggle-active` — the selected option's background.
-- `--font-label` (Lato) — the field label, matching `SelectField`'s own label typography exactly.
-- `--font-ui` (Inter) — each option's text.
+## Anatomy
 
-## Spec
+```
+.radio
+├── .radio__label      Lato Regular 12, text/muted
+├── .radio__group      role="radiogroup", 2px padding, radius 8, surface/toggle
+│   └── .radio__option[]   equal width, radius 6, Inter 12; active takes surface/toggle-active
+└── .radio__caption    optional, Lato Regular 11
+```
 
-<Canvas of={RadioStories.KRange} />
-<Canvas of={RadioStories.Multipole} />
+## Playground
+
+<Canvas of={Stories.KRange} />
 <Controls />
 
-- Label above (`--color-text-muted`, matches `SelectField.mdx`'s own label spec), then a segmented group of equal-width pill buttons, optional caption below.
-- **Deliberately not a new visual language.** This reuses `Toolbar`'s existing view-mode-toggle treatment (`--color-surface-toggle` container, `--color-surface-toggle-active` selected state) rather than inventing new colors for what's structurally the same "pick one of a few visible options" interaction — see `Toolbar.mdx`.
-- All options render at equal width (`flex: 1`) regardless of label length — real usage never has more than 3 options, so this doesn't get cramped in practice.
+## Variants and states
 
-## Usecase
+<Canvas of={Stories.Multipole} />
+<Canvas of={Stories.ThreeOptions} />
 
-- Real usage: `PowerSpectrumSidebar`'s "k range" (2 options: Standard / All-k) and conditionally-shown "Multipole" (3 options: P0/P2/P4, only visible once an RSD axis is picked) — see `PowerSpectrumSidebar.mdx`.
-- **Not a replacement for `SelectField`.** Use `Radio` when every option needs to stay visible for direct comparison and there are only a handful (2-3); use `SelectField` when there are many options or screen space is tight. `st.radio` vs. `st.selectbox` in `app.py` draws this same line — Suite/Set/Field pickers (many options) stay `SelectField`/`SelectField`-backed, while k-range/multipole/spectra (2-3 mutually exclusive, comparison-worthy options) become `Radio`.
+Options divide the group's width equally, so three options each take a third. The active option is the only
+one with a fill; the rest are transparent on the group's own surface.
 
-## Code
+## Tokens
 
-```tsx
-import { useState } from 'react';
-import { Radio } from '@/components/Radio/Radio';
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-toggle` | Group container |
+| `--color-surface-toggle-active` | The selected option |
+| `--color-text-primary` | Selected option label |
+| `--color-text-muted` | Field label, unselected options, caption |
+| `--font-label` | Field label and caption |
+| `--font-ui` | Option labels |
 
-function KRangePicker() {
-  const [kRange, setKRange] = useState('Standard (k ≤ ~25 h/Mpc)');
-  return (
-    <Radio
-      label="k range"
-      value={kRange}
-      options={['Standard (k ≤ ~25 h/Mpc)', 'All-k (HIPSTER, up to k~1000 h/Mpc)']}
-      onChange={setKRange}
-    />
-  );
-}
-```
+## Behaviour
+
+- Every option is always visible. There is no menu and no truncation to an ellipsis.
+- A long option label wraps onto a second line rather than truncating, which makes the group taller.
+  The `k range` options are the worst case in the app.
+- Options keep equal widths regardless of label length.
+
+## Accessibility
+
+- The group carries `role="radiogroup"` and an `aria-label` taken from the field label. This is the best
+  accessibility story of any control in the system.
+- `Source: gap`. The options are buttons without `role="radio"` or `aria-checked`, so membership is announced
+  but selection is not. Arrow-key navigation between options is also missing.
+
+## Content
+
+Sentence case. Expand an acronym inside the option where it fits: `All-k (HIPSTER, up to k~1000 h/Mpc)`.
+Keep options to a similar length, because they share the width evenly.
+
+## Use it
+
+- Two or three mutually exclusive options that all fit on one row.
+- When seeing the alternatives matters as much as picking one.
+
+## Don't use it
+
+- For four or more options, or long labels. Use `SelectField`.
+- For an independent on/off setting. Use `Checkbox`.
+- For a value on a continuum. Use `Slider`.
+
+## Related
+
+- `Checkbox` — independent settings
+- `SelectField` — longer option lists
+- **Patterns / Statistic sidebar** — k range, Spectra, Group by
+
+## Source files
+
+`Radio.tsx` · `Radio.css` · `Radio.stories.tsx`

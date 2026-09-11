@@ -1,86 +1,88 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as AddPlotModalStories from './AddPlotModal.stories';
+import * as Stories from './AddPlotModal.stories';
 
-<Meta of={AddPlotModalStories} />
+<Meta of={Stories} />
 
 # AddPlotModal
 
-The real Add-a-plot flow: click "Add Plot" (`TopNav`) or a tile's own empty state (`Tile`) → this modal opens with two tabs, **Curated** and **Custom** → filling in Curated's fields and confirming adds a tile to the canvas. Real sources: Figma nodes `971:850` (Curated tab, the default) and `975:141` (Custom tab, "advanced settings expanded").
+The dialog shell for adding a plot. Two tabs: a ready-made statistic, or one built from the catalog.
 
-## Token
+`Source: figma:1113:1583`
 
-- `--color-surface-content` — modal card background
-- `--color-border` / `--color-border-subtle` — card border, dividers, Cancel button border
-- `--color-accent-gradient-start` → `--color-accent-gradient-end` — active tab underline, Add Plot confirm button (same gradient as `TopNav`'s own Add Plot button)
-- `--font-label` (Lato) — title, tabs, field labels, buttons
-- `--font-ui` (Inter) — field values
+## Anatomy
 
-## Spec
+```
+.add-plot-modal-backdrop     black at 60%
+└── .add-plot-modal          440px, radius 16, surface/content
+    ├── __header             padding 20/20/16/24: title + 28px close
+    ├── __divider
+    ├── __tab-row            gap 24; the active tab takes a 2px accent underline
+    ├── __fields             fixed 260px of content height, scrolls
+    │   └── __fields-fade    48px, only while scrolled short of the end
+    ├── __footer-divider
+    └── __footer             hint left, Cancel and Add Plot right
+```
 
-<Canvas of={AddPlotModalStories.CuratedTabDefault} />
+## Playground
+
+<Canvas of={Stories.CuratedTabDefault} />
 <Controls />
 
-- 440px card, 16px radius, `rgba(0,0,0,0.6)` full-screen backdrop, centered.
-- Header: title + a 28px `×` close button. Divider. Tab row (Curated/Custom, 24px gap, gradient underline on the active tab only). Scrollable fields area (22px/24px padding, 18px gap, capped at the viewport height rather than Figma's fixed 364px/480px — a real, deliberate simplification: one shared modal shell needs one height rule regardless of which tab is showing, not two different fixed heights.
-- Footer: divider, then right-aligned Cancel (outline) + Add Plot (gradient) buttons.
+## Variants and states
 
-**Real gap, not fabricated:** Figma's Custom tab shows a gradient fade at the bottom of the scroll region (`976:15`, "scroll-fade-bottom"). Not implemented — an absolutely-positioned fade risks clipping real content when a tab's fields are short enough not to scroll (Curated never needs it). Skipped rather than risk a visual bug for a polish detail.
+<Canvas of={Stories.CustomTabReal} />
 
-**Real bug fixed 2026-08-04:** `SelectField`'s open menu used to be `position: absolute` nested inside this modal's own scrollable fields area — for the last field (Statistic), the menu rendered past the bottom edge and got clipped by that container's `overflow-y: auto`, invisible until the user scrolled the whole modal. Fixed at the `SelectField` level (now portals to `document.body`, positioned via the trigger's real on-screen coordinates) — see `SelectField.mdx`.
+**The field area height is fixed at 260px.** Curated needs three dropdowns; Custom needs ten fields and a
+filter tree. Without a fixed height the dialog resized when switching tabs, moving the tab row and footer
+under the cursor. Custom scrolls inside it. See Decision log, DR-009.
 
-**Deliberate deviation from Figma (2026-08-04):** the Set field's label ("LH — Latin Hypercube" in the raw frame) uses a middle dot instead — `"LH · Latin Hypercube"` — per direct user feedback that an em dash here read as "AI generated." Matches the app's own existing separator convention (`ParamsSidebar`'s "PANEL 1 · FOCUSED").
+**The confirm button states why it is disabled.** The footer hint sits at the leading edge and names the
+missing input rather than leaving a dead button.
 
-<Canvas of={AddPlotModalStories.CustomTabReal} />
+## Tokens
 
-## Usecase
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-content` | Dialog fill |
+| `--color-border` | Border, dividers, close button fill |
+| `--color-accent-gradient-start` → `--color-accent-gradient-end` | Active tab underline, confirm button |
+| `--color-border-subtle` | Cancel outline |
+| `--color-text-muted` | Inactive tab, hint |
 
-### Curated tab (real, wired)
+## Behaviour
 
-- Suite / Set / Statistic use `SelectField`; Realization uses `NumberStepper` (typeable, plus +/- — see `NumberStepper.mdx`'s 2026-08-04 update). All four options lists come from a **real, live HTTP fetch** — `GET http://localhost:8010/api/metadata`, a new endpoint (`api/routers/metadata.py`) that reads directly from `backend.py`'s own `SUITES`/`SET_REALIZATIONS`/`STATISTICS` constants. Nothing is hardcoded in the frontend.
-- **Corrected 2026-08-04:** Realization was originally a plain `<input type="number">` (a since-removed `TextField` component) — the browser's own native spinner arrows rendered on top of it, looking nothing like the rest of the design system. Replaced with the real, already-documented `NumberStepper`.
-- The Set field's caption and the Realization field's `0–N` range update live based on the selected set's real realization count (`PUBLIC_PK_SUITES` → 4 suites; `SET_REALIZATIONS` → LH 1,000 / CV 27 / 1P 66 / EX 4).
-- **Real, honest failure mode:** if the API server isn't running, the tab shows an inline error with the exact command to fix it, rather than hanging on a spinner forever.
-- Confirming calls `onSubmit({ suite, set, realization, statistic })`. What happens with that selection is the caller's job — see `App.tsx`'s composition, which currently adds a new tile titled with the chosen statistic. **Real, still-open gap:** the tile added this way has no actual rendered chart yet — that's the separate, not-yet-built "wire one statistic end-to-end" step (no chart library has been chosen). This modal's job ends at handing off a real, valid selection.
+- Opens from the single Add Plot button in `TopNav`.
+- The fade renders only when the field area is actually scrollable, so Curated never shows one.
+- The field area has 56px of bottom padding, taller than the 48px fade, so the last control clears the
+  gradient entirely.
+- Confirm stays disabled until the chosen tab's required fields are set.
 
-### Custom tab (real, wired 2026-08-05)
+## Accessibility
 
-Rebuilt from scratch against three real, live proxy endpoints (`api/routers/custom.py`) that query Flatiron's own public FlatHUB API directly - `GET /api/custom/fields` (241 real fields, live min/max/avg stats), `GET /api/custom/count` (live row count for a filter set), `GET /api/custom/data` (real matching rows). This is genuinely different from Curated: a Custom query can span the *whole* ~2.9B-row ensemble, pooling rows from potentially many different realizations, rather than reading one suite/set/realization's own files.
+- Carries `role="dialog"` with `aria-modal` and an `aria-label`, which is the best dialog implementation in
+  the app.
+- `Source: gap`. Focus is not trapped and not moved into the dialog on open, and is not restored to the Add
+  Plot button on close. The tabs are buttons without `role="tab"` or `aria-selected`.
 
-- **Type** (FoF halo / Subhalo) is the one required, first choice - it gates which other fields are meaningful everywhere else in the tab. Querying `Group_*` fields for `type: "Subhalo"` (or vice versa) returns nulls - confirmed directly against the live API - so the X/Y/Color field pickers are filtered to `Group_*` fields when Type is "FoF halo", `Subhalo_*` fields when "Subhalo", plus `params_*`/`simulation_suite`/`simulation_set`/`snapshot`/`redshift`/`id`, which apply regardless of type.
-- **Suite** (Any/IllustrisTNG/SIMBA) and **Set** (Any/LH/1P/CV/EX) are optional - "Any" is a real, legal query (confirmed live: `GET /api/custom/count` 200s with the full ~2.9B-row count when no filters are set at all).
-- **Parameter filters** - a checkbox per real per-realization param (`Omega_m`, `sigma_8`, `A_SN1`, `A_AGN1`, `A_SN2`, `A_AGN2`), each revealing a Min/Max `Slider` pair only once enabled. Slider bounds are the field's own real, live `stats.min`/`stats.max` - not guessed. **Known, reported limitation, not fixed this pass:** `A_SN1`/`A_AGN1`'s real range is 0–100 with an avg of ~1.37 - a linear slider over that full range is genuinely coarse near the values that matter, but using the real live bounds (as specified) was prioritized over inventing a narrower range.
-- An unchecked/untouched filter (Suite "Any", a param filter left off) is **omitted from the filters object entirely**, not sent as a full-range constraint - this also sidesteps a real float32 stats artifact (e.g. `Omega_m`'s real min is `0.10000000149011612`) silently clipping edge rows a naive "always send gte: stats.min" would introduce.
-- **Chart type**: all 5 of FlatHUB's own chart types are available (Histogram, Heatmap, Box Plot, Scatterplot, 3D Scatterplot).
-- **X field / Y field** (required) and **Color field** (optional, real third-field coloring via Plotly's native `marker.colorscale`) are filtered per the Type rule above. **Log scale** checkboxes for X and Y match FlatHUB's own UI.
-- A live **row-count preview** ("Filtered to N out of 2,927,443,277 total rows") calls `GET /api/custom/count` as filters change (400ms debounced, with a sequence-number guard against a slow, stale response landing after a newer one - FlatHUB counts over 2.9B rows are slow enough for this to happen in practice) - so a user isn't surprised by how many rows a filter combination matches before adding the tile. Matches FlatHUB's own UI, which shows the identical preview.
-- The actual field-picking UI (`CustomFieldsForm`) is shared with `CustomSidebar` (App.tsx's per-tile sidebar for a `kind: 'custom'` tile) - a Custom tile's filters/fields stay editable after creation, the same as every other statistic's own per-tile sidebar.
-- **Real fix (2026-08-06, direct user feedback):** the Filters tree (browsable "+ Add"/"Remove" per real field) used to render inline, either inside this tab's own scroll area or collapsed-by-default in `CustomSidebar`'s cramped column - both cases risked real content (field descriptions, group "N fields" badges) getting cut off. Now a "Filter settings" button opens the same tree in a real, full-size shared modal instead - see `CustomFilterSettingsModal.mdx`.
-- Confirming calls `onSubmitCustom({ type, suite, set, paramFilters, chartType, xField, yField, colorField, logX, logY })`. `AddPlotModal`'s confirm button requires `type`/`xField`/`yField` to all be set.
+## Content
 
-## Code
+Title: "Add a plot or simulation". Tabs: "Curated", "Custom". The hint names what is missing: "Pick a Type
+and the required fields for this chart type to continue."
 
-```tsx
-import { useState } from 'react';
-import { AddPlotModal } from '@/components/AddPlotModal/AddPlotModal';
-import type { CuratedSelection } from '@/components/AddPlotModal/CuratedTab';
-import type { CustomSelection } from '@/components/AddPlotModal/CustomFieldsForm';
+## Use it
 
-function AddPlotFlow() {
-  const [isOpen, setIsOpen] = useState(false);
+- Once, as the only route to adding a plot.
 
-  return (
-    <AddPlotModal
-      isOpen={isOpen}
-      onClose={() => setIsOpen(false)}
-      onSubmitCurated={(selection: CuratedSelection) => {
-        // e.g. addTile({ title: selection.statistic, ...selection })
-        setIsOpen(false);
-      }}
-      onSubmitCustom={(selection: CustomSelection) => {
-        // e.g. addTile({ title: `${selection.yField} vs ${selection.xField}`, ...selection })
-        setIsOpen(false);
-      }}
-    />
-  );
-}
-```
+## Don't use it
+
+- For settings on an existing plot. Those are in the sidebar.
+
+## Related
+
+- **Patterns / Custom plot** and **Patterns / Filter settings** — what the Custom tab leads to
+- `SelectField`, `Radio`, `Checkbox`, `Button` — its contents
+- `TopNav` — what opens it
+
+## Source files
+
+`AddPlotModal.tsx` · `AddPlotModal.css` · `AddPlotModal.stories.tsx`

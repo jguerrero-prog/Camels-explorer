@@ -4,7 +4,7 @@ import { ICParticlesSidebar } from './ICParticlesSidebar';
 import type { ICParticlesParams } from './ICParticlesSidebar';
 
 const meta: Meta<typeof ICParticlesSidebar> = {
-  title: 'Sections/ICParticlesSidebar',
+  title: 'Statistic sidebars/ICParticlesSidebar',
   component: ICParticlesSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '480px' }}><Story /></div>],

@@ -4,7 +4,7 @@ import { LymanAlphaSpectrumSidebar } from './LymanAlphaSpectrumSidebar';
 import type { LymanAlphaSpectrumParams } from './LymanAlphaSpectrumSidebar';
 
 const meta: Meta<typeof LymanAlphaSpectrumSidebar> = {
-  title: 'Sections/LymanAlphaSpectrumSidebar',
+  title: 'Statistic sidebars/LymanAlphaSpectrumSidebar',
   component: LymanAlphaSpectrumSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '560px' }}><Story /></div>],

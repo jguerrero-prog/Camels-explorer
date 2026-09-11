@@ -4,7 +4,7 @@ import { PowerSpectrumSidebar } from './PowerSpectrumSidebar';
 import type { PowerSpectrumParams } from './PowerSpectrumSidebar';
 
 const meta: Meta<typeof PowerSpectrumSidebar> = {
-  title: 'Sections/PowerSpectrumSidebar',
+  title: 'Statistic sidebars/PowerSpectrumSidebar',
   component: PowerSpectrumSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '1100px' }}><Story /></div>],

@@ -1,0 +1,140 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+import { TokenTable } from './TokenTable';
+
+<Meta title="Foundations/Color" />
+
+# Color
+
+Three layers. Components reference the semantic layer only. Primitives exist so that every semantic token
+traces back to one value, and the brand ramp exists so every accent traces back to the logo.
+
+Values below are read from the live stylesheet, so this page cannot disagree with the tokens.
+
+`Source: figma:1113:1583` for the neutral ramp, `figma:1106:1364` for the brand ramp.
+
+## Semantic: surfaces
+
+The five surfaces are a depth order, darkest to lightest in role rather than in value. `surface/canvas` sits
+behind tiles, and a tile sits on top of it.
+
+<TokenTable
+  rows={[
+    { name: '--color-surface-canvas', role: 'The viewer area behind tiles', alias: '--neutral-960' },
+    { name: '--color-surface-chrome', role: 'Top nav, icon rail, params sidebar', alias: '--neutral-950' },
+    { name: '--color-surface-content', role: 'Tiles and modal bodies', alias: '--neutral-925' },
+    { name: '--color-surface-sunken', role: 'Stat chips', alias: '--neutral-black' },
+    { name: '--color-surface-table', role: 'Halo table containers', alias: '--neutral-915' },
+    { name: '--color-surface-popover', role: 'Floating popovers', alias: '--neutral-905' },
+    { name: '--color-surface-chart', role: 'The plot card. Deliberately white so axes and data read against it', alias: 'literal #FFFFFF' },
+  ]}
+/>
+
+## Semantic: controls
+
+<TokenTable
+  rows={[
+    { name: '--color-surface-control', role: 'Input and select field fills', alias: '--neutral-900' },
+    { name: '--color-surface-toggle', role: 'Segmented control container', alias: '--neutral-910' },
+    { name: '--color-surface-toggle-active', role: 'Selected segment, and option hover', alias: '--neutral-850' },
+    { name: '--color-surface-chip', role: 'MultiSelect chips', alias: '--neutral-920' },
+    { name: '--color-surface-track', role: 'Slider track', alias: '--neutral-850' },
+  ]}
+/>
+
+`surface/control` and `border/default` resolve to the same grey today. They stay separate tokens because they
+are different roles and will diverge the moment a second theme exists.
+
+## Semantic: borders and text
+
+<TokenTable
+  rows={[
+    { name: '--color-border', role: 'Tile, modal and chip borders', alias: '--neutral-900' },
+    { name: '--color-border-subtle', role: 'Inputs, dividers, toolbar rules', alias: '--neutral-850' },
+    { name: '--color-border-selected', role: 'The focused tile ring', alias: 'literal #3B82F6' },
+    { name: '--color-text-primary', role: 'Titles, field values, chip numbers', alias: '--neutral-100' },
+    { name: '--color-text-muted', role: 'Labels, captions, inactive states', alias: '--neutral-400' },
+    { name: '--color-text-faint', role: 'Separators and de-emphasised metadata', alias: '--neutral-500' },
+    { name: '--color-text-emphasis', role: 'Active tab, confirm button label', alias: '--neutral-white' },
+  ]}
+/>
+
+`border/selected` is a UI blue rather than a brand colour, so selection never competes with the accent
+gradient. See Decision log, DR-002.
+
+## Semantic: accent and state
+
+The accent is a two-stop gradient, not a colour. Use both tokens together, left to right.
+
+<TokenTable
+  rows={[
+    { name: '--color-accent-gradient-start', role: 'Gradient 0%: buttons, active tab underline, slider fill', alias: '--brand-purple' },
+    { name: '--color-accent-gradient-end', role: 'Gradient 100%', alias: '--brand-bright-red' },
+    { name: '--color-add-plot-surface', role: 'The nav Add Plot button, the one inverted control', alias: '--neutral-white' },
+    { name: '--color-add-plot-text', role: 'Its label', alias: '--neutral-900' },
+    { name: '--color-success', role: 'Copy confirmation', alias: 'literal #34D399' },
+  ]}
+/>
+
+## Primitives: neutrals
+
+Do not reference these from a component. The index is a slot, not a lightness ramp: `--neutral-960` is darker
+than `--neutral-950`.
+
+<TokenTable
+  rows={[
+    { name: '--neutral-black', role: 'Sunken surface' },
+    { name: '--neutral-960', role: 'Canvas' },
+    { name: '--neutral-950', role: 'Chrome' },
+    { name: '--neutral-925', role: 'Content' },
+    { name: '--neutral-920', role: 'Chip' },
+    { name: '--neutral-915', role: 'Table' },
+    { name: '--neutral-910', role: 'Toggle container' },
+    { name: '--neutral-905', role: 'Popover' },
+    { name: '--neutral-900', role: 'Border, control fill' },
+    { name: '--neutral-850', role: 'Subtle border, active toggle, track' },
+    { name: '--neutral-500', role: 'Faint text' },
+    { name: '--neutral-400', role: 'Muted text' },
+    { name: '--neutral-100', role: 'Primary text' },
+    { name: '--neutral-white', role: 'Emphasis text' },
+  ]}
+/>
+
+## Primitives: brand
+
+The twelve swatches from the CAMELS logo, in logo order. Only two are currently in use, as the accent
+gradient. The rest are available for data visualisation scales.
+
+<TokenTable
+  rows={[
+    { name: '--brand-deep-crimson', role: 'Note card surface' },
+    { name: '--brand-crimson-red', role: 'Note card border' },
+    { name: '--brand-bright-red', role: 'Accent gradient end' },
+    { name: '--brand-burnt-orange', role: 'Unused' },
+    { name: '--brand-golden-amber', role: 'Empty-state ring, 75% stop' },
+    { name: '--brand-yellow', role: 'Unused' },
+    { name: '--brand-emerald-green', role: 'Unused' },
+    { name: '--brand-teal', role: 'Unused' },
+    { name: '--brand-royal-blue', role: 'Unused' },
+    { name: '--brand-deep-indigo', role: 'Unused' },
+    { name: '--brand-purple', role: 'Accent gradient start' },
+    { name: '--brand-magenta', role: 'Syntax keyword' },
+  ]}
+/>
+
+## Gradients
+
+Two gradients exist. Neither is a token, because a gradient is a pair of tokens plus a direction.
+
+| Gradient | Stops | Direction | Used by |
+| --- | --- | --- | --- |
+| Accent | `accent/gradient-start` → `accent/gradient-end` | Left to right | Confirm buttons, active tab underline, slider fill, checked checkbox |
+| Empty-state ring | `brand-purple` → `#B0336A` → `brand-golden-amber` → `brand-bright-red` | Top to bottom | The add-plot icon on an empty tile only |
+
+The empty-state ring's 50% stop has no brand equivalent and stays a literal. `Source: gap`, it should either
+join the brand ramp or be replaced by a stop that is already in it.
+
+## Theme
+
+One theme. Every token is defined on `:root` in `tokens/semantic/semantic.css`, and there is no light mode
+because no light design exists. A second theme redefines the semantic layer only, in its own file, without
+touching a single component.

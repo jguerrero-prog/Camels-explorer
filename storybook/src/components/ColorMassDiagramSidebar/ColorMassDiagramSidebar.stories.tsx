@@ -4,7 +4,7 @@ import { ColorMassDiagramSidebar } from './ColorMassDiagramSidebar';
 import type { ColorMassDiagramParams } from './ColorMassDiagramSidebar';
 
 const meta: Meta<typeof ColorMassDiagramSidebar> = {
-  title: 'Sections/ColorMassDiagramSidebar',
+  title: 'Statistic sidebars/ColorMassDiagramSidebar',
   component: ColorMassDiagramSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '800px' }}><Story /></div>],

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Plotly3DChart } from './Plotly3DChart';
 
 const meta: Meta<typeof Plotly3DChart> = {
-  title: 'Fields/Plotly3DChart',
+  title: 'Charts/Plotly3DChart',
   component: Plotly3DChart,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '640px', height: '560px' }}><Story /></div>],

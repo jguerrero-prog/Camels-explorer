@@ -34,65 +34,46 @@ export type ColumnDef = {
 
 export type UnderlyingHalosProps = {
   rows: AnyRow[];
-  /** backend.py's Catalog.raw_frame - curated columns + every other real
-   * column this file has, same row order as `rows`. null when unavailable
-   * (see get_halo_catalog's own real None case) - the "Show all available
-   * fields" checkbox is disabled rather than hidden in that case, same
-   * pattern as app.py's own real Catalog Browser tab. Real only for per-
-   * halo catalogs - the VIDE void catalog has no second, deeper field set
-   * behind its real fetch (`app.py`'s own void table just shows every
-   * column it has, always), so its caller omits this too. */
+  /** Every column the source file has, not just the curated ones, in the
+   * same row order as `rows`. `null` when unavailable, which disables the
+   * "Show all available fields" checkbox rather than hiding it. Omitted for
+   * catalogs with no deeper field set, such as the VIDE void catalog. */
   rawRows?: Record<string, number>[] | null;
-  /** Which columns to render - defaults to the real per-halo column set
-   * (`HALO_COLUMNS`) every existing caller already relied on implicitly. */
+  /** Which columns to render. Defaults to the per-halo column set. */
   columns?: ColumnDef[];
-  /** Real disclosure shown above the table when the statistic feeding this
-   * tile doesn't plot the same quantity any column here represents (e.g.
-   * Halo Mass Function/Baryon Fraction bin by FoF group mass, which this
-   * per-subhalo catalog has no column for at all) - see PlotTile.tsx's
-   * `haloMassContextNote`. Omitted for Stellar Mass Function, whose own
-   * Stellar Mass column IS what's plotted. */
+  /** A note shown above the table when the plotted quantity is not one of
+   * these columns. Halo Mass Function bins by FoF group mass, which this
+   * per-subhalo catalog has no column for, so the table cannot be read as
+   * the plotted values. Omitted where a column is what is plotted, as for
+   * Stellar Mass Function. */
   massContextNote?: string;
-  /** Real numeric filter slider, keyed by one of `columns`' own field keys
-   * - defaults to the original "Minimum stellar mass" filter every
-   * existing per-halo caller relied on. `app.py`'s own real VIDE void
-   * table has no filter at all (voids number in the dozens/hundreds, not
-   * thousands) - its caller passes `null` to omit the slider rather than
-   * fabricate a filter Streamlit itself doesn't have. */
+  /** A numeric filter keyed to one of the columns. Defaults to a minimum
+   * stellar mass filter. Pass `null` to omit it, as the void catalog does:
+   * voids number in the hundreds rather than the thousands, so there is
+   * nothing to filter down. */
   filter?: { key: string; label: string; format: (v: number) => string } | null;
-  /** Real wording, defaulting to the exact strings every existing per-halo
-   * caller already showed (zero behavior change for those callers). The
-   * VIDE void catalog caller overrides these to match `app.py`'s own real
-   * "Void catalog fields (VIDE)" wording/file naming instead. */
+  /** What the rows are called, in the disclosure label, the counts, the
+   * footer and the CSV filename. Defaults to halo wording; the void catalog
+   * overrides all four. */
   label?: string;
   itemNoun?: string;
   footerNoun?: string;
   csvFilename?: string;
-  /** Real (wired 2026-08-07, direct user request - this replaces what used
-   * to be a permanently-disabled "+ Add a halo finder" placeholder button).
-   * `backend.py`'s `get_alt_halo_catalog()`/`GET /halo-catalog/alt` already
-   * real for AHF/Rockstar/CAESAR/CAESAR Galaxies - this renders a real
-   * dropdown (reusing the same portal `Dropdown` the column kebab/eye menus
-   * use) switching which finder's catalog `rows`/`columns` show. The fetch
-   * itself is the caller's job (`App.tsx`'s `handleSelectHaloFinder`) - this
-   * component still never fetches on its own, only `onSelect` + `current`/
-   * `options`/`loading` to reflect state. `null`/omitted for catalogs with
-   * no alternate-finder concept (the VIDE void catalog) - no button at all,
-   * not a disabled one, since there's nothing to eventually wire up there. */
+  /** Switches which halo finder's catalog is shown: AHF, Rockstar, CAESAR
+   * or CAESAR Galaxies, served by `GET /halo-catalog/alt`. Fully controlled;
+   * the caller fetches, this renders the state it is given. Omit it for a
+   * catalog with no alternate finder, such as the void catalog, which shows
+   * no button at all rather than a disabled one. */
   finderPicker?: {
     current: string;
     options: string[];
     onSelect: (finder: string) => void;
     loading?: boolean;
   } | null;
-  /** Real (wired 2026-08-07, direct user request) - `app.py`'s own "Trace a
-   * subhalo's merger history" expander (SubLink/SubLink_gal for Subfind,
-   * Rockstar's own Consistent Trees for Rockstar). Only meaningful for
-   * catalogs with a real merger-tree product - AHF/CAESAR/CAMELS-SAM/VIDE
-   * void callers omit this entirely. Fully controlled, same pattern as
-   * `finderPicker` - the actual fetch is the caller's job (`App.tsx`'s
-   * `handleTraceMergerHistory`), this only renders whatever state it's
-   * given and calls back on input changes. */
+  /** Traces one subhalo's merger history, from SubLink for Subfind or
+   * Consistent Trees for Rockstar. Only meaningful for a catalog that has a
+   * merger-tree product, so AHF, CAESAR, CAMELS-SAM and void callers omit
+   * it. Fully controlled, like `finderPicker`. */
   mergerHistory?: {
     idLabel: string;
     id: number;
@@ -103,13 +84,10 @@ export type UnderlyingHalosProps = {
     data?: { redshift: number[]; mass: number[]; note: string } | null;
   } | null;
   defaultExpanded?: boolean;
-  /** Real fix (2026-08-06, direct user feedback): the fullscreen table
-   * view had no indication of which tile/statistic it belonged to - just
-   * a generic "View underlying halos" label. `PlotTile`'s own `title`
-   * prop, threaded down one level, shown alongside that label only in the
-   * fullscreen header (the collapsed inline disclosure already sits
-   * directly under its own tile's title, so it doesn't need this - only
-   * the fullscreen portal, which detaches from that visual context, does). */
+  /** The owning tile's title, shown in the fullscreen header only. Inline,
+   * the table already sits under its tile's title; fullscreen it detaches
+   * from that context and would otherwise say only "View underlying
+   * halos". */
   parentTitle?: string;
 };
 

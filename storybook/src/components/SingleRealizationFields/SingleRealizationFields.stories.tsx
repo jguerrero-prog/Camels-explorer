@@ -5,7 +5,7 @@ import type { SingleRealizationFieldsValue } from './SingleRealizationFields';
 import { useCatalogMetadata } from '../../lib/useCatalogMetadata';
 
 const meta: Meta<typeof SingleRealizationFields> = {
-  title: 'Fields/SingleRealizationFields',
+  title: 'Patterns/Realization fields (single)',
   component: SingleRealizationFields,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '280px', display: 'flex', flexDirection: 'column', gap: '16px' }}><Story /></div>],

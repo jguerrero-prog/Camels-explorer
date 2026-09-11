@@ -27,3 +27,8 @@ export const Unchecked: Story = {
 export const Checked: Story = {
   render: () => <Interactive initial label="Checkbox label" />,
 };
+
+/** Not selectable. The whole control drops to 50% opacity and the cursor changes. */
+export const Disabled: Story = {
+  args: { label: 'Compare mode', checked: false, disabled: true },
+};

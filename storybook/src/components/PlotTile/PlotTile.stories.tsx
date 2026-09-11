@@ -4,7 +4,7 @@ import type { HaloRow } from '../UnderlyingHalos/UnderlyingHalos';
 import { ParticleCloudChart } from '../ParticleCloudChart/ParticleCloudChart';
 
 const meta: Meta<typeof PlotTile> = {
-  title: 'Sections/PlotTile',
+  title: 'Chrome/PlotTile',
   component: PlotTile,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '720px', height: '520px' }}><Story /></div>],

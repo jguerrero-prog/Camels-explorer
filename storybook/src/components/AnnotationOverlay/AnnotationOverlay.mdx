@@ -1,43 +1,91 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as AnnotationOverlayStories from './AnnotationOverlay.stories';
+import * as Stories from './AnnotationOverlay.stories';
 
-<Meta of={AnnotationOverlayStories} />
+<Meta of={Stories} />
 
 # AnnotationOverlay
 
-The toolbar's Annotate tool (Figma node `1055-10`'s "annotation-pin/annotation-callout") - click anywhere on a tile's chart area to drop a pin tied to that exact point, with an editable text callout.
+Pins a comment to a point on a chart. Click the pin to open what it says.
 
-## Token
+`Source: code`
 
-- `--color-accent-gradient-start` / `--color-accent-gradient-end` — the pin's own gradient fill
+## Anatomy
 
-## Spec
+```
+.annotation-pin                  14px, accent gradient, z-index 5, positioned by percentage
+└── .annotation-callout          240px, z-index 6, surface/content
+    ├── __author-row            __dot (6px) + __time + __delete
+    └── __text                  the comment
 
-<Canvas of={AnnotationOverlayStories.Playground} />
+draft pin
+└── .annotation-callout
+    ├── __input                 textarea, placeholder "Add a note…", autofocused
+    └── __actions               __cancel + __save
+```
+
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-A small gradient-filled pin (14×14, white ring) at the clicked point; clicking it opens/closes a callout with an author-row (a relative timestamp, since this app has no real multi-user identity - no name/avatar) and the annotation's text. A `draft` (not yet a real `Annotation` until saved) renders the identical pin shape with an already-open, empty editable callout - the same visual object throughout its life, not a separate "placing" state.
+## Variants and states
 
-`CalloutOpen` shows a real annotation's callout already expanded, without needing an actual click in the docs canvas.
+<Canvas of={Stories.CalloutOpen} />
 
-## Usecase
+A pin has two lives. A **draft** pin is placed but not yet saved: its callout opens with an empty textarea,
+Save stays disabled until the text is non-empty, and Cancel discards the pin. A **saved** pin shows its
+text with a timestamp, and opens only when clicked.
 
-- Rendered by `App.tsx`'s `renderAnnotationOverlay(tile)`, passed to `PlotTile`'s `annotationOverlay` prop - positioned inside `.plot-tile__chart-area` (`position: relative`), which is what makes this component's own `xFrac`/`yFrac` percentage placement work.
-- `PlotTile`'s `onChartClick` fires with the click position as a fraction of the chart area's own box (0-1 per axis, not pixels) - App.tsx stores that fraction per annotation so it stays correctly placed regardless of how large a given tile renders (grid vs. stacked, resizing the window).
-- Only wired when Annotate mode is on (`App.tsx`'s `annotateMode`, part of the single `activeTool` state shared with Arrow/Note/Ruler/Linked brushing, since only one click-driven tool can own the next chart click).
+## Tokens
 
-## Code
+| Token | Applies to |
+| --- | --- |
+| `--color-accent-gradient-start` → `--color-accent-gradient-end` | Pin fill, a 90° gradient |
+| `--color-surface-content` | Callout fill |
+| `--color-border` | Callout border |
+| `--color-surface-control` | Textarea |
+| `--color-text-muted` | Timestamp, and the author dot |
+| `--font-label` | Author row |
 
-```tsx
-import { AnnotationOverlay } from '@/components/AnnotationOverlay/AnnotationOverlay';
+The callout takes no drop shadow, so it reads as part of the page rather than floating above it.
 
-<AnnotationOverlay
-  annotations={annotationsByTile[tile.id] ?? []}
-  activeId={activeAnnotation?.tileId === tile.id ? activeAnnotation.id : null}
-  onSelect={(id) => setActiveAnnotation(id ? { tileId: tile.id, id } : null)}
-  onDelete={(id) => removeAnnotation(tile.id, id)}
-  draft={annotateDraft?.tileId === tile.id ? annotateDraft : null}
-  onSaveDraft={(text) => saveAnnotationDraft(tile.id, text)}
-  onCancelDraft={() => setAnnotateDraft(null)}
-/>
-```
+## Behaviour
+
+- Positions are fractional (`xFrac`, `yFrac`) and applied as percentages, so a pin stays on the same point
+  when the tile resizes.
+- One callout is open at a time: `activeId` is owned by the caller, and clicking the active pin closes it.
+- Clicks are stopped at the pin and the callout, so opening a note does not also reach the chart underneath.
+- Timestamps are relative and coarse: "just now", "5m ago", "3h ago", "2d ago".
+- `hidden` on an annotation is honoured by the Hide popover's Annotations category, not by this component.
+
+## Accessibility
+
+- The delete control carries `aria-label` and `title`, and is revealed on `:focus-within` as well as hover,
+  so it is reachable without a pointer once focus is inside the callout.
+- `Source: gap`. The pin itself is a `div` with a click handler: not focusable, not a button, and not
+  reachable by keyboard. The callout is not a dialog, takes no focus on open, and Escape does not close it.
+
+## Content
+
+The comment is the user's own words. The only text the interface supplies is the relative timestamp and the
+placeholder, "Add a note…".
+
+## Use it
+
+- Marking a specific feature in the data for a colleague.
+
+## Don't use it
+
+- For a remark about the figure as a whole. Use `NoteOverlay`, which is not tied to a coordinate.
+- For pointing without words. Use `ArrowOverlay`.
+
+## Related
+
+- `NoteOverlay` — unpinned and draggable
+- `ArrowOverlay` — the third annotation tool
+- `HidePopover` — hides all annotations at once
+- `Toolbar` — the mode that places them
+
+## Source files
+
+`AnnotationOverlay.tsx` · `AnnotationOverlay.css` · `AnnotationOverlay.stories.tsx`

@@ -6,7 +6,7 @@ import type { CustomSelection } from './CustomFieldsForm';
 import type { CustomFieldTreeNode } from '../../lib/api';
 
 const meta: Meta<typeof CustomFilterSettingsModal> = {
-  title: 'Flows/CustomFilterSettingsModal',
+  title: 'Patterns/Filter settings',
   component: CustomFilterSettingsModal,
   parameters: { layout: 'fullscreen' },
 };

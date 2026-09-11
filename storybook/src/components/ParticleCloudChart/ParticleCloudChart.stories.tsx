@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { ParticleCloudChart } from './ParticleCloudChart';
 
 const meta: Meta<typeof ParticleCloudChart> = {
-  title: 'Fields/ParticleCloudChart',
+  title: 'Charts/ParticleCloudChart',
   component: ParticleCloudChart,
   parameters: { layout: 'padded' },
   decorators: [(Story) => <div style={{ width: '640px', height: '560px' }}><Story /></div>],

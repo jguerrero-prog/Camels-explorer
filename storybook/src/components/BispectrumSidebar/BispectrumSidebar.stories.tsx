@@ -4,7 +4,7 @@ import { BispectrumSidebar } from './BispectrumSidebar';
 import type { BispectrumParams } from './BispectrumSidebar';
 
 const meta: Meta<typeof BispectrumSidebar> = {
-  title: 'Sections/BispectrumSidebar',
+  title: 'Statistic sidebars/BispectrumSidebar',
   component: BispectrumSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '640px' }}><Story /></div>],

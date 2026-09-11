@@ -1,75 +1,85 @@
 import { Meta, Canvas, Controls } from '@storybook/addon-docs/blocks';
-import * as NumberStepperStories from './NumberStepper.stories';
+import * as Stories from './NumberStepper.stories';
 
-<Meta of={NumberStepperStories} />
+<Meta of={Stories} />
 
 # NumberStepper
 
-A numeric field with increment/decrement buttons. Real source: Figma node `1055:56` ("field-z max"). Partially resolves the "Stepper" gap flagged in `STORYBOOK_STRUCTURE.md`'s initial inventory — **but that flag meant a multi-step wizard progress indicator, a different thing with the same common name.** This component is the numeric-value kind; the wizard kind remains undesigned.
+A typed number with increment and decrement buttons. Use when the exact value matters.
 
-## Token
+`Source: figma:1019:37`
 
-- `--color-surface-control` / `--color-border-subtle` — the input row, same as `SelectField`'s
-- `--color-surface-chrome` — the two increment/decrement buttons' own background (matches TopNav/IconRail's chrome tone, not the control surface)
-- `--font-label` (Lato) — label
-- `--font-ui` (Inter) — value
+## Anatomy
 
-## Spec
+```
+.number-stepper
+├── .number-stepper__label     Lato Regular 12
+├── .number-stepper__input-row  padding 6/12, radius 8, surface/control
+│   ├── .number-stepper__value  a text input, Inter Regular 14
+│   └── .number-stepper__buttons  two 14px buttons stacked, 2px apart
+└── .number-stepper__caption   optional, Lato Regular 11
+```
 
-<Canvas of={NumberStepperStories.Playground} />
+## Playground
+
+<Canvas of={Stories.Playground} />
 <Controls />
 
-- Label above, 12px muted.
-- Input row: `--color-surface-control` fill, `--color-border-subtle` border, 8px radius, `justify-content: space-between` between the value and the stepper buttons.
-- Stepper: two 14×14 buttons stacked vertically (2px gap), each with a chevron icon, `--color-surface-chrome` fill, `--color-border-subtle` border, 4px radius.
-- Optional `caption` line below (11px muted), same pattern as `SelectField`'s.
+## Variants and states
 
-**Corrected 2026-08-04 — real bug fixed, not a Figma correction:** the value used to be a plain, non-interactive `<span>` — only the +/- buttons could change it. Caught when this component was needed for the Add Plot modal's Realization field and the user pointed out steppers "are meant to be flexible where I can type a number as well." Now a real editable `<input>`: typing commits on blur or Enter, Escape reverts to the last committed value, and invalid/empty text reverts too rather than silently accepting garbage. The +/- buttons and typing are equally valid, real ways to set the value.
+<Canvas of={Stories.WithCaption} />
 
-**Fixed 2026-08-08 — real bug found in direct QA, a second one after the fix above:** every real caller wires `onChange` straight to a backend refetch (e.g. Realization inside `SingleRealizationFields`/`RealizationFields`, used by 18+ sidebars) — the +/- buttons used to call `onChange` synchronously on every click, so clicking 5 times in a row (say, Realization 4→9) fired 5 separate loads instead of one, confirmed via repeated 404s in the console for each intermediate value. Now debounced 300ms after the last click, same `Slider`-precedented fix as its own `COMMIT_DEBOUNCE_MS` (see that component's docs) — the displayed number still updates instantly per click for responsiveness, only the actual `onChange`/refetch waits for a pause. Typing + blur/Enter was never affected (already committed once, immediately) and needed no change.
+The caption carries the valid range, which is the difference between a usable stepper and a guessing game.
+Realization shows `0–999`.
 
-<Canvas of={NumberStepperStories.WithCaption} />
+## Tokens
 
-**The Canvas above renders "Number label," not "z max."** This story demonstrates the control's mechanics, not confirmed copy — see Usecase below for why "z max" itself isn't confirmed either.
+| Token | Applies to |
+| --- | --- |
+| `--color-surface-control` | Input row fill |
+| `--color-border-subtle` | Input row and button borders |
+| `--color-surface-chrome` | Stepper button fills |
+| `--color-text-primary` | Value |
+| `--color-text-muted` | Label and caption |
+| `--font-ui` | Value |
+| `--font-label` | Label and caption |
 
-**Still open:**
-- The real frame shows a fixed display value ("10.0") with no visible min/max — this component doesn't clamp; that's left to whoever wires it to a real field, since `z_max`'s real valid range isn't confirmed anywhere yet. (Realization *does* clamp its own valid range via a `caption`, but that's a display hint, not enforcement — typing 5000 into a 0–999 field isn't blocked here.)
-- No held-button repeat-increment behavior is implied by the static frame.
+## Behaviour
 
-## Usecase
+- The value is typeable, so a user going to realization 847 types it rather than clicking 847 times.
+- `step` defaults to 1. `formatValue` controls display only: pass `(v) => v.toFixed(1)` for `10.0`.
+- The buttons are 14px, deliberately small, because typing is the primary path.
 
-- Real usage: SFR History's "z max" field — but this, and the redshift-range field it may or may not replace, are explicit placeholders (confirmed 2026-08-04, see `ParamsSidebar.mdx`). Which control z_min/z_max actually end up using is intentionally undecided until real data wiring informs the choice — don't treat this component as the final answer for that field.
-- Real usage: the Add Plot modal's Curated tab "Realization" field (see `AddPlotModal.mdx`) — the first place this component's typing behavior is actually exercised, not just its buttons.
-- Reach for this over `Slider` when the value has no natural visual range to scrub (or the step size matters more than the position within a range).
+## Accessibility
 
-## Code
+- The stepper buttons carry `aria-label`, so increment and decrement are distinguishable.
+- `Source: gap`. The value input has no associated `label` element and no `aria-label`, so the field name is
+  not announced. It also lacks `role="spinbutton"` with `aria-valuenow`, `aria-valuemin` and `aria-valuemax`,
+  which is what would make the caption's range available to a screen reader.
+- Arrow-key stepping inside the input is not implemented.
 
-```tsx
-import { useState } from 'react';
-import { NumberStepper } from '@/components/NumberStepper/NumberStepper';
+## Content
 
-function ZMaxField() {
-  const [value, setValue] = useState(10.0);
-  return (
-    <NumberStepper
-      label="z max"
-      value={value}
-      step={0.1}
-      onChange={setValue}
-      formatValue={(v) => v.toFixed(1)}
-    />
-  );
-}
+Label in sentence case with units in square brackets. The caption states the range as `0–999` with an en
+dash, or a constraint such as "Integers only".
 
-function RealizationField() {
-  const [value, setValue] = useState(0);
-  return (
-    <NumberStepper
-      label="Realization"
-      value={value}
-      onChange={setValue}
-      caption="0–999"
-    />
-  );
-}
-```
+## Use it
+
+- A precise value the user is likely to know: Realization, z min, z max, a mass bound.
+- Anywhere the valid range needs stating alongside the control.
+
+## Don't use it
+
+- For an approximate position on a range. Use `Slider`.
+- For two bounds. Use `RangeFilterControl`.
+- For a value from a fixed list. Use `SelectField` or `OptionSlider`.
+
+## Related
+
+- `Slider` — scrubbing rather than typing
+- `RangeFilterControl` — min and max together
+- **Patterns / Statistic sidebar** — Realization on nearly every statistic
+
+## Source files
+
+`NumberStepper.tsx` · `NumberStepper.css` · `NumberStepper.stories.tsx`

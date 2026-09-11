@@ -4,7 +4,7 @@ import { FieldMap2DSidebar } from './FieldMap2DSidebar';
 import type { FieldMap2DParams } from './FieldMap2DSidebar';
 
 const meta: Meta<typeof FieldMap2DSidebar> = {
-  title: 'Sections/FieldMap2DSidebar',
+  title: 'Statistic sidebars/FieldMap2DSidebar',
   component: FieldMap2DSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '480px' }}><Story /></div>],

@@ -77,85 +77,56 @@ export type PlotTileCatalogTable = Omit<UnderlyingHalosProps, 'parentTitle' | 'd
 
 export type PlotTileProps = {
   title: string;
-  /** `null` for a statistic with no chartable shape at all - a flat
-   * parameter table has no natural x/y plot (added 2026-08-07, Simulation
-   * Parameters - the first real caller with no chart of any kind). Static/
-   * Interactive are simply absent from `availableChartModes` in that case,
-   * so the tile opens straight into Table mode with no dropdown at all
-   * (matches the existing "no toggle when nothing to switch to" behavior) -
-   * requires `halos`/`catalogTable` to be set, or there'd be nothing to
-   * render at all. */
+  /** `null` for a statistic with nothing chartable: a flat parameter table
+   * has no x/y plot. Static and Interactive then drop out of the mode list
+   * and the tile opens straight into Table with no dropdown, so `halos` or
+   * `catalogTable` must be set or there is nothing to render. */
   chart: PlotTileChart | null;
   readoutGroups: ParamsReadoutGroup[];
-  /** `null` when this statistic has no per-halo catalog concept at all -
-   * Power Spectrum, Bispectrum, and SFR History are field/box-level
-   * statistics (real 2026-08-05 addition), not tied to any per-halo
-   * catalog the way Stellar Mass Function/Halo Mass Function/Baryon
-   * Fraction are. Omits the "Table" mode entirely rather than showing a
-   * confusing empty (0 of 0) table. */
+  /** `null` for a statistic with no per-halo catalog. Power Spectrum,
+   * Bispectrum and SFR History measure a whole box rather than individual
+   * halos. Table mode is then omitted entirely, rather than offering an
+   * empty table. */
   halos: PlotTileHalos | null;
-  /** `undefined`/`null` for every statistic without a real generic-catalog
-   * concept (i.e. everything except 3D Density Field's VIDE void overlay
-   * today) - see `PlotTileCatalogTable`'s own docs for why this is a
-   * separate prop from `halos` rather than reusing it. */
+  /** A generic catalog table, as distinct from a per-halo one. Only the
+   * void overlay on 3D Density Field uses it today; every other statistic
+   * omits it. Kept separate from `halos` because the rows are not halos and
+   * take different columns, wording and filtering. */
   catalogTable?: PlotTileCatalogTable | null;
-  /** Real (added 2026-08-07, direct user request: Black Hole Mergers
-   * wanted a 3D Scatter option alongside Interactive/Table). A peer of
-   * `chart`, not a variant of it - `chart` keeps driving Static/Interactive
-   * as before, this drives the new `scatter3d` mode when present. Kept
-   * separate rather than widening `PlotTileChart`'s union: a tile with
-   * this set still has an ordinary 2D `chart` too (unlike Density Field/
-   * Particle Cloud, whose `chart.kind` IS `'plotly-3d'` because they have
-   * no 2D alternative at all). `null`/omitted hides the mode entirely,
-   * same convention as `halos`. */
+  /** A 3D scatter view, offered alongside the 2D chart. A peer of `chart`
+   * rather than a kind of it: a tile with this set still has an ordinary 2D
+   * chart, unlike Density Field and Particle Cloud, which are 3D only and
+   * express that through `chart.kind`. Omit it to hide the mode. */
   chart3d?: ReactNode | null;
-  /** Fires on any click on the tile - App.tsx uses this to decide which
-   * tile's ParamsSidebar shows (its own focusedTileId state, not a prop
-   * here). No visual effect on the tile itself - see PlotTile.mdx's
-   * 2026-08-04 correction. */
+  /** Fires on any click on the tile. The caller uses it to decide which
+   * tile's sidebar shows. It has no visual effect here; pass `focused` for
+   * that. */
   onFocus?: () => void;
-  /** Whether this is the currently-focused tile (App.tsx's own
-   * `focusedTileId`, the same tile whose ParamsSidebar shows in the left
-   * slot) - added 2026-08-06 so the toolbar tools that operate on "the
-   * currently focused tile" (Copy provenance/as code, Annotate, Ruler,
-   * Ratio/diff) have something for a user to see and click before using
-   * them, matching the bordered-panel treatment shown in every one of
-   * those Figma frames (nodes 1066-10/1076-10/1063-10). Previously
-   * `onFocus` had "No visual effect on the tile itself" (see this file's
-   * 2026-08-04 note above) - now it does. */
+  /** Whether this is the focused tile, the one whose sidebar is showing and
+   * the one every tile-scoped toolbar tool acts on: Copy provenance, Copy as
+   * code, Annotate, Ruler, Ratio/diff. Draws the focus ring, so a user can
+   * see what those tools will apply to before using them. */
   focused?: boolean;
-  /** Real (Figma node 1055-10's annotation-pin/annotation-callout) - fires
-   * with the click position as a FRACTION of the chart area's own box
-   * (0-1 on each axis, not pixels), so App.tsx can store one fractional
-   * position per annotation and it stays correctly placed regardless of
-   * how large this tile happens to render. Only wired when annotate mode
-   * is on (App.tsx's own toggle) - omitted otherwise, so an ordinary
-   * click still only calls `onFocus`. */
+  /** Fires with the click position as a fraction of the chart area, 0 to 1
+   * on each axis rather than pixels, so an annotation stays on the same
+   * point however large the tile renders. Wire it only while an annotation
+   * mode is on; omitted, an ordinary click just calls `onFocus`. */
   onChartClick?: (xFrac: number, yFrac: number) => void;
-  /** Real (same Figma node) - the pins/callouts themselves, rendered by
-   * App.tsx (which owns the annotation data) as an absolutely-positioned
-   * overlay on top of the chart area this component owns. */
+  /** Slot for the annotation overlays, positioned over the chart area. The
+   * caller owns the annotation data; this component owns the box it is
+   * placed in. */
   annotationOverlay?: ReactNode;
-  /** Set when the tile's own fetch failed - App.tsx's refetchXxxTile
-   * catch blocks (see PlotTile.mdx). Real gap fixed 2026-08-05: this prop
-   * already existed on every tile's own state type and was already being
-   * set on failure, but nothing here ever rendered it - a failed fetch
-   * (no real data for this selection) showed either a stale/empty chart
-   * or a generic image-load message, with no indication of what actually
-   * went wrong. Replaces the chart area entirely rather than overlaying
-   * it, since a failed fetch means there's no chart data to show under it.
-   * Only applies to the chart views (Static/Interactive) - Table mode
-   * shows whatever halos data exists regardless, since a chart-fetch
-   * failure doesn't necessarily mean the halos catalog fetch failed too. */
+  /** Set when the tile's own fetch failed. It replaces the chart area
+   * rather than overlaying it, since a failed fetch leaves nothing to show
+   * underneath. Applies to the chart views only: Table mode still shows
+   * whatever catalog rows exist, because a chart fetch failing does not mean
+   * the catalog fetch did. */
   error?: string;
-  /** Real (Toolbar's Hide feature, added 2026-08-06) - unlike
-   * annotations/arrows/notes (see AnnotationOverlay's own `hidden` field
-   * docs), a param readout has no per-item array to stamp and no
-   * "creation moment" distinct from the tile itself - so this is a
-   * genuinely live gate, computed fresh by App.tsx on every render from
-   * `hidePerPanel[tile.id]?.readouts ?? hideAllPanels.readouts`, not a
-   * one-time stamp. A brand-new tile added while readouts are globally
-   * hidden inherits that immediately, with no fresh-item exemption. */
+  /** Hides this tile's parameter readout. Unlike annotations, arrows and
+   * notes, which carry their own `hidden` flag per item, a readout has no
+   * creation moment of its own, so this is a live gate recomputed on every
+   * render. A tile added while readouts are hidden for all panels is hidden
+   * immediately. */
   readoutsHidden?: boolean;
 };
 

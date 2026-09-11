@@ -4,7 +4,7 @@ import { HaloGasProfilesSidebar } from './HaloGasProfilesSidebar';
 import type { HaloGasProfilesParams } from './HaloGasProfilesSidebar';
 
 const meta: Meta<typeof HaloGasProfilesSidebar> = {
-  title: 'Sections/HaloGasProfilesSidebar',
+  title: 'Statistic sidebars/HaloGasProfilesSidebar',
   component: HaloGasProfilesSidebar,
   parameters: { layout: 'fullscreen' },
   decorators: [(Story) => <div style={{ height: '680px' }}><Story /></div>],
